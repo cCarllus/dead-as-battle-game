@@ -22,6 +22,10 @@ export type UserModel = {
   updatedAt: string;
 };
 
+export function getUserLevel(user: UserModel): number {
+  return 1 + Math.floor(user.stats.matches / 5);
+}
+
 function nowIso(now = new Date()): string {
   return now.toISOString();
 }

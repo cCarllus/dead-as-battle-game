@@ -3,14 +3,14 @@ import { resolveLocale, t, type Locale } from "../../i18n";
 import { clearElement, hydrateI18n, qs } from "../components/dom";
 import {
   CURRENCY_ITEMS,
+  createTeamSlots,
   DEFAULT_ACTIVE_TAB,
   FOOTER_ACTIONS,
   MENU_NAV_ITEMS,
-  PLAY_PANEL_MODEL,
-  TEAM_CAPACITY,
-  TEAM_SLOTS,
+  TEAM_TOTAL_SLOTS,
   type MenuActionId,
-  type MenuTabId
+  type MenuTabId,
+  type TeamSlot
 } from "./mainMenu.model";
 
 export type MainMenuActions = {
@@ -20,6 +20,9 @@ export type MainMenuActions = {
   locale?: Locale;
   activeTab?: MenuTabId;
   onNavigateTab?: (tab: MenuTabId) => void;
+  playerName: string;
+  playerLevel: number;
+  isSessionActive: boolean;
 };
 
 const MENU_TAB_ID_SET = new Set<string>(MENU_NAV_ITEMS.map((item) => item.id));
@@ -85,10 +88,10 @@ function renderCurrency(container: HTMLElement, locale: Locale): void {
   });
 }
 
-function renderTeamSlots(container: HTMLElement, locale: Locale): void {
+function renderTeamSlots(container: HTMLElement, locale: Locale, slots: readonly TeamSlot[]): void {
   container.replaceChildren();
 
-  TEAM_SLOTS.forEach((slot) => {
+  slots.forEach((slot) => {
     const button = document.createElement("button");
     button.type = "button";
 
@@ -108,7 +111,7 @@ function renderTeamSlots(container: HTMLElement, locale: Locale): void {
       : "dab-roster__status dab-roster__status--offline";
 
     const text = document.createElement("span");
-    text.textContent = t(locale, slot.nameKey);
+    text.textContent = slot.name;
 
     const detail = document.createElement("small");
     detail.textContent = t(locale, slot.detailKey, slot.detailParams);
@@ -136,6 +139,13 @@ export function renderMainMenuScreen(root: HTMLElement, actions: MainMenuActions
   const locale = resolveLocale(actions.locale ?? document.documentElement.lang);
   let activeTab = actions.activeTab ?? DEFAULT_ACTIVE_TAB;
 
+  const teamSlotsModel = createTeamSlots({
+    playerName: actions.playerName,
+    playerLevel: actions.playerLevel,
+    isOnline: actions.isSessionActive
+  });
+  const currentPlayers = teamSlotsModel.filter((slot) => slot.type === "player").length;
+
   clearElement(root);
   root.innerHTML = template;
 
@@ -151,22 +161,22 @@ export function renderMainMenuScreen(root: HTMLElement, actions: MainMenuActions
   renderCurrency(currency, locale);
 
   const rosterCount = qs<HTMLElement>(menu, '[data-slot="roster-count"]');
-  rosterCount.textContent = t(locale, "menu.roster.count", TEAM_CAPACITY);
+  rosterCount.textContent = t(locale, "menu.roster.count", {
+    current: currentPlayers,
+    total: TEAM_TOTAL_SLOTS
+  });
 
   const teamSlots = qs<HTMLElement>(menu, '[data-slot="team-slots"]');
-  renderTeamSlots(teamSlots, locale);
+  renderTeamSlots(teamSlots, locale, teamSlotsModel);
 
   const footerActions = qs<HTMLElement>(menu, '[data-slot="footer-actions"]');
   renderFooterActions(footerActions, locale);
-
-  const playStatus = qs<HTMLElement>(menu, '[data-slot="ping"]');
-  playStatus.textContent = t(locale, PLAY_PANEL_MODEL.pingKey, { value: PLAY_PANEL_MODEL.pingValue });
 
   const playSection = qs<HTMLElement>(menu, ".dab-play");
   playSection.setAttribute("aria-label", t(locale, "menu.aria.playModes"));
 
   const parallaxBackground = menu.querySelector<HTMLElement>('[data-parallax="bg"]');
-  const parallaxHero = menu.querySelector<HTMLElement>('[data-parallax="hero"]');
+  const parallaxChampion = menu.querySelector<HTMLElement>('[data-parallax="champion"]');
 
   const actionHandlers: Record<MenuActionId, () => void> = {
     play: actions.onOpenMultiplayer,
@@ -216,8 +226,8 @@ export function renderMainMenuScreen(root: HTMLElement, actions: MainMenuActions
         parallaxBackground.style.transform = `scale(1.06) translate(${xRatio * -16}px, ${yRatio * -12}px)`;
       }
 
-      if (parallaxHero) {
-        parallaxHero.style.transform = `translate(${xRatio * 18}px, ${yRatio * 12}px)`;
+      if (parallaxChampion) {
+        parallaxChampion.style.transform = `translate(${xRatio * 18}px, ${yRatio * 12}px)`;
       }
     },
     { signal }
@@ -230,8 +240,8 @@ export function renderMainMenuScreen(root: HTMLElement, actions: MainMenuActions
         parallaxBackground.style.transform = "scale(1.06) translate(0, 0)";
       }
 
-      if (parallaxHero) {
-        parallaxHero.style.transform = "translate(0, 0)";
+      if (parallaxChampion) {
+        parallaxChampion.style.transform = "translate(0, 0)";
       }
     },
     { signal }

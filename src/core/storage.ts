@@ -65,3 +65,12 @@ export function startSession(userId: string, nickname: string): void {
 export function clearSession(): void {
   sessionStorage.removeItem(KEY_SESSION);
 }
+
+export function isSessionActiveForUser(userId: string): boolean {
+  const snapshot = getSessionSnapshot();
+  if (!snapshot) {
+    return false;
+  }
+
+  return snapshot.userId === userId.trim();
+}

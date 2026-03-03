@@ -1,6 +1,6 @@
 import type { TranslationKey, TranslationParams } from "../../i18n";
 
-export type MenuTabId = "home" | "play" | "notes" | "heroes" | "store";
+export type MenuTabId = "home" | "play" | "notes" | "champions" | "store";
 export type MenuActionId = "play" | "settings" | "exit";
 
 export type MenuNavItem = {
@@ -13,7 +13,7 @@ export const MENU_NAV_ITEMS: readonly MenuNavItem[] = [
   { id: "home", labelKey: "menu.nav.home" },
   { id: "play", labelKey: "menu.nav.play" },
   { id: "notes", labelKey: "menu.nav.notes" },
-  { id: "heroes", labelKey: "menu.nav.heroes" },
+  { id: "champions", labelKey: "menu.nav.champions" },
   { id: "store", labelKey: "menu.nav.store" }
 ];
 
@@ -32,7 +32,7 @@ export const CURRENCY_ITEMS: readonly CurrencyItem[] = [
 
 export type PlayerTeamSlot = {
   type: "player";
-  nameKey: TranslationKey;
+  name: string;
   detailKey: TranslationKey;
   detailParams?: TranslationParams;
   isSelf?: boolean;
@@ -46,28 +46,26 @@ export type EmptyTeamSlot = {
 
 export type TeamSlot = PlayerTeamSlot | EmptyTeamSlot;
 
-export const TEAM_CAPACITY = {
-  current: 1,
-  total: 3
-} as const;
+export const TEAM_TOTAL_SLOTS = 3;
 
-export const TEAM_SLOTS: readonly TeamSlot[] = [
-  {
-    type: "player",
-    nameKey: "menu.team.player1",
-    detailKey: "menu.roster.level",
-    detailParams: { value: 42 },
-    isSelf: true,
-    isOnline: true
-  },
-  { type: "empty", ariaLabelKey: "menu.roster.inviteAria" },
-  { type: "empty", ariaLabelKey: "menu.roster.inviteAria" }
-];
-
-export const PLAY_PANEL_MODEL = {
-  pingKey: "menu.play.ping",
-  pingValue: 24
-} as const;
+export function createTeamSlots(params: {
+  playerName: string;
+  playerLevel: number;
+  isOnline: boolean;
+}): readonly TeamSlot[] {
+  return [
+    {
+      type: "player",
+      name: params.playerName,
+      detailKey: "menu.roster.level",
+      detailParams: { value: params.playerLevel },
+      isSelf: true,
+      isOnline: params.isOnline
+    },
+    { type: "empty", ariaLabelKey: "menu.roster.inviteAria" },
+    { type: "empty", ariaLabelKey: "menu.roster.inviteAria" }
+  ];
+}
 
 export type FooterAction = {
   labelKey: TranslationKey;

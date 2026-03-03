@@ -396,7 +396,7 @@ body {
   font-weight: 700;
 }
 
-.dab-menu__hero {
+.dab-menu__champion {
   position: absolute;
   left: 50%;
   bottom: 30px;
@@ -409,7 +409,7 @@ body {
   z-index: 2;
 }
 
-.dab-menu__hero-core {
+.dab-menu__champion-core {
   position: absolute;
   inset: 0;
   clip-path: polygon(48% 0%, 65% 14%, 76% 38%, 90% 60%, 88% 100%, 15% 100%, 10% 60%, 24% 40%, 36% 14%);
@@ -524,6 +524,11 @@ body {
   background: #3df47e;
   box-shadow: 0 0 10px rgba(61, 244, 126, 0.8);
   align-self: center;
+}
+
+.dab-roster__status--offline {
+  background: #7b8194;
+  box-shadow: none;
 }
 
 .dab-play {
@@ -644,7 +649,7 @@ body {
 }
 
 @media (max-width: 920px) {
-  .dab-menu__hero {
+  .dab-menu__champion {
     opacity: 0.45;
     left: 58%;
     width: min(46vw, 300px);
@@ -683,7 +688,7 @@ body {
     padding: 0 12px;
   }
 
-  .dab-menu__hero {
+  .dab-menu__champion {
     display: none;
   }
 

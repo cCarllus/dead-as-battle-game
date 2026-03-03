@@ -4,10 +4,11 @@ import { renderNicknameScreen } from "../ui/screens/nickname.screen";
 import { renderSettingsScreen } from "../ui/screens/settings.screen";
 import "../ui/styles/ui.css";
 import { clearCurrentUser, getCurrentUser, registerUser } from "../services/user.service";
+import { getUserLevel } from "../models/user";
 import { warmUpAssetCache } from "./cache";
 import { createRouter } from "./router";
 import { createAppState } from "./state";
-import { clearSession, startSession } from "./storage";
+import { clearSession, getSessionSnapshot, isSessionActiveForUser, startSession } from "./storage";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -60,6 +61,17 @@ export function bootstrap(): void {
         });
       },
       mainMenu: ({ uiRoot: root, state: store, goTo }) => {
+        const user = getCurrentUser();
+        if (!user) {
+          clearSession();
+          goTo("nickname");
+          return;
+        }
+
+        const session = getSessionSnapshot();
+        const isActive = isSessionActiveForUser(user.id);
+        const sessionNickname = session?.userId === user.id ? session.nickname : null;
+
         return renderMainMenuScreen(root, {
           locale: store.get().locale,
           activeTab: store.get().activeMenuTab,
@@ -70,7 +82,10 @@ export function bootstrap(): void {
             clearCurrentUser();
             clearSession();
             goTo("nickname");
-          }
+          },
+          playerName: sessionNickname ?? user.nickname,
+          playerLevel: getUserLevel(user),
+          isSessionActive: isActive
         });
       },
       settings: ({ uiRoot: root, state: store, goTo }) => {
