@@ -1,9 +1,6 @@
-import type { Engine } from "@babylonjs/core";
 import type { AppStateStore, ScreenId } from "./state";
 
 export type ScreenContext = {
-  engine: Engine;
-  canvas: HTMLCanvasElement;
   uiRoot: HTMLDivElement;
   state: AppStateStore;
   goTo: (screen: ScreenId) => void;

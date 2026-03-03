@@ -8,11 +8,6 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
-  "dependencies": {
-    "@babylonjs/core": "^7.42.0",
-    "@babylonjs/gui": "^7.54.3",
-    "@babylonjs/loaders": "^7.54.3"
-  },
   "devDependencies": {
     "@types/node": "^25.3.3",
     "typescript": "^5.7.2",
