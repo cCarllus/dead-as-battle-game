@@ -14,7 +14,10 @@ if (!canvas || !uiRoot) {
   throw new Error("Elementos principais do app não encontrados.");
 }
 
-const engine = new Engine(canvas, true);
+const appCanvas: HTMLCanvasElement = canvas;
+const appUiRoot: HTMLDivElement = uiRoot;
+
+const engine = new Engine(appCanvas, true);
 let currentGameCleanup: (() => void) | null = null;
 
 const renderLoop = (): void => {
@@ -35,7 +38,7 @@ function stopGameIfNeeded(): void {
 
 function showSplashAndGoToMenu(): void {
   stopGameIfNeeded();
-  clearElement(uiRoot);
+  clearElement(appUiRoot);
 
   const container = document.createElement("section");
   container.className = "screen";
@@ -46,7 +49,7 @@ function showSplashAndGoToMenu(): void {
   subtitle.textContent = "Carregando...";
   container.appendChild(subtitle);
 
-  uiRoot.appendChild(container);
+  appUiRoot.appendChild(container);
 
   window.setTimeout(showMenu, 1800);
 }
@@ -54,31 +57,31 @@ function showSplashAndGoToMenu(): void {
 function showMenu(): void {
   stopGameIfNeeded();
 
-  renderMenu(uiRoot, {
+  renderMenu(appUiRoot, {
     onOpenConfig: showConfig,
     onOpenMultiplayer: showCharacterSelection,
     onExit: () => {
-      clearElement(uiRoot);
+      clearElement(appUiRoot);
       const message = document.createElement("section");
       message.className = "screen";
       message.appendChild(createTitle("Até logo!"));
-      uiRoot.appendChild(message);
+      appUiRoot.appendChild(message);
     }
   });
 }
 
 function showConfig(): void {
   stopGameIfNeeded();
-  renderConfig(uiRoot, showMenu);
+  renderConfig(appUiRoot, showMenu);
 }
 
 function showCharacterSelection(): void {
   stopGameIfNeeded();
 
-  renderCharacterSelection(uiRoot, {
+  renderCharacterSelection(appUiRoot, {
     onSelect: (character: CharacterId) => {
-      clearElement(uiRoot);
-      currentGameCleanup = startLocalGame(engine, canvas, character);
+      clearElement(appUiRoot);
+      currentGameCleanup = startLocalGame(engine, appCanvas, character);
     },
     onBack: showMenu
   });
