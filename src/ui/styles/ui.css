@@ -396,29 +396,54 @@ body {
   font-weight: 700;
 }
 
-.dab-menu__champion {
+.dab-champion-preview {
   position: absolute;
   left: 50%;
-  bottom: 30px;
-  width: min(35vw, 420px);
-  height: min(75vh, 640px);
-  transform: translate(0, 0);
+  bottom: 22px;
+  width: 100%;
+  height: 113%;
+  --champion-parallax-x: 0px;
+  --champion-parallax-y: 0px;
+  transform: translate(calc(-50% + var(--champion-parallax-x)), var(--champion-parallax-y));
   transition: transform 180ms linear;
   filter: drop-shadow(-24px 0 26px rgba(0, 0, 0, 0.45));
-  pointer-events: none;
+  pointer-events: auto;
   z-index: 2;
+  display: grid;
+  place-items: center;
+  cursor: grab;
 }
 
-.dab-menu__champion-core {
+.dab-champion-preview::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: min(360px, 90%);
+  height: 36px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(0, 219, 255, 0.45) 0%, rgba(0, 219, 255, 0) 70%);
+  filter: blur(10px);
+  z-index: 0;
+}
+
+.dab-champion-preview__canvas {
   position: absolute;
   inset: 0;
-  clip-path: polygon(48% 0%, 65% 14%, 76% 38%, 90% 60%, 88% 100%, 15% 100%, 10% 60%, 24% 40%, 36% 14%);
-  background:
-    linear-gradient(180deg, rgba(190, 226, 255, 0.62) 0%, rgba(58, 172, 255, 0.34) 42%, rgba(10, 13, 24, 0.12) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow:
-    inset 0 0 90px rgba(0, 219, 255, 0.22),
-    0 0 80px rgba(0, 56, 157, 0.35);
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  z-index: 1;
+  outline: none;
+}
+
+.dab-champion-preview__icon {
+  width: min(220px, 45%);
+  height: auto;
+  color: rgba(176, 218, 255, 0.4);
+  filter: drop-shadow(0 0 24px rgba(0, 170, 255, 0.35));
+  z-index: 2;
+  pointer-events: none;
 }
 
 .dab-menu__main {
@@ -649,10 +674,10 @@ body {
 }
 
 @media (max-width: 920px) {
-  .dab-menu__champion {
-    opacity: 0.45;
-    left: 58%;
-    width: min(46vw, 300px);
+  .dab-champion-preview {
+    left: 50%;
+    width: min(52vw, 380px);
+    height: min(64vh, 520px);
   }
 
   .dab-menu__main {
@@ -688,7 +713,7 @@ body {
     padding: 0 12px;
   }
 
-  .dab-menu__champion {
+  .dab-champion-preview {
     display: none;
   }
 

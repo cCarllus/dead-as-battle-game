@@ -1,10 +1,10 @@
 import { resolveLocale, type Locale } from "../i18n";
-import { DEFAULT_ACTIVE_TAB, type MenuTabId } from "../ui/screens/mainMenu.model";
+import { DEFAULT_ACTIVE_TAB, type MenuTabId } from "../ui/navigation/menu.model";
 
 export type ScreenId =
   | "loading"
   | "nickname"
-  | "mainMenu"
+  | "home"
   | "settings";
 
 export type AppState = {

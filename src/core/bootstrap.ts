@@ -1,5 +1,5 @@
 import { renderLoadingScreen } from "../ui/screens/loading.screen";
-import { renderMainMenuScreen } from "../ui/screens/mainMenu.screen";
+import { renderHomeScreen } from "../ui/screens/home.screen";
 import { renderNicknameScreen } from "../ui/screens/nickname.screen";
 import { renderSettingsScreen } from "../ui/screens/settings.screen";
 import "../ui/styles/ui.css";
@@ -15,7 +15,7 @@ function delay(ms: number): Promise<void> {
 }
 
 async function runStartupFlow(
-  router: { goTo: (screen: "loading" | "nickname" | "mainMenu") => void }
+  router: { goTo: (screen: "loading" | "nickname" | "home") => void }
 ): Promise<void> {
   router.goTo("loading");
 
@@ -29,7 +29,7 @@ async function runStartupFlow(
   }
 
   startSession(user.id, user.nickname);
-  router.goTo("mainMenu");
+  router.goTo("home");
 }
 
 export function bootstrap(): void {
@@ -56,11 +56,11 @@ export function bootstrap(): void {
           onSubmit: (nickname) => {
             const user = registerUser(nickname);
             startSession(user.id, user.nickname);
-            goTo("mainMenu");
+            goTo("home");
           }
         });
       },
-      mainMenu: ({ uiRoot: root, state: store, goTo }) => {
+      home: ({ uiRoot: root, state: store, goTo }) => {
         const user = getCurrentUser();
         if (!user) {
           clearSession();
@@ -72,7 +72,7 @@ export function bootstrap(): void {
         const isActive = isSessionActiveForUser(user.id);
         const sessionNickname = session?.userId === user.id ? session.nickname : null;
 
-        return renderMainMenuScreen(root, {
+        return renderHomeScreen(root, {
           locale: store.get().locale,
           activeTab: store.get().activeMenuTab,
           onNavigateTab: (tab) => store.patch({ activeMenuTab: tab }),
@@ -91,7 +91,7 @@ export function bootstrap(): void {
       settings: ({ uiRoot: root, state: store, goTo }) => {
         return renderSettingsScreen(root, {
           locale: store.get().locale,
-          onBack: () => goTo("mainMenu")
+          onBack: () => goTo("home")
         });
       }
     }
