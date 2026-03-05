@@ -10,18 +10,24 @@ import type { MenuActionId } from "./home.model";
 export type HomeActions = {
   onOpenConfig: () => void;
   onOpenMultiplayer: () => void;
+  onOpenChampions: () => void;
   onExit: () => void;
   locale?: Locale;
   activeTab?: MenuTabId;
   onNavigateTab?: (tab: MenuTabId) => void;
   playerName: string;
-  playerLevel: number;
+  selectedChampionName: string;
+  selectedChampionLevel: number;
+  selectedChampionModelUrl: string;
+  selectedChampionSplashImageUrl: string;
+  selectedChampionThemeColor: string;
   isSessionActive: boolean;
 };
 
 function createActionHandlers(actions: HomeActions): Record<MenuActionId, () => void> {
   return {
     play: actions.onOpenMultiplayer,
+    champions: actions.onOpenChampions,
     settings: actions.onOpenConfig,
     exit: actions.onExit
   };
@@ -37,7 +43,11 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     locale,
     activeTab,
     playerName: actions.playerName,
-    playerLevel: actions.playerLevel,
+    selectedChampionName: actions.selectedChampionName,
+    selectedChampionLevel: actions.selectedChampionLevel,
+    selectedChampionModelUrl: actions.selectedChampionModelUrl,
+    selectedChampionSplashImageUrl: actions.selectedChampionSplashImageUrl,
+    selectedChampionThemeColor: actions.selectedChampionThemeColor,
     isSessionActive: actions.isSessionActive
   });
 

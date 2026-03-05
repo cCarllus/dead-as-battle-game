@@ -306,6 +306,7 @@ body {
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   background: #070b17;
   isolation: isolate;
+  --dab-champion-theme: #22d3ee;
 }
 
 .dab-menu__bg {
@@ -643,11 +644,37 @@ body {
   gap: 12px;
 }
 
+.dab-roster__summary {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 18, 34, 0.68);
+  backdrop-filter: blur(10px);
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.dab-roster__summary-line {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.dab-roster__summary-line + .dab-roster__summary-line {
+  margin-top: 4px;
+}
+
+.dab-roster__summary-line--accent {
+  color: var(--dab-champion-theme);
+  font-weight: 700;
+  text-shadow: 0 0 14px color-mix(in oklab, var(--dab-champion-theme) 45%, transparent);
+}
+
 .dab-roster__title {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  border-left: 4px solid #22d3ee;
+  border-left: 4px solid var(--dab-champion-theme);
   padding-left: 12px;
 }
 
@@ -1376,7 +1403,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  cursor: pointer;
+  cursor: default;
   transition: background-color 160ms ease, border-color 160ms ease;
 }
 
@@ -1464,6 +1491,7 @@ body {
 }
 
 .dab-champion-card {
+  --dab-card-theme: #22d3ee;
   position: relative;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #151622;
@@ -1477,8 +1505,8 @@ body {
 
 .dab-champion-card:hover {
   transform: translateY(-6px);
-  border-color: rgba(34, 211, 238, 0.45);
-  box-shadow: 0 16px 30px rgba(34, 211, 238, 0.2);
+  border-color: color-mix(in oklab, var(--dab-card-theme) 65%, white 12%);
+  box-shadow: 0 16px 30px color-mix(in oklab, var(--dab-card-theme) 30%, transparent);
 }
 
 .dab-champion-card__image {
@@ -1514,6 +1542,24 @@ body {
   letter-spacing: 0.04em;
 }
 
+.dab-champion-card__check {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  width: 23px;
+  height: 23px;
+  border-radius: 999px;
+  display: none;
+  place-items: center;
+  border: 1px solid color-mix(in oklab, var(--dab-card-theme) 70%, white 15%);
+  background: color-mix(in oklab, var(--dab-card-theme) 30%, #0f172a);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  box-shadow: 0 0 14px color-mix(in oklab, var(--dab-card-theme) 35%, transparent);
+}
+
 .dab-champion-card__footer {
   position: absolute;
   right: 0;
@@ -1546,27 +1592,24 @@ body {
 }
 
 .dab-champion-card.is-selected {
-  border-color: rgba(250, 204, 21, 0.85);
-  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.25), 0 0 28px rgba(250, 204, 21, 0.25);
+  border-color: color-mix(in oklab, var(--dab-card-theme) 85%, white 10%);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--dab-card-theme) 35%, transparent),
+    0 0 32px color-mix(in oklab, var(--dab-card-theme) 28%, transparent);
 }
 
 .dab-champion-card.is-selected .dab-champion-card__footer {
-  border-top-color: rgba(250, 204, 21, 0.9);
+  border-top-color: color-mix(in oklab, var(--dab-card-theme) 80%, white 10%);
 }
 
 .dab-champion-card.is-selected .dab-champion-card__level {
-  border-color: rgba(252, 211, 77, 0.6);
-  background: linear-gradient(90deg, rgba(250, 204, 21, 0.92), rgba(245, 158, 11, 0.92));
-  color: #0f172a;
+  border-color: color-mix(in oklab, var(--dab-card-theme) 82%, white 6%);
+  background: color-mix(in oklab, var(--dab-card-theme) 75%, #081021);
+  color: #f8fdff;
 }
 
-.dab-champion-card.is-legendary::after {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border: 2px solid rgba(252, 211, 77, 0.85);
-  pointer-events: none;
-  z-index: 1;
+.dab-champion-card.is-selected .dab-champion-card__check {
+  display: grid;
 }
 
 .dab-champion-card--locked {

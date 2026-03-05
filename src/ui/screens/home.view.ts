@@ -11,7 +11,11 @@ export type HomeViewOptions = {
   locale: Locale;
   activeTab: MenuTabId;
   playerName: string;
-  playerLevel: number;
+  selectedChampionName: string;
+  selectedChampionLevel: number;
+  selectedChampionModelUrl: string;
+  selectedChampionSplashImageUrl: string;
+  selectedChampionThemeColor: string;
   isSessionActive: boolean;
 };
 
@@ -86,6 +90,13 @@ function renderFooterActions(container: HTMLElement, locale: Locale): void {
     button.className = "dab-footer-button";
     button.dataset.action = item.action;
 
+    if (item.action === "champions") {
+      const icon = document.createElement("span");
+      icon.className = "dab-footer-button__icon";
+      icon.textContent = "✦";
+      button.appendChild(icon);
+    }
+
     if (item.action === "settings") {
       const icon = document.createElement("span");
       icon.className = "dab-footer-button__icon";
@@ -111,17 +122,38 @@ function renderFooterActions(container: HTMLElement, locale: Locale): void {
 export function renderHomeView(options: HomeViewOptions): HomeViewResult {
   const teamSlotsModel = createTeamSlots({
     playerName: options.playerName,
-    playerLevel: options.playerLevel,
+    selectedChampionName: options.selectedChampionName,
+    selectedChampionLevel: options.selectedChampionLevel,
     isOnline: options.isSessionActive
   });
 
   const menu = qs<HTMLElement>(options.root, ".dab-menu");
   menu.setAttribute("aria-label", t(options.locale, "menu.aria.main"));
+  menu.style.setProperty("--dab-champion-theme", options.selectedChampionThemeColor);
+
+  const menuBackground = qs<HTMLElement>(menu, ".dab-menu__bg");
+  menuBackground.style.background =
+    `linear-gradient(135deg, #0b1021 0%, #1a1b41 48%, #2d1b4e 100%), ` +
+    `url("${options.selectedChampionSplashImageUrl}")`;
+  menuBackground.style.backgroundBlendMode = "overlay";
+  menuBackground.style.backgroundSize = "cover";
+  menuBackground.style.backgroundPosition = "center";
 
   const navbar = qs<HTMLElement>(menu, '[data-slot="navbar"]');
   renderNavbar(navbar, {
     locale: options.locale,
     activeTab: options.activeTab
+  });
+
+  const welcomeMessage = qs<HTMLElement>(menu, '[data-slot="welcome-message"]');
+  welcomeMessage.textContent = t(options.locale, "home.welcome", {
+    nickname: options.playerName
+  });
+
+  const championMessage = qs<HTMLElement>(menu, '[data-slot="champion-message"]');
+  championMessage.textContent = t(options.locale, "home.currentChampion", {
+    champion: options.selectedChampionName,
+    level: options.selectedChampionLevel
   });
 
   const rosterCount = qs<HTMLElement>(menu, '[data-slot="roster-count"]');
@@ -141,7 +173,7 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
 
   const championPreview = qs<HTMLElement>(menu, "#champion-preview");
   const disposeChampionPreview = mountChampionPreview(championPreview, {
-    modelUrl: "assets/models/champions/kaiju_no_8/kaiju_no_8.glb"
+    modelUrl: options.selectedChampionModelUrl
   });
 
   const pingSlot = qs<HTMLElement>(menu, '[data-slot="ping"]');

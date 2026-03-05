@@ -1,11 +1,14 @@
 // Responsável por renderizar e ajustar preview 3D do campeão usando Babylon.js.
 import {
   ArcRotateCamera,
+  Color3,
   Color4,
   Engine,
   HemisphericLight,
+  MeshBuilder,
   Scene,
   SceneLoader,
+  StandardMaterial,
   TransformNode,
   Vector3
 } from "@babylonjs/core";
@@ -118,6 +121,40 @@ function frameCamera(camera: ArcRotateCamera, engine: Engine, frame: ChampionPre
   camera.setTarget(new Vector3(0, frame.focusY, 0));
 }
 
+function mountPlaceholderMesh(scene: Scene, root: TransformNode): ChampionPreviewFrame {
+  const material = new StandardMaterial("championPreviewPlaceholderMaterial", scene);
+  material.diffuseColor = new Color3(0.32, 0.74, 0.98);
+  material.emissiveColor = new Color3(0.05, 0.14, 0.2);
+  material.specularColor = new Color3(0.12, 0.3, 0.45);
+
+  const body = MeshBuilder.CreateCapsule(
+    "championPreviewPlaceholderCapsule",
+    {
+      height: 2.6,
+      radius: 0.62,
+      tessellation: 16
+    },
+    scene
+  );
+  body.material = material;
+  body.parent = root;
+
+  const base = MeshBuilder.CreateCylinder(
+    "championPreviewPlaceholderBase",
+    {
+      height: 0.24,
+      diameter: 2.25,
+      tessellation: 28
+    },
+    scene
+  );
+  base.position.y = -1.42;
+  base.material = material;
+  base.parent = root;
+
+  return normalizeModel(root);
+}
+
 export function mountChampionPreview(container: HTMLElement, options: ChampionPreviewOptions): () => void {
   const fallbackIcon = container.querySelector<SVGElement>(".dab-champion-preview__icon");
   const canvas = document.createElement("canvas");
@@ -173,7 +210,12 @@ export function mountChampionPreview(container: HTMLElement, options: ChampionPr
       }
     })
     .catch(() => {
-      // Keep fallback icon if GLB load fails.
+      modelFrame = mountPlaceholderMesh(scene, modelRoot);
+      frameCamera(camera, engine, modelFrame);
+
+      if (fallbackIcon && !isDisposed) {
+        fallbackIcon.style.display = "none";
+      }
     });
 
   const updateSize = (): void => {

@@ -1,9 +1,10 @@
 // Responsável por orquestrar fluxo de inicialização, navegação e integração entre telas e serviços.
-import { getUserLevel } from "../models/user";
 import type { AppRouter, ScreenRegistry } from "../core/router";
 import { createRouter } from "../core/router";
 import type { AppStateStore } from "../core/state";
 import type { SessionService } from "../core/storage";
+import { CHAMPION_CATALOG, getChampionById } from "../data/champions.catalog";
+import type { ChampionId } from "../models/champion.model";
 import { renderLoadingScreen } from "../ui/screens/loading.screen";
 import { renderHomeScreen } from "../ui/screens/home.screen";
 import { renderNicknameScreen } from "../ui/screens/nickname.screen";
@@ -45,6 +46,7 @@ function createScreenRegistry(
         onSubmit: (nickname) => {
           const user = userService.registerUser(nickname);
           sessionService.start(user.id, user.nickname);
+          state.patch({ activeMenuTab: "home" });
           goTo("home");
         }
       });
@@ -57,9 +59,9 @@ function createScreenRegistry(
         return;
       }
 
-      const snapshot = sessionService.getSnapshot();
+      const selectedChampion = getChampionById(user.selectedChampionId);
+      const selectedChampionProgress = user.champions[selectedChampion.id];
       const isSessionActive = sessionService.isActiveForUser(user.id);
-      const sessionNickname = snapshot?.userId === user.id ? snapshot.nickname : null;
 
       return renderHomeScreen(uiRoot, {
         locale: state.get().locale,
@@ -74,25 +76,55 @@ function createScreenRegistry(
           goTo("settings");
         },
         onOpenMultiplayer: () => undefined,
+        onOpenChampions: () => {
+          state.patch({ activeMenuTab: "champions" });
+          goTo("champions");
+        },
         onExit: () => {
           userService.clearCurrentUser();
           sessionService.clear();
           goTo("nickname");
         },
-        playerName: sessionNickname ?? user.nickname,
-        playerLevel: getUserLevel(user),
+        playerName: user.nickname,
+        selectedChampionName: selectedChampion.displayName,
+        selectedChampionLevel: selectedChampionProgress.level,
+        selectedChampionModelUrl: selectedChampion.modelUrl,
+        selectedChampionSplashImageUrl: selectedChampion.splashImageUrl,
+        selectedChampionThemeColor: selectedChampion.themeColor,
         isSessionActive
       });
     },
     champions: ({ uiRoot, state, goTo }) => {
+      const user = userService.getCurrentUser();
+      if (!user) {
+        goTo("nickname");
+        return;
+      }
+
+      const cards = CHAMPION_CATALOG.map((champion) => ({
+        id: champion.id,
+        displayName: champion.displayName,
+        universeName: champion.universeName,
+        level: user.champions[champion.id].level,
+        imageUrl: champion.cardImageUrl,
+        themeColor: champion.themeColor
+      }));
+
       return renderChampionsScreen(uiRoot, {
         locale: state.get().locale,
         activeTab: state.get().activeMenuTab,
+        cards,
+        selectedChampionId: user.selectedChampionId,
         onNavigateTab: (tab) => {
           state.patch({ activeMenuTab: tab });
           if (tab === "home") {
             goTo("home");
           }
+        },
+        onConfirmSelection: (championId: ChampionId) => {
+          userService.selectChampion(championId);
+          state.patch({ activeMenuTab: "home" });
+          goTo("home");
         },
         onBack: () => {
           state.patch({ activeMenuTab: "home" });
@@ -122,13 +154,13 @@ async function runStartupFlow(params: {
 
   await Promise.all([params.warmUpAssets(), delay(params.startupDelayMs)]);
 
-  const user = params.userService.getCurrentUser();
-  if (!user) {
+  if (!params.userService.hasUserProfile()) {
     params.sessionService.clear();
     params.router.goTo("nickname");
     return;
   }
 
+  const user = params.userService.ensureUserProfile();
   params.sessionService.start(user.id, user.nickname);
   params.router.goTo("home");
 }

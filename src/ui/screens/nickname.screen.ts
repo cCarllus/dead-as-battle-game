@@ -1,7 +1,7 @@
 // Responsável por renderizar a coleta de nickname e validar entrada do usuário.
 import template from "../layout/nickname.html?raw";
 import { t, type Locale } from "../../i18n";
-import { MAX_NICKNAME_LENGTH, MIN_NICKNAME_LENGTH, normalizeNickname } from "../../models/user";
+import { MAX_NICKNAME_LENGTH, MIN_NICKNAME_LENGTH, normalizeNickname } from "../../models/user.model";
 import { bind, bindDelegatedClick, qs } from "../components/dom";
 import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
 

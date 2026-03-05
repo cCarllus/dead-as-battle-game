@@ -1,7 +1,7 @@
 // Responsável por definir modelos e dados estáticos usados pela tela Home.
 import type { TranslationKey, TranslationParams } from "../../i18n";
 
-export const MENU_ACTION_IDS = ["play", "settings", "exit"] as const;
+export const MENU_ACTION_IDS = ["play", "champions", "settings", "exit"] as const;
 export type MenuActionId = (typeof MENU_ACTION_IDS)[number];
 
 export type CurrencyItem = {
@@ -35,15 +35,19 @@ export const TEAM_TOTAL_SLOTS = 3;
 
 export function createTeamSlots(params: {
   playerName: string;
-  playerLevel: number;
+  selectedChampionName: string;
+  selectedChampionLevel: number;
   isOnline: boolean;
 }): readonly TeamSlot[] {
   return [
     {
       type: "player",
       name: params.playerName,
-      detailKey: "menu.roster.level",
-      detailParams: { value: params.playerLevel },
+      detailKey: "home.currentChampionShort",
+      detailParams: {
+        champion: params.selectedChampionName,
+        level: params.selectedChampionLevel
+      },
       isSelf: true,
       isOnline: params.isOnline
     },
@@ -58,6 +62,7 @@ export type FooterAction = {
 };
 
 export const FOOTER_ACTIONS: readonly FooterAction[] = [
+  { labelKey: "menu.footer.champions", action: "champions" },
   { labelKey: "menu.footer.settings", action: "settings" },
   { labelKey: "common.back", action: "exit" }
 ];

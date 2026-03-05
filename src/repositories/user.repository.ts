@@ -1,20 +1,19 @@
-// Responsável por persistir e recuperar dados de usuário no armazenamento local do navegador.
-import { isUserModel, type UserModel } from "../models/user";
+// Responsável por persistir o perfil de usuário no localStorage com parse seguro.
+import type { UserProfile } from "../models/user.model";
 
 export type UserStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export type UserRepository = {
-  load: () => UserModel | null;
-  save: (user: UserModel) => void;
+  load: () => unknown | null;
+  save: (user: UserProfile) => void;
   clear: () => void;
 };
 
-const USER_STORAGE_KEY = "dab.user.v1";
+const USER_STORAGE_KEY = "dab:user";
 
-function parseUser(rawValue: string): UserModel | null {
+function parseStoredUser(rawValue: string): unknown | null {
   try {
-    const parsed = JSON.parse(rawValue) as unknown;
-    return isUserModel(parsed) ? parsed : null;
+    return JSON.parse(rawValue) as unknown;
   } catch {
     return null;
   }
@@ -31,7 +30,7 @@ export function createUserRepository(
         return null;
       }
 
-      return parseUser(rawValue);
+      return parseStoredUser(rawValue);
     },
     save: (user) => {
       storage.setItem(storageKey, JSON.stringify(user));
@@ -40,18 +39,4 @@ export function createUserRepository(
       storage.removeItem(storageKey);
     }
   };
-}
-
-const defaultUserRepository = createUserRepository();
-
-export function loadUser(): UserModel | null {
-  return defaultUserRepository.load();
-}
-
-export function saveUser(user: UserModel): void {
-  defaultUserRepository.save(user);
-}
-
-export function clearUser(): void {
-  defaultUserRepository.clear();
 }
