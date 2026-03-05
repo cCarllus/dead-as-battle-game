@@ -23,6 +23,7 @@
   "menu.play.tryCompetitive": "EXPERIMENTE O COMPETITIVO",
   "menu.play.changeMode": "MUDAR MODO >",
   "menu.play.quickMatch": "PARTIDA RÁPIDA",
+  "menu.play.modeTag": "PVP MULTIJOGADOR",
   "menu.play.start": "JOGAR",
   "menu.play.ping": "{value}ms",
   "menu.footer.chat": "Pressione Enter para falar no chat",

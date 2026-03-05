@@ -1,40 +1,52 @@
 <section class="dab-menu" data-screen="home">
   <div class="dab-menu__bg" data-parallax="bg"></div>
-  <div class="dab-menu__aurora dab-menu__aurora--left"></div>
-  <div class="dab-menu__aurora dab-menu__aurora--right"></div>
+  <div class="dab-menu__grid" aria-hidden="true"></div>
+  <div class="dab-menu__orb dab-menu__orb--left" aria-hidden="true"></div>
+  <div class="dab-menu__orb dab-menu__orb--right" aria-hidden="true"></div>
 
   <div data-slot="navbar"></div>
 
-  <div class="dab-menu__watermark" aria-hidden="true">
-    <h1 data-i18n="menu.watermark.title"></h1>
-    <p data-i18n="menu.watermark.subtitle"></p>
-  </div>
+  <main class="dab-menu__stage">
+    <div class="dab-menu__watermark" aria-hidden="true">
+      <h1 data-i18n="menu.watermark.title"></h1>
+      <p data-i18n="menu.watermark.subtitle"></p>
+    </div>
 
-  <div id="champion-preview" class="dab-champion-preview" data-parallax="champion" aria-hidden="true"></div>
+    <div class="dab-menu__character">
+      <div id="champion-preview" class="dab-champion-preview" aria-hidden="true"></div>
+      <div class="dab-menu__spotlight" aria-hidden="true"></div>
+    </div>
+  </main>
 
-  <main class="dab-menu__main">
-    <aside class="dab-roster">
-      <div class="dab-roster__title">
-        <h2 data-i18n="menu.roster.title"></h2>
-        <span data-slot="roster-count"></span>
-      </div>
-      <div data-slot="team-slots"></div>
-    </aside>
+  <aside class="dab-roster">
+    <div class="dab-roster__title">
+      <h2 data-i18n="menu.roster.title"></h2>
+      <span data-slot="roster-count"></span>
+    </div>
+    <div class="dab-roster__slots" data-slot="team-slots"></div>
+  </aside>
 
-    <section class="dab-play">
+  <aside class="dab-play">
+    <div class="dab-play__shell">
       <article class="dab-play__card">
         <div class="dab-play__mode">
           <h3 data-i18n="menu.play.quickMatch"></h3>
+          <p data-i18n="menu.play.modeTag"></p>
         </div>
-        <button type="button" class="dab-play__start" data-action="play" data-i18n="menu.play.start"></button>
+        <button type="button" class="dab-play__start" data-action="play">
+          <span data-i18n="menu.play.start"></span>
+          <span class="dab-play__start-icon" aria-hidden="true"></span>
+        </button>
       </article>
-
-      <div class="dab-play__status" data-slot="ping"></div>
-    </section>
-  </main>
+    </div>
+    <div class="dab-play__status" data-slot="ping"></div>
+  </aside>
 
   <footer class="dab-menu__footer">
-    <button type="button" class="dab-chat-button" data-i18n="menu.footer.chat"></button>
+    <button type="button" class="dab-chat-button">
+      <span class="dab-keycap">ENTER</span>
+      <span data-i18n="menu.footer.chat"></span>
+    </button>
     <div class="dab-footer-actions" data-slot="footer-actions"></div>
   </footer>
 </section>

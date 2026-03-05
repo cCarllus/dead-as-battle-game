@@ -58,30 +58,49 @@ function renderTeamSlots(container: HTMLElement, locale: Locale, slots: readonly
   slots.forEach((slot) => {
     const button = document.createElement("button");
     button.type = "button";
+    button.className = "dab-roster__slot";
 
     if (slot.type === "empty") {
-      button.className = "dab-roster__slot dab-roster__slot--empty";
+      button.classList.add("dab-roster__slot--empty");
       button.setAttribute("aria-label", t(locale, slot.ariaLabelKey));
-      button.textContent = "+";
+
+      const plus = document.createElement("span");
+      plus.className = "dab-roster__plus";
+      plus.textContent = "+";
+      button.appendChild(plus);
       container.appendChild(button);
       return;
     }
 
-    button.className = slot.isSelf ? "dab-roster__slot dab-roster__slot--self" : "dab-roster__slot";
+    if (slot.isSelf) {
+      button.classList.add("dab-roster__slot--self");
+    }
+
+    const avatar = document.createElement("span");
+    avatar.className = "dab-roster__avatar";
+
+    const avatarIcon = document.createElement("span");
+    avatarIcon.className = "dab-roster__avatar-icon";
+    avatarIcon.textContent = slot.name.slice(0, 1).toUpperCase();
+    avatar.appendChild(avatarIcon);
 
     const status = document.createElement("span");
     status.className = slot.isOnline
       ? "dab-roster__status"
       : "dab-roster__status dab-roster__status--offline";
+    avatar.appendChild(status);
 
     const text = document.createElement("span");
-    text.textContent = slot.name;
+    text.className = "dab-roster__info";
+
+    const name = document.createElement("strong");
+    name.textContent = slot.name;
 
     const detail = document.createElement("small");
     detail.textContent = t(locale, slot.detailKey, slot.detailParams);
-    text.appendChild(detail);
+    text.append(name, detail);
 
-    button.append(status, text);
+    button.append(avatar, text);
     container.appendChild(button);
   });
 }
@@ -94,7 +113,25 @@ function renderFooterActions(container: HTMLElement, locale: Locale): void {
     button.type = "button";
     button.className = "dab-footer-button";
     button.dataset.action = item.action;
-    button.textContent = t(locale, item.labelKey);
+
+    if (item.action === "settings") {
+      const icon = document.createElement("span");
+      icon.className = "dab-footer-button__icon";
+      icon.textContent = "⚙";
+      button.appendChild(icon);
+    }
+
+    if (item.action === "exit") {
+      const keycap = document.createElement("span");
+      keycap.className = "dab-keycap";
+      keycap.textContent = "ESC";
+      button.appendChild(keycap);
+    }
+
+    const label = document.createElement("span");
+    label.textContent = t(locale, item.labelKey);
+    button.appendChild(label);
+
     container.appendChild(button);
   });
 }
@@ -140,11 +177,13 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
 
   const championPreview = qs<HTMLElement>(menu, "#champion-preview");
   const disposeChampionPreview = mountChampionPreview(championPreview, {
-    modelUrl: "/assets/models/characters/ryomen_sukuna/ryomen_sukuna.glb"
+    modelUrl: "assets/models/champions/kaiju_no_8/kaiju_no_8.glb"
   });
 
+  const pingSlot = qs<HTMLElement>(menu, '[data-slot="ping"]');
+  pingSlot.textContent = t(locale, "menu.play.ping", { value: 42 });
+
   const parallaxBackground = menu.querySelector<HTMLElement>('[data-parallax="bg"]');
-  const parallaxChampion = menu.querySelector<HTMLElement>('[data-parallax="champion"]');
 
   const actionHandlers: Record<MenuActionId, () => void> = {
     play: actions.onOpenMultiplayer,
@@ -193,11 +232,6 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
       if (parallaxBackground) {
         parallaxBackground.style.transform = `scale(1.06) translate(${xRatio * -16}px, ${yRatio * -12}px)`;
       }
-
-      if (parallaxChampion) {
-        parallaxChampion.style.setProperty("--champion-parallax-x", `${xRatio * 18}px`);
-        parallaxChampion.style.setProperty("--champion-parallax-y", `${yRatio * 12}px`);
-      }
     },
     { signal }
   );
@@ -207,11 +241,6 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     () => {
       if (parallaxBackground) {
         parallaxBackground.style.transform = "scale(1.06) translate(0, 0)";
-      }
-
-      if (parallaxChampion) {
-        parallaxChampion.style.setProperty("--champion-parallax-x", "0px");
-        parallaxChampion.style.setProperty("--champion-parallax-y", "0px");
       }
     },
     { signal }

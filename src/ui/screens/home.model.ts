@@ -57,5 +57,5 @@ export type FooterAction = {
 
 export const FOOTER_ACTIONS: readonly FooterAction[] = [
   { labelKey: "menu.footer.settings", action: "settings" },
-  { labelKey: "menu.footer.back", action: "exit" }
+  { labelKey: "common.back", action: "exit" }
 ];

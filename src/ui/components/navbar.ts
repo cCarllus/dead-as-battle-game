@@ -52,23 +52,36 @@ export function renderNavbar(container: HTMLElement, props: NavbarProps): void {
   const tools = document.createElement("div");
   tools.className = "dab-menu__tools";
 
-  const settingsButton = document.createElement("button");
-  settingsButton.type = "button";
-  settingsButton.className = "dab-icon-button";
-  settingsButton.dataset.action = "settings";
-  settingsButton.setAttribute("aria-label", t(props.locale, "menu.tools.settingsAria"));
-  settingsButton.textContent = "⚙";
-
   const currency = document.createElement("div");
   currency.className = "dab-currency";
 
-  CURRENCY_ITEMS.forEach((item) => {
-    const span = document.createElement("span");
-    span.textContent = t(props.locale, item.labelKey, { value: formatNumber(props.locale, item.value) });
-    currency.appendChild(span);
+  CURRENCY_ITEMS.forEach((item, index) => {
+    const itemNode = document.createElement("div");
+    itemNode.className = "dab-currency__item";
+    itemNode.setAttribute("aria-label", t(props.locale, item.labelKey, { value: formatNumber(props.locale, item.value) }));
+
+    const icon = document.createElement("span");
+    icon.className = item.id === "coin"
+      ? "dab-currency__icon dab-currency__icon--coin"
+      : "dab-currency__icon dab-currency__icon--gem";
+    icon.textContent = item.id === "coin" ? "M" : "◆";
+
+    const value = document.createElement("span");
+    value.className = "dab-currency__value";
+    value.textContent = formatNumber(props.locale, item.value);
+
+    itemNode.append(icon, value);
+    currency.appendChild(itemNode);
+
+    if (index < CURRENCY_ITEMS.length - 1) {
+      const divider = document.createElement("span");
+      divider.className = "dab-currency__divider";
+      divider.setAttribute("aria-hidden", "true");
+      currency.appendChild(divider);
+    }
   });
 
-  tools.append(settingsButton, currency);
+  tools.append(currency);
   header.append(logo, nav, tools);
   container.appendChild(header);
 }

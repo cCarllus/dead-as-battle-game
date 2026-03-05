@@ -1,14 +1,27 @@
 <section class="nickname-screen" data-screen="nickname">
-  <h1 class="nickname-screen__title" data-i18n="intro.title"></h1>
-  <input
-    id="nickname-input"
-    class="nickname-screen__input"
-    type="text"
-    maxlength="16"
-    autocomplete="nickname"
-    spellcheck="false"
-    data-slot="nickname-input"
-  />
-  <button type="button" class="nickname-screen__submit" data-action="submit" data-i18n="nick.submit"></button>
-  <p class="nickname-screen__error" data-slot="error"></p>
+  <div class="nickname-screen__bg" aria-hidden="true">
+    <div class="nickname-screen__bg-gradient"></div>
+    <div class="nickname-screen__blob nickname-screen__blob--left"></div>
+    <div class="nickname-screen__blob nickname-screen__blob--right"></div>
+  </div>
+
+  <div class="nickname-screen__content">
+    <h1 class="nickname-screen__title" data-i18n="intro.title"></h1>
+
+    <div class="nickname-screen__form">
+      <input
+        id="nickname-input"
+        class="nickname-screen__input"
+        type="text"
+        maxlength="16"
+        autocomplete="nickname"
+        spellcheck="false"
+        data-slot="nickname-input"
+      />
+      <button type="button" class="nickname-screen__submit" data-action="submit" data-i18n="nick.submit"></button>
+      <p class="nickname-screen__error" data-slot="error"></p>
+    </div>
+
+    <p class="nickname-screen__helper">Seu nickname fica salvo neste dispositivo.</p>
+  </div>
 </section>
