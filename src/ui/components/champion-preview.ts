@@ -15,7 +15,8 @@ import {
 import "@babylonjs/loaders/glTF";
 
 export type ChampionPreviewOptions = {
-  modelUrl: string;
+  modelUrl?: string | null;
+  themeColor?: string;
 };
 
 type ChampionPreviewFrame = {
@@ -122,10 +123,26 @@ function frameCamera(camera: ArcRotateCamera, engine: Engine, frame: ChampionPre
 }
 
 function mountPlaceholderMesh(scene: Scene, root: TransformNode): ChampionPreviewFrame {
+  return mountPlaceholderMeshWithTheme(scene, root, new Color3(0.32, 0.74, 0.98));
+}
+
+function parseThemeColor(themeColor: string | undefined): Color3 {
+  if (!themeColor || !/^#[0-9a-fA-F]{6}$/.test(themeColor)) {
+    return new Color3(0.32, 0.74, 0.98);
+  }
+
+  const red = parseInt(themeColor.slice(1, 3), 16) / 255;
+  const green = parseInt(themeColor.slice(3, 5), 16) / 255;
+  const blue = parseInt(themeColor.slice(5, 7), 16) / 255;
+
+  return new Color3(red, green, blue);
+}
+
+function mountPlaceholderMeshWithTheme(scene: Scene, root: TransformNode, themeColor: Color3): ChampionPreviewFrame {
   const material = new StandardMaterial("championPreviewPlaceholderMaterial", scene);
-  material.diffuseColor = new Color3(0.32, 0.74, 0.98);
-  material.emissiveColor = new Color3(0.05, 0.14, 0.2);
-  material.specularColor = new Color3(0.12, 0.3, 0.45);
+  material.diffuseColor = themeColor;
+  material.emissiveColor = themeColor.scale(0.2);
+  material.specularColor = themeColor.scale(0.45);
 
   const body = MeshBuilder.CreateCapsule(
     "championPreviewPlaceholderCapsule",
@@ -191,32 +208,42 @@ export function mountChampionPreview(container: HTMLElement, options: ChampionPr
   const modelRoot = new TransformNode("championModelRoot", scene);
   let modelFrame: ChampionPreviewFrame | null = null;
   let isDisposed = false;
+  const themeColor = parseThemeColor(options.themeColor);
 
-  const { rootUrl, fileName } = splitModelPath(options.modelUrl);
-  void SceneLoader.ImportMeshAsync("", rootUrl, fileName, scene)
-    .then((result) => {
-      result.meshes.forEach((mesh) => {
-        if (!mesh.parent) {
-          mesh.parent = modelRoot;
+  if (!options.modelUrl) {
+    modelFrame = mountPlaceholderMeshWithTheme(scene, modelRoot, themeColor);
+    frameCamera(camera, engine, modelFrame);
+
+    if (fallbackIcon && !isDisposed) {
+      fallbackIcon.style.display = "none";
+    }
+  } else {
+    const { rootUrl, fileName } = splitModelPath(options.modelUrl);
+    void SceneLoader.ImportMeshAsync("", rootUrl, fileName, scene)
+      .then((result) => {
+        result.meshes.forEach((mesh) => {
+          if (!mesh.parent) {
+            mesh.parent = modelRoot;
+          }
+        });
+
+        modelFrame = normalizeModel(modelRoot);
+        frameCamera(camera, engine, modelFrame);
+        playAnimationGroups(result.animationGroups);
+
+        if (fallbackIcon && !isDisposed) {
+          fallbackIcon.style.display = "none";
+        }
+      })
+      .catch(() => {
+        modelFrame = mountPlaceholderMeshWithTheme(scene, modelRoot, themeColor);
+        frameCamera(camera, engine, modelFrame);
+
+        if (fallbackIcon && !isDisposed) {
+          fallbackIcon.style.display = "none";
         }
       });
-
-      modelFrame = normalizeModel(modelRoot);
-      frameCamera(camera, engine, modelFrame);
-      playAnimationGroups(result.animationGroups);
-
-      if (fallbackIcon && !isDisposed) {
-        fallbackIcon.style.display = "none";
-      }
-    })
-    .catch(() => {
-      modelFrame = mountPlaceholderMesh(scene, modelRoot);
-      frameCamera(camera, engine, modelFrame);
-
-      if (fallbackIcon && !isDisposed) {
-        fallbackIcon.style.display = "none";
-      }
-    });
+  }
 
   const updateSize = (): void => {
     if (isDisposed) {

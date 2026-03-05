@@ -13,9 +13,10 @@ export type HomeViewOptions = {
   playerName: string;
   selectedChampionName: string;
   selectedChampionLevel: number;
-  selectedChampionModelUrl: string;
+  selectedChampionModelUrl: string | null;
   selectedChampionSplashImageUrl: string;
   selectedChampionThemeColor: string;
+  isUserChampion: boolean;
   isSessionActive: boolean;
 };
 
@@ -156,6 +157,10 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
     level: options.selectedChampionLevel
   });
 
+  const userChampionBadge = qs<HTMLElement>(menu, '[data-slot="user-champion-badge"]');
+  userChampionBadge.hidden = !options.isUserChampion;
+  userChampionBadge.textContent = t(options.locale, "home.userChampionBadge");
+
   const rosterCount = qs<HTMLElement>(menu, '[data-slot="roster-count"]');
   rosterCount.textContent = t(options.locale, "menu.roster.count", {
     current: countPlayers(teamSlotsModel),
@@ -173,7 +178,8 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
 
   const championPreview = qs<HTMLElement>(menu, "#champion-preview");
   const disposeChampionPreview = mountChampionPreview(championPreview, {
-    modelUrl: options.selectedChampionModelUrl
+    modelUrl: options.selectedChampionModelUrl,
+    themeColor: options.selectedChampionThemeColor
   });
 
   const pingSlot = qs<HTMLElement>(menu, '[data-slot="ping"]');

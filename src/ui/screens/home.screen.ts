@@ -18,9 +18,10 @@ export type HomeActions = {
   playerName: string;
   selectedChampionName: string;
   selectedChampionLevel: number;
-  selectedChampionModelUrl: string;
+  selectedChampionModelUrl: string | null;
   selectedChampionSplashImageUrl: string;
   selectedChampionThemeColor: string;
+  isUserChampion: boolean;
   isSessionActive: boolean;
 };
 
@@ -48,6 +49,7 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     selectedChampionModelUrl: actions.selectedChampionModelUrl,
     selectedChampionSplashImageUrl: actions.selectedChampionSplashImageUrl,
     selectedChampionThemeColor: actions.selectedChampionThemeColor,
+    isUserChampion: actions.isUserChampion,
     isSessionActive: actions.isSessionActive
   });
 

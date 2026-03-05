@@ -87,6 +87,7 @@ export type ChampionsActions = {
   cards: readonly ChampionSelectionCard[];
   selectedChampionId: ChampionId;
   onNavigateTab?: (tab: MenuTabId) => void;
+  onPreviewSelection?: (championId: ChampionId) => void;
   onConfirmSelection: (championId: ChampionId) => void;
   onBack: () => void;
 };
@@ -153,6 +154,7 @@ export function renderChampionsScreen(root: HTMLElement, actions: ChampionsActio
         }
 
         previewSelectedChampionId = championId;
+        actions.onPreviewSelection?.(championId);
         renderGrid();
         return;
       }

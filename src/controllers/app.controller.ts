@@ -3,8 +3,9 @@ import type { AppRouter, ScreenRegistry } from "../core/router";
 import { createRouter } from "../core/router";
 import type { AppStateStore } from "../core/state";
 import type { SessionService } from "../core/storage";
-import { CHAMPION_CATALOG, getChampionById } from "../data/champions.catalog";
 import type { ChampionId } from "../models/champion.model";
+import { getChampionCardsForUser, getSelectedChampionForUser } from "../services/champion.service";
+import type { AudioService } from "../services/audio.service";
 import { renderLoadingScreen } from "../ui/screens/loading.screen";
 import { renderHomeScreen } from "../ui/screens/home.screen";
 import { renderNicknameScreen } from "../ui/screens/nickname.screen";
@@ -17,6 +18,7 @@ export type AppControllerDependencies = {
   state: AppStateStore;
   userService: UserService;
   sessionService: SessionService;
+  audioService: AudioService;
   warmUpAssets: () => Promise<void>;
   startupDelayMs?: number;
 };
@@ -34,7 +36,8 @@ function delay(ms: number): Promise<void> {
 
 function createScreenRegistry(
   userService: UserService,
-  sessionService: SessionService
+  sessionService: SessionService,
+  audioService: AudioService
 ): ScreenRegistry {
   return {
     loading: ({ uiRoot, state }) => {
@@ -59,7 +62,7 @@ function createScreenRegistry(
         return;
       }
 
-      const selectedChampion = getChampionById(user.selectedChampionId);
+      const selectedChampion = getSelectedChampionForUser(user);
       const selectedChampionProgress = user.champions[selectedChampion.id];
       const isSessionActive = sessionService.isActiveForUser(user.id);
 
@@ -91,6 +94,7 @@ function createScreenRegistry(
         selectedChampionModelUrl: selectedChampion.modelUrl,
         selectedChampionSplashImageUrl: selectedChampion.splashImageUrl,
         selectedChampionThemeColor: selectedChampion.themeColor,
+        isUserChampion: selectedChampion.id === "user",
         isSessionActive
       });
     },
@@ -101,11 +105,11 @@ function createScreenRegistry(
         return;
       }
 
-      const cards = CHAMPION_CATALOG.map((champion) => ({
+      const cards = getChampionCardsForUser(user).map((champion) => ({
         id: champion.id,
         displayName: champion.displayName,
         universeName: champion.universeName,
-        level: user.champions[champion.id].level,
+        level: champion.level,
         imageUrl: champion.cardImageUrl,
         themeColor: champion.themeColor
       }));
@@ -120,6 +124,9 @@ function createScreenRegistry(
           if (tab === "home") {
             goTo("home");
           }
+        },
+        onPreviewSelection: (championId: ChampionId) => {
+          audioService.playChampionSelect(championId);
         },
         onConfirmSelection: (championId: ChampionId) => {
           userService.selectChampion(championId);
@@ -170,6 +177,7 @@ export function createAppController({
   state,
   userService,
   sessionService,
+  audioService,
   warmUpAssets,
   startupDelayMs = 1200
 }: AppControllerDependencies): AppController {
@@ -178,7 +186,7 @@ export function createAppController({
       uiRoot,
       state
     },
-    createScreenRegistry(userService, sessionService)
+    createScreenRegistry(userService, sessionService, audioService)
   );
 
   return {
@@ -193,6 +201,7 @@ export function createAppController({
     },
     dispose: () => {
       router.dispose();
+      audioService.dispose();
     }
   };
 }

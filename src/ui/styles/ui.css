@@ -670,6 +670,20 @@ body {
   text-shadow: 0 0 14px color-mix(in oklab, var(--dab-champion-theme) 45%, transparent);
 }
 
+.dab-roster__summary-line--badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--dab-champion-theme) 60%, white 10%);
+  background: color-mix(in oklab, var(--dab-champion-theme) 18%, #0b1220);
+  color: #f8fbff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 .dab-roster__title {
   display: flex;
   align-items: baseline;

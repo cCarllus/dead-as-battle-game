@@ -41,6 +41,7 @@
   "home.welcome": "Welcome, {nickname}",
   "home.currentChampion": "Current champion: {champion} (Lv. {level})",
   "home.currentChampionShort": "{champion} · Lv. {level}",
+  "home.userChampionBadge": "YOUR CHARACTER",
   "menu.team.player1": "GamerTagX",
   "menu.team.player2": "FrostBite",
   "intro.title": "Dead as Battle: Multiverse (Alpha)",

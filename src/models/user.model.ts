@@ -1,4 +1,4 @@
-// Responsável por tipar e normalizar o perfil de usuário local e progresso por campeão.
+// Responsável por tipar e normalizar o perfil local do usuário com progresso por campeão.
 import type { ChampionId } from "./champion.model";
 
 export const MIN_NICKNAME_LENGTH = 3;
@@ -10,7 +10,8 @@ export type ChampionProgress = {
   xp: number;
   kills: number;
   deaths: number;
-  lastPlayedAt?: string;
+  createdAt: string;
+  lastSelectedAt?: string;
 };
 
 export type UserProfile = {
@@ -61,12 +62,13 @@ export function normalizeNickname(nickname: string): string | null {
   return isValidLength ? normalized : null;
 }
 
-export function createDefaultChampionProgress(): ChampionProgress {
+export function createDefaultChampionProgress(now: Date = new Date()): ChampionProgress {
   return {
     level: 1,
     xp: 0,
     kills: 0,
-    deaths: 0
+    deaths: 0,
+    createdAt: now.toISOString()
   };
 }
 
@@ -81,11 +83,12 @@ export function sanitizeChampionProgress(value: unknown): ChampionProgress {
     level: toSafeLevel(Number(progress.level ?? 1)),
     xp: toSafeCounter(Number(progress.xp ?? 0), 0),
     kills: toSafeCounter(Number(progress.kills ?? 0), 0),
-    deaths: toSafeCounter(Number(progress.deaths ?? 0), 0)
+    deaths: toSafeCounter(Number(progress.deaths ?? 0), 0),
+    createdAt: isValidIsoDate(progress.createdAt) ? progress.createdAt : new Date().toISOString()
   };
 
-  if (isValidIsoDate(progress.lastPlayedAt)) {
-    sanitized.lastPlayedAt = progress.lastPlayedAt;
+  if (isValidIsoDate(progress.lastSelectedAt)) {
+    sanitized.lastSelectedAt = progress.lastSelectedAt;
   }
 
   return sanitized;
@@ -98,10 +101,11 @@ export function createUserProfile(params: {
   now?: Date;
 }): UserProfile {
   const normalizedNickname = normalizeNickname(params.nickname) ?? DEFAULT_NICKNAME;
-  const createdAt = (params.now ?? new Date()).toISOString();
+  const now = params.now ?? new Date();
+  const createdAt = now.toISOString();
 
   const champions = params.championIds.reduce((acc, championId) => {
-    acc[championId] = createDefaultChampionProgress();
+    acc[championId] = createDefaultChampionProgress(now);
     return acc;
   }, {} as Record<ChampionId, ChampionProgress>);
 
