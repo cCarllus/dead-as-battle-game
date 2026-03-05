@@ -1,0 +1,57 @@
+<!-- Responsável por estruturar o layout da tela de seleção de campeões. -->
+<section class="dab-champions" data-screen="champions">
+  <div class="dab-champions__bg" aria-hidden="true">
+    <div class="dab-champions__bg-gradient"></div>
+    <div class="dab-champions__shard dab-champions__shard--left"></div>
+    <div class="dab-champions__shard dab-champions__shard--right"></div>
+    <div class="dab-champions__glow dab-champions__glow--left"></div>
+    <div class="dab-champions__glow dab-champions__glow--right"></div>
+    <div class="dab-champions__grid-overlay"></div>
+  </div>
+
+  <div class="dab-champions__edge dab-champions__edge--left" aria-hidden="true">
+    <span></span>
+    <span></span>
+  </div>
+  <div class="dab-champions__edge dab-champions__edge--right" aria-hidden="true">
+    <span></span>
+    <span></span>
+  </div>
+
+  <div data-slot="navbar"></div>
+
+  <div class="dab-champions__subnav" aria-hidden="true">
+    <div class="dab-champions__subnav-tag" data-i18n="champions.tag.heroes"></div>
+  </div>
+
+  <main class="dab-champions__main">
+    <header class="dab-champions__header">
+      <div class="dab-champions__header-spacer"></div>
+      <div class="dab-champions__filter">
+        <button type="button" class="dab-champions__filter-btn" data-action="toggle-filter">
+          <span class="dab-champions__filter-icon" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </span>
+          <span data-slot="filter-label"></span>
+          <span class="dab-champions__filter-chevron" aria-hidden="true">v</span>
+        </button>
+        <div class="dab-champions__filter-menu" data-slot="filter-options" hidden></div>
+      </div>
+    </header>
+
+    <div class="dab-champions__grid" data-slot="champion-grid"></div>
+  </main>
+
+  <footer class="dab-champions__footer">
+    <div></div>
+    <div class="dab-champions__actions">
+      <button type="button" class="dab-champions__confirm" data-action="confirm">
+        <span data-i18n="champions.confirm"></span>
+      </button>
+      <button type="button" class="dab-champions__back" data-action="back">
+        <span class="dab-keycap">ESC</span>
+        <span data-i18n="common.back"></span>
+      </button>
+    </div>
+  </footer>
+</section>

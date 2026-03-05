@@ -8,6 +8,7 @@ import { renderLoadingScreen } from "../ui/screens/loading.screen";
 import { renderHomeScreen } from "../ui/screens/home.screen";
 import { renderNicknameScreen } from "../ui/screens/nickname.screen";
 import { renderSettingsScreen } from "../ui/screens/settings.screen";
+import { renderChampionsScreen } from "../ui/screens/champions.screen";
 import type { UserService } from "../services/user.service";
 
 export type AppControllerDependencies = {
@@ -65,6 +66,9 @@ function createScreenRegistry(
         activeTab: state.get().activeMenuTab,
         onNavigateTab: (tab) => {
           state.patch({ activeMenuTab: tab });
+          if (tab === "champions") {
+            goTo("champions");
+          }
         },
         onOpenConfig: () => {
           goTo("settings");
@@ -78,6 +82,22 @@ function createScreenRegistry(
         playerName: sessionNickname ?? user.nickname,
         playerLevel: getUserLevel(user),
         isSessionActive
+      });
+    },
+    champions: ({ uiRoot, state, goTo }) => {
+      return renderChampionsScreen(uiRoot, {
+        locale: state.get().locale,
+        activeTab: state.get().activeMenuTab,
+        onNavigateTab: (tab) => {
+          state.patch({ activeMenuTab: tab });
+          if (tab === "home") {
+            goTo("home");
+          }
+        },
+        onBack: () => {
+          state.patch({ activeMenuTab: "home" });
+          goTo("home");
+        }
       });
     },
     settings: ({ uiRoot, state, goTo }) => {

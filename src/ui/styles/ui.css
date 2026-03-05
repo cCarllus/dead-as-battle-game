@@ -1167,3 +1167,604 @@ body {
     padding: 8px 12px;
   }
 }
+
+.dab-champions,
+.dab-champions * {
+  box-sizing: border-box;
+}
+
+.dab-champions {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: auto;
+  color: #f8fbff;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  background: #070b17;
+  isolation: isolate;
+}
+
+.dab-champions__bg {
+  position: absolute;
+  inset: 0;
+  z-index: -5;
+}
+
+.dab-champions__bg-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(140deg, #0b0c15 0%, #15162b 54%, #1d1135 100%);
+}
+
+.dab-champions__shard {
+  position: absolute;
+  pointer-events: none;
+}
+
+.dab-champions__shard--left {
+  top: -18%;
+  left: -12%;
+  width: 62%;
+  height: 152%;
+  transform: rotate(3deg) skewX(15deg);
+  background: rgba(79, 70, 229, 0.09);
+  filter: blur(72px);
+}
+
+.dab-champions__shard--right {
+  top: 10%;
+  right: -22%;
+  width: 72%;
+  height: 120%;
+  transform: skewX(-20deg);
+  background: rgba(126, 34, 206, 0.08);
+  filter: blur(48px);
+}
+
+.dab-champions__glow {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.dab-champions__glow--left {
+  top: 30%;
+  left: 24%;
+  width: min(48vw, 380px);
+  height: min(48vw, 380px);
+  background: rgba(34, 211, 238, 0.08);
+  filter: blur(120px);
+}
+
+.dab-champions__glow--right {
+  right: 26%;
+  bottom: 24%;
+  width: min(62vw, 640px);
+  height: min(62vw, 640px);
+  background: rgba(79, 70, 229, 0.08);
+  filter: blur(150px);
+}
+
+.dab-champions__grid-overlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0.3;
+  mix-blend-mode: overlay;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1), rgba(0, 0, 0, 0));
+}
+
+.dab-champions__edge {
+  position: absolute;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transform: translateY(-50%);
+  opacity: 0.35;
+  z-index: 1;
+}
+
+.dab-champions__edge span {
+  width: 4px;
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.9), rgba(56, 189, 248, 0.5));
+  transform: skewY(30deg);
+}
+
+.dab-champions__edge span:first-child {
+  height: 64px;
+}
+
+.dab-champions__edge span:last-child {
+  height: 92px;
+  margin-left: 7px;
+}
+
+.dab-champions__edge--left {
+  left: 26px;
+}
+
+.dab-champions__edge--right {
+  right: 26px;
+  align-items: flex-end;
+}
+
+.dab-champions__edge--right span {
+  transform: skewY(-30deg);
+}
+
+.dab-champions__edge--right span:first-child {
+  margin-right: 7px;
+}
+
+.dab-champions__subnav {
+  position: absolute;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 42;
+  pointer-events: none;
+}
+
+.dab-champions__subnav-tag {
+  border: 1px solid rgba(252, 211, 77, 0.5);
+  border-top: 0;
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+  background: linear-gradient(90deg, #facc15, #f59e0b);
+  color: #0f172a;
+  padding: 9px 24px;
+  transform: skewX(-14deg);
+  box-shadow: 0 8px 18px rgba(250, 204, 21, 0.24);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dab-champions__subnav-tag::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(17, 24, 39, 0.24);
+  pointer-events: none;
+}
+
+.dab-champions__main {
+  position: absolute;
+  inset: 0;
+  padding: 122px 32px 106px;
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+  z-index: 10;
+}
+
+.dab-champions__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 20px;
+}
+
+.dab-champions__header-spacer {
+  flex: 1;
+}
+
+.dab-champions__filter {
+  position: relative;
+  z-index: 30;
+}
+
+.dab-champions__filter-btn {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  background: #24273a;
+  color: rgba(255, 255, 255, 0.95);
+  min-height: 42px;
+  min-width: 214px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 14px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.dab-champions__filter-btn:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: #2c3047;
+}
+
+.dab-champions__filter-icon {
+  width: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  opacity: 0.7;
+}
+
+.dab-champions__filter-icon span {
+  width: 4px;
+  height: 4px;
+  background: currentColor;
+}
+
+.dab-champions__filter-chevron {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+}
+
+.dab-champions__filter-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 214px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(16, 20, 35, 0.95);
+  box-shadow: 0 20px 34px rgba(2, 6, 23, 0.45);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dab-champions__filter-menu[hidden] {
+  display: none;
+}
+
+.dab-champions__filter-option {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: left;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.dab-champions__filter-option:hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: #fff;
+}
+
+.dab-champions__filter-option.is-active {
+  background: rgba(34, 211, 238, 0.2);
+  color: #67e8f9;
+}
+
+.dab-champions__grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  height: calc(100vh - 262px);
+  overflow-y: auto;
+  padding-top: 8px;
+  padding-bottom: 18px;
+  scrollbar-width: none;
+}
+
+.dab-champions__grid::-webkit-scrollbar {
+  display: none;
+}
+
+.dab-champion-card {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #151622;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 3 / 4.5;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.45);
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.dab-champion-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(34, 211, 238, 0.45);
+  box-shadow: 0 16px 30px rgba(34, 211, 238, 0.2);
+}
+
+.dab-champion-card__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.78;
+  filter: saturate(0.65);
+  transition: transform 360ms ease, opacity 220ms ease, filter 220ms ease;
+}
+
+.dab-champion-card:hover .dab-champion-card__image {
+  transform: scale(1.06);
+  opacity: 0.96;
+  filter: saturate(1);
+}
+
+.dab-champion-card__level {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  padding: 4px 9px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(2, 6, 23, 0.65);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.dab-champion-card__footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  background: rgba(26, 28, 42, 0.92);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 10px 12px;
+}
+
+.dab-champion-card__footer strong {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dab-champion-card__footer small {
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.76rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.dab-champion-card.is-selected {
+  border-color: rgba(250, 204, 21, 0.85);
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.25), 0 0 28px rgba(250, 204, 21, 0.25);
+}
+
+.dab-champion-card.is-selected .dab-champion-card__footer {
+  border-top-color: rgba(250, 204, 21, 0.9);
+}
+
+.dab-champion-card.is-selected .dab-champion-card__level {
+  border-color: rgba(252, 211, 77, 0.6);
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.92), rgba(245, 158, 11, 0.92));
+  color: #0f172a;
+}
+
+.dab-champion-card.is-legendary::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border: 2px solid rgba(252, 211, 77, 0.85);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.dab-champion-card--locked {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(26, 28, 42, 0.94), rgba(13, 14, 23, 0.98));
+  cursor: not-allowed;
+}
+
+.dab-champion-card--locked::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.42);
+}
+
+.dab-champion-card--locked:hover {
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.45);
+}
+
+.dab-champion-card__locked-text {
+  position: relative;
+  z-index: 2;
+  color: rgba(255, 255, 255, 0.24);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dab-champion-card__locked-line {
+  width: 72%;
+  height: 10px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dab-champions__footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 45;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 56px 32px 22px;
+  background: linear-gradient(180deg, rgba(7, 11, 23, 0), rgba(7, 11, 23, 0.95) 62%);
+}
+
+.dab-champions__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dab-champions__confirm {
+  border: 1px solid rgba(252, 211, 77, 0.72);
+  border-radius: 4px;
+  background: linear-gradient(90deg, #facc15, #f59e0b);
+  color: #0f172a;
+  min-height: 46px;
+  padding: 0 26px;
+  transform: skewX(-10deg);
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: filter 170ms ease, box-shadow 170ms ease;
+}
+
+.dab-champions__confirm span {
+  display: block;
+  transform: skewX(10deg);
+}
+
+.dab-champions__confirm:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 0 22px rgba(250, 204, 21, 0.3);
+}
+
+.dab-champions__confirm:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.dab-champions__back {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  background: rgba(26, 28, 42, 0.88);
+  color: rgba(255, 255, 255, 0.68);
+  min-height: 44px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transform: skewX(-10deg);
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease;
+}
+
+.dab-champions__back:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dab-champions__back span {
+  transform: skewX(10deg);
+}
+
+@media (min-width: 640px) {
+  .dab-champions__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 820px) {
+  .dab-champions__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1040px) {
+  .dab-champions__grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1260px) {
+  .dab-champions__grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1480px) {
+  .dab-champions__grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1080px) {
+  .dab-champions__main {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .dab-champions__footer {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  .dab-champions {
+    overflow-y: auto;
+  }
+
+  .dab-champions__subnav {
+    top: 106px;
+  }
+
+  .dab-champions__main {
+    position: relative;
+    inset: auto;
+    padding: 166px 12px 18px;
+  }
+
+  .dab-champions__header {
+    margin-bottom: 14px;
+  }
+
+  .dab-champions__filter-btn {
+    min-width: 182px;
+    font-size: 0.76rem;
+  }
+
+  .dab-champions__grid {
+    height: auto;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .dab-champions__footer {
+    position: relative;
+    inset: auto;
+    padding: 22px 0;
+    margin-top: 12px;
+    background: transparent;
+  }
+
+  .dab-champions__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
