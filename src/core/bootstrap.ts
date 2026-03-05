@@ -1,105 +1,33 @@
-import { renderLoadingScreen } from "../ui/screens/loading.screen";
-import { renderHomeScreen } from "../ui/screens/home.screen";
-import { renderNicknameScreen } from "../ui/screens/nickname.screen";
-import { renderSettingsScreen } from "../ui/screens/settings.screen";
+// Responsável por compor dependências da aplicação e inicializar o ciclo de vida principal.
 import "../ui/styles/ui.css";
-import { clearCurrentUser, getCurrentUser, registerUser } from "../services/user.service";
-import { getUserLevel } from "../models/user";
+import { createAppController } from "../controllers/app.controller";
 import { warmUpAssetCache } from "./cache";
-import { createRouter } from "./router";
 import { createAppState } from "./state";
-import { clearSession, getSessionSnapshot, isSessionActiveForUser, startSession } from "./storage";
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function runStartupFlow(
-  router: { goTo: (screen: "loading" | "nickname" | "home") => void }
-): Promise<void> {
-  router.goTo("loading");
-
-  await Promise.all([warmUpAssetCache(), delay(1200)]);
-
-  const user = getCurrentUser();
-  if (!user) {
-    clearSession();
-    router.goTo("nickname");
-    return;
-  }
-
-  startSession(user.id, user.nickname);
-  router.goTo("home");
-}
+import { createSessionService } from "./storage";
+import { createUserRepository } from "../repositories/user.repository";
+import { createUserService } from "../services/user.service";
 
 export function bootstrap(): void {
   const uiRoot = document.getElementById("ui-root") as HTMLDivElement | null;
-
   if (!uiRoot) {
     throw new Error("Elemento principal de UI não encontrado.");
   }
 
-  const state = createAppState();
+  const appState = createAppState();
+  const userService = createUserService({ repository: createUserRepository() });
+  const sessionService = createSessionService();
 
-  const router = createRouter(
-    {
-      uiRoot,
-      state
-    },
-    {
-      loading: ({ uiRoot: root, state: store }) => {
-        renderLoadingScreen(root, { locale: store.get().locale });
-      },
-      nickname: ({ uiRoot: root, state: store, goTo }) => {
-        return renderNicknameScreen(root, {
-          locale: store.get().locale,
-          onSubmit: (nickname) => {
-            const user = registerUser(nickname);
-            startSession(user.id, user.nickname);
-            goTo("home");
-          }
-        });
-      },
-      home: ({ uiRoot: root, state: store, goTo }) => {
-        const user = getCurrentUser();
-        if (!user) {
-          clearSession();
-          goTo("nickname");
-          return;
-        }
+  const appController = createAppController({
+    uiRoot,
+    state: appState,
+    userService,
+    sessionService,
+    warmUpAssets: warmUpAssetCache
+  });
 
-        const session = getSessionSnapshot();
-        const isActive = isSessionActiveForUser(user.id);
-        const sessionNickname = session?.userId === user.id ? session.nickname : null;
-
-        return renderHomeScreen(root, {
-          locale: store.get().locale,
-          activeTab: store.get().activeMenuTab,
-          onNavigateTab: (tab) => store.patch({ activeMenuTab: tab }),
-          onOpenConfig: () => goTo("settings"),
-          onOpenMultiplayer: () => undefined,
-          onExit: () => {
-            clearCurrentUser();
-            clearSession();
-            goTo("nickname");
-          },
-          playerName: sessionNickname ?? user.nickname,
-          playerLevel: getUserLevel(user),
-          isSessionActive: isActive
-        });
-      },
-      settings: ({ uiRoot: root, state: store, goTo }) => {
-        return renderSettingsScreen(root, {
-          locale: store.get().locale,
-          onBack: () => goTo("home")
-        });
-      }
-    }
-  );
-
-  void runStartupFlow(router);
+  appController.start();
 
   window.addEventListener("beforeunload", () => {
-    router.dispose();
+    appController.dispose();
   });
 }

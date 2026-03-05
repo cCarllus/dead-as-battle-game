@@ -1,6 +1,8 @@
+// Responsável por definir modelos e dados estáticos usados pela tela Home.
 import type { TranslationKey, TranslationParams } from "../../i18n";
 
-export type MenuActionId = "play" | "settings" | "exit";
+export const MENU_ACTION_IDS = ["play", "settings", "exit"] as const;
+export type MenuActionId = (typeof MENU_ACTION_IDS)[number];
 
 export type CurrencyItem = {
   id: "coin" | "gem";
@@ -59,3 +61,7 @@ export const FOOTER_ACTIONS: readonly FooterAction[] = [
   { labelKey: "menu.footer.settings", action: "settings" },
   { labelKey: "common.back", action: "exit" }
 ];
+
+export function isMenuActionId(value: string | undefined): value is MenuActionId {
+  return value !== undefined && MENU_ACTION_IDS.some((actionId) => actionId === value);
+}

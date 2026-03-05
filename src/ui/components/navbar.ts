@@ -1,3 +1,4 @@
+// Responsável por renderizar cabeçalho de navegação e indicadores de moeda da Home.
 import { t, type Locale } from "../../i18n";
 import { MENU_NAV_ITEMS, type MenuTabId } from "../navigation/menu.model";
 import { CURRENCY_ITEMS } from "../screens/home.model";

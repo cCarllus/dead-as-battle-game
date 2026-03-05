@@ -1,11 +1,8 @@
+// Responsável por armazenar e atualizar estado global simples da aplicação.
 import { resolveLocale, type Locale } from "../i18n";
 import { DEFAULT_ACTIVE_TAB, type MenuTabId } from "../ui/navigation/menu.model";
 
-export type ScreenId =
-  | "loading"
-  | "nickname"
-  | "home"
-  | "settings";
+export type ScreenId = "loading" | "nickname" | "home" | "settings";
 
 export type AppState = {
   currentScreen: ScreenId;
@@ -19,20 +16,23 @@ export type AppStateStore = {
   patch: (partial: Partial<AppState>) => void;
 };
 
-export function createAppState(initialState: Partial<AppState> = {}): AppStateStore {
-  let state: AppState = {
+function createDefaultState(): AppState {
+  return {
     currentScreen: "loading",
     locale: resolveLocale(document.documentElement.lang),
-    activeMenuTab: DEFAULT_ACTIVE_TAB,
-    ...initialState
+    activeMenuTab: DEFAULT_ACTIVE_TAB
   };
+}
+
+export function createAppState(initialState: Partial<AppState> = {}): AppStateStore {
+  let state: AppState = { ...createDefaultState(), ...initialState };
 
   return {
     get: () => state,
-    set: (nextState: AppState) => {
+    set: (nextState) => {
       state = nextState;
     },
-    patch: (partial: Partial<AppState>) => {
+    patch: (partial) => {
       state = { ...state, ...partial };
     }
   };

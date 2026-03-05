@@ -1,3 +1,4 @@
+// Responsável por centralizar configuração de abas de navegação do menu principal.
 import type { TranslationKey } from "../../i18n";
 
 export type MenuTabId = "home" | "champions" | "store" | "notes";

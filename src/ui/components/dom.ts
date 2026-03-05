@@ -1,3 +1,4 @@
+// Responsável por utilitários reutilizáveis de manipulação de DOM e hidratação de traduções.
 import { t, type Locale, type TranslationKey } from "../../i18n";
 
 export function clearElement(element: HTMLElement): void {
@@ -24,16 +25,35 @@ export function bind<K extends keyof HTMLElementEventMap>(
   options?: AddEventListenerOptions
 ): () => void {
   element.addEventListener(eventName, handler as EventListener, options);
-  return () => element.removeEventListener(eventName, handler as EventListener, options);
+  return () => {
+    element.removeEventListener(eventName, handler as EventListener, options);
+  };
 }
 
-export function createButton(label: string, onClick: () => void): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "menu-button";
-  button.textContent = label;
-  button.addEventListener("click", onClick);
-  return button;
+export function bindDelegatedClick(
+  root: HTMLElement,
+  selector: string,
+  handler: (button: HTMLButtonElement, event: MouseEvent) => void,
+  options?: AddEventListenerOptions
+): () => void {
+  return bind(
+    root,
+    "click",
+    (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) {
+        return;
+      }
+
+      const button = target.closest<HTMLButtonElement>(selector);
+      if (!button || !root.contains(button)) {
+        return;
+      }
+
+      handler(button, event);
+    },
+    options
+  );
 }
 
 export function hydrateI18n(root: ParentNode, locale: Locale): void {

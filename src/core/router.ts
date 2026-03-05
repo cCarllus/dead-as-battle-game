@@ -1,3 +1,4 @@
+// Responsável por controlar navegação entre telas e ciclo de vida de cleanups de UI.
 import type { AppStateStore, ScreenId } from "./state";
 
 export type ScreenContext = {
@@ -10,29 +11,31 @@ export type ScreenHandler = (context: ScreenContext) => void | (() => void);
 
 export type ScreenRegistry = Record<ScreenId, ScreenHandler>;
 
-export function createRouter(
-  baseContext: Omit<ScreenContext, "goTo">,
-  screens: ScreenRegistry
-): { goTo: (screen: ScreenId) => void; dispose: () => void } {
-  let activeCleanup: (() => void) | null = null;
+export type AppRouter = {
+  goTo: (screen: ScreenId) => void;
+  dispose: () => void;
+};
+
+export function createRouter(baseContext: Omit<ScreenContext, "goTo">, screens: ScreenRegistry): AppRouter {
+  let disposeCurrentScreen: (() => void) | null = null;
 
   const goTo = (screen: ScreenId): void => {
-    activeCleanup?.();
-    activeCleanup = null;
+    disposeCurrentScreen?.();
+    disposeCurrentScreen = null;
 
     baseContext.state.patch({ currentScreen: screen });
     const cleanup = screens[screen]({ ...baseContext, goTo });
 
     if (cleanup) {
-      activeCleanup = cleanup;
+      disposeCurrentScreen = cleanup;
     }
   };
 
   return {
     goTo,
     dispose: () => {
-      activeCleanup?.();
-      activeCleanup = null;
+      disposeCurrentScreen?.();
+      disposeCurrentScreen = null;
     }
   };
 }

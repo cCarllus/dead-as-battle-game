@@ -1,3 +1,4 @@
+// Responsável por resolver locale e fornecer traduções parametrizadas da aplicação.
 import enUS from "./locales/en-US.json";
 import ptBR from "./locales/pt-BR.json";
 

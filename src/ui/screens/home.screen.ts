@@ -1,20 +1,11 @@
+// Responsável por compor renderização e interações da tela Home.
 import template from "../layout/home.html?raw";
-import { resolveLocale, t, type Locale } from "../../i18n";
-import { clearElement, hydrateI18n, qs } from "../components/dom";
-import { mountChampionPreview } from "../components/champion-preview";
-import { renderNavbar } from "../components/navbar";
-import {
-  DEFAULT_ACTIVE_TAB,
-  MENU_NAV_ITEMS,
-  type MenuTabId
-} from "../navigation/menu.model";
-import {
-  createTeamSlots,
-  FOOTER_ACTIONS,
-  TEAM_TOTAL_SLOTS,
-  type MenuActionId,
-  type TeamSlot
-} from "./home.model";
+import type { Locale } from "../../i18n";
+import { DEFAULT_ACTIVE_TAB, type MenuTabId } from "../navigation/menu.model";
+import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
+import { bindHomeEvents } from "./home.events";
+import { renderHomeView } from "./home.view";
+import type { MenuActionId } from "./home.model";
 
 export type HomeActions = {
   onOpenConfig: () => void;
@@ -28,226 +19,43 @@ export type HomeActions = {
   isSessionActive: boolean;
 };
 
-const MENU_TAB_ID_SET = new Set<string>(MENU_NAV_ITEMS.map((item) => item.id));
-
-function isMenuTabId(value: string | undefined): value is MenuTabId {
-  return value !== undefined && MENU_TAB_ID_SET.has(value);
-}
-
-function isMenuActionId(value: string | undefined): value is MenuActionId {
-  return value === "play" || value === "settings" || value === "exit";
-}
-
-function setActiveTab(menu: HTMLElement, activeTab: MenuTabId): void {
-  menu.querySelectorAll<HTMLButtonElement>(".dab-menu__nav-btn[data-tab]").forEach((button) => {
-    const isActive = button.dataset.tab === activeTab;
-    button.classList.toggle("is-active", isActive);
-
-    if (isActive) {
-      button.setAttribute("aria-current", "page");
-      return;
-    }
-
-    button.removeAttribute("aria-current");
-  });
-}
-
-function renderTeamSlots(container: HTMLElement, locale: Locale, slots: readonly TeamSlot[]): void {
-  container.replaceChildren();
-
-  slots.forEach((slot) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "dab-roster__slot";
-
-    if (slot.type === "empty") {
-      button.classList.add("dab-roster__slot--empty");
-      button.setAttribute("aria-label", t(locale, slot.ariaLabelKey));
-
-      const plus = document.createElement("span");
-      plus.className = "dab-roster__plus";
-      plus.textContent = "+";
-      button.appendChild(plus);
-      container.appendChild(button);
-      return;
-    }
-
-    if (slot.isSelf) {
-      button.classList.add("dab-roster__slot--self");
-    }
-
-    const avatar = document.createElement("span");
-    avatar.className = "dab-roster__avatar";
-
-    const avatarIcon = document.createElement("span");
-    avatarIcon.className = "dab-roster__avatar-icon";
-    avatarIcon.textContent = slot.name.slice(0, 1).toUpperCase();
-    avatar.appendChild(avatarIcon);
-
-    const status = document.createElement("span");
-    status.className = slot.isOnline
-      ? "dab-roster__status"
-      : "dab-roster__status dab-roster__status--offline";
-    avatar.appendChild(status);
-
-    const text = document.createElement("span");
-    text.className = "dab-roster__info";
-
-    const name = document.createElement("strong");
-    name.textContent = slot.name;
-
-    const detail = document.createElement("small");
-    detail.textContent = t(locale, slot.detailKey, slot.detailParams);
-    text.append(name, detail);
-
-    button.append(avatar, text);
-    container.appendChild(button);
-  });
-}
-
-function renderFooterActions(container: HTMLElement, locale: Locale): void {
-  container.replaceChildren();
-
-  FOOTER_ACTIONS.forEach((item) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "dab-footer-button";
-    button.dataset.action = item.action;
-
-    if (item.action === "settings") {
-      const icon = document.createElement("span");
-      icon.className = "dab-footer-button__icon";
-      icon.textContent = "⚙";
-      button.appendChild(icon);
-    }
-
-    if (item.action === "exit") {
-      const keycap = document.createElement("span");
-      keycap.className = "dab-keycap";
-      keycap.textContent = "ESC";
-      button.appendChild(keycap);
-    }
-
-    const label = document.createElement("span");
-    label.textContent = t(locale, item.labelKey);
-    button.appendChild(label);
-
-    container.appendChild(button);
-  });
-}
-
-export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () => void {
-  const locale = resolveLocale(actions.locale ?? document.documentElement.lang);
-  let activeTab = actions.activeTab ?? DEFAULT_ACTIVE_TAB;
-
-  const teamSlotsModel = createTeamSlots({
-    playerName: actions.playerName,
-    playerLevel: actions.playerLevel,
-    isOnline: actions.isSessionActive
-  });
-  const currentPlayers = teamSlotsModel.filter((slot) => slot.type === "player").length;
-
-  clearElement(root);
-  root.innerHTML = template;
-
-  const menu = qs<HTMLElement>(root, ".dab-menu");
-  menu.setAttribute("aria-label", t(locale, "menu.aria.main"));
-  hydrateI18n(menu, locale);
-
-  const navbar = qs<HTMLElement>(menu, '[data-slot="navbar"]');
-  renderNavbar(navbar, {
-    locale,
-    activeTab
-  });
-
-  const rosterCount = qs<HTMLElement>(menu, '[data-slot="roster-count"]');
-  rosterCount.textContent = t(locale, "menu.roster.count", {
-    current: currentPlayers,
-    total: TEAM_TOTAL_SLOTS
-  });
-
-  const teamSlots = qs<HTMLElement>(menu, '[data-slot="team-slots"]');
-  renderTeamSlots(teamSlots, locale, teamSlotsModel);
-
-  const footerActions = qs<HTMLElement>(menu, '[data-slot="footer-actions"]');
-  renderFooterActions(footerActions, locale);
-
-  const playSection = qs<HTMLElement>(menu, ".dab-play");
-  playSection.setAttribute("aria-label", t(locale, "menu.aria.playModes"));
-
-  const championPreview = qs<HTMLElement>(menu, "#champion-preview");
-  const disposeChampionPreview = mountChampionPreview(championPreview, {
-    modelUrl: "assets/models/champions/kaiju_no_8/kaiju_no_8.glb"
-  });
-
-  const pingSlot = qs<HTMLElement>(menu, '[data-slot="ping"]');
-  pingSlot.textContent = t(locale, "menu.play.ping", { value: 42 });
-
-  const parallaxBackground = menu.querySelector<HTMLElement>('[data-parallax="bg"]');
-
-  const actionHandlers: Record<MenuActionId, () => void> = {
+function createActionHandlers(actions: HomeActions): Record<MenuActionId, () => void> {
+  return {
     play: actions.onOpenMultiplayer,
     settings: actions.onOpenConfig,
     exit: actions.onExit
   };
+}
 
-  const abortController = new AbortController();
-  const { signal } = abortController;
+export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () => void {
+  const locale = resolveScreenLocale(actions.locale);
+  const activeTab = actions.activeTab ?? DEFAULT_ACTIVE_TAB;
+  const menu = renderScreenTemplate(root, template, '[data-screen="home"]', locale);
 
-  menu.addEventListener(
-    "click",
-    (event) => {
-      const target = event.target as HTMLElement | null;
-      if (!target) {
-        return;
-      }
+  const homeView = renderHomeView({
+    root,
+    locale,
+    activeTab,
+    playerName: actions.playerName,
+    playerLevel: actions.playerLevel,
+    isSessionActive: actions.isSessionActive
+  });
 
-      const button = target.closest<HTMLButtonElement>("button");
-      if (!button || !menu.contains(button)) {
-        return;
-      }
+  const actionHandlers = createActionHandlers(actions);
 
-      const tab = button.dataset.tab;
-      if (isMenuTabId(tab)) {
-        activeTab = tab;
-        setActiveTab(menu, activeTab);
-        actions.onNavigateTab?.(activeTab);
-      }
-
-      const action = button.dataset.action;
-      if (isMenuActionId(action)) {
-        actionHandlers[action]();
-      }
+  const disposeEvents = bindHomeEvents({
+    menu,
+    initialActiveTab: activeTab,
+    onTabChange: (tab) => {
+      actions.onNavigateTab?.(tab);
     },
-    { signal }
-  );
-
-  menu.addEventListener(
-    "pointermove",
-    (event) => {
-      const bounds = menu.getBoundingClientRect();
-      const xRatio = (event.clientX - bounds.left) / bounds.width - 0.5;
-      const yRatio = (event.clientY - bounds.top) / bounds.height - 0.5;
-
-      if (parallaxBackground) {
-        parallaxBackground.style.transform = `scale(1.06) translate(${xRatio * -16}px, ${yRatio * -12}px)`;
-      }
-    },
-    { signal }
-  );
-
-  menu.addEventListener(
-    "pointerleave",
-    () => {
-      if (parallaxBackground) {
-        parallaxBackground.style.transform = "scale(1.06) translate(0, 0)";
-      }
-    },
-    { signal }
-  );
+    onAction: (actionId) => {
+      actionHandlers[actionId]();
+    }
+  });
 
   return () => {
-    abortController.abort();
-    disposeChampionPreview();
+    disposeEvents();
+    homeView.dispose();
   };
 }

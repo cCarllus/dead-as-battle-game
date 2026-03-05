@@ -1,32 +1,61 @@
+// Responsável por orquestrar casos de uso de usuário com regras de domínio e persistência.
 import {
+  applyMatchResult,
   createUserModel,
-  withMatchResult,
   type MatchResult,
   type UserModel
 } from "../models/user";
-import { clearUser, loadUser, saveUser } from "../repositories/user.repository";
+import { createUserRepository, type UserRepository } from "../repositories/user.repository";
+
+export type UserService = {
+  getCurrentUser: () => UserModel | null;
+  registerUser: (nickname: string) => UserModel;
+  clearCurrentUser: () => void;
+  recordUserMatch: (matchResult: MatchResult) => UserModel | null;
+};
+
+export type UserServiceDependencies = {
+  repository: UserRepository;
+};
+
+export function createUserService({ repository }: UserServiceDependencies): UserService {
+  return {
+    getCurrentUser: () => repository.load(),
+    registerUser: (nickname) => {
+      const user = createUserModel(nickname);
+      repository.save(user);
+      return user;
+    },
+    clearCurrentUser: () => {
+      repository.clear();
+    },
+    recordUserMatch: (matchResult) => {
+      const user = repository.load();
+      if (!user) {
+        return null;
+      }
+
+      const updatedUser = applyMatchResult(user, matchResult);
+      repository.save(updatedUser);
+      return updatedUser;
+    }
+  };
+}
+
+const defaultUserService = createUserService({ repository: createUserRepository() });
 
 export function getCurrentUser(): UserModel | null {
-  return loadUser();
+  return defaultUserService.getCurrentUser();
 }
 
 export function registerUser(nickname: string): UserModel {
-  const user = createUserModel(nickname);
-  saveUser(user);
-  return user;
+  return defaultUserService.registerUser(nickname);
 }
 
 export function clearCurrentUser(): void {
-  clearUser();
+  defaultUserService.clearCurrentUser();
 }
 
 export function recordUserMatch(matchResult: MatchResult): UserModel | null {
-  const user = getCurrentUser();
-  if (!user) {
-    return null;
-  }
-
-  const updatedUser = withMatchResult(user, matchResult);
-  saveUser(updatedUser);
-  return updatedUser;
+  return defaultUserService.recordUserMatch(matchResult);
 }

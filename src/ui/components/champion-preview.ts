@@ -1,3 +1,4 @@
+// Responsável por renderizar e ajustar preview 3D do campeão usando Babylon.js.
 import {
   ArcRotateCamera,
   Color4,
