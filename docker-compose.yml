@@ -25,7 +25,7 @@ services:
       - -c
       - |
         npm ci
-        npm exec concurrently -- -k -n SERVER,WEB -c cyan,yellow "npm run dev:server" "npm run dev -- --host 0.0.0.0 --port 5173"
+        npm exec concurrently -- -k -n SERVER,WEB -c cyan,yellow "npm run dev:server" "npm run dev:ngrok -- --host 0.0.0.0 --port 5173"
 
 volumes:
   node_modules:
