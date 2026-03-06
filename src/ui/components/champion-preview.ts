@@ -29,15 +29,15 @@ type ChampionPreviewFrame = {
 const PREVIEW_PROFILE = {
   targetHeight: 4.6,
   maxWidth: 3.2,
-  focusYRatio: 0.6,
+  focusYRatio: 0.52,
   pedestalLift: 0,
-  framingMargin: 1,
-  visibleHeightRatio: 0.82,
-  visibleWidthRatio: 1.24,
+  framingMargin: 1.06,
+  visibleHeightRatio: 1.02,
+  visibleWidthRatio: 1.12,
   cameraAlpha: -Math.PI / 2,
-  cameraBeta: Math.PI / 2.36,
+  cameraBeta: Math.PI / 2.24,
   minRadius: 3.3,
-  maxRadius: 5.4
+  maxRadius: 6.4
 } as const;
 
 function clamp(value: number, min: number, max: number): number {

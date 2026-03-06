@@ -366,7 +366,17 @@ body {
   padding: 0 28px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(12px);
-  background: rgba(11, 16, 33, 0.58);
+  background: rgba(8, 12, 24, 0.7);
+}
+
+.dab-menu__header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0)),
+    linear-gradient(90deg, color-mix(in oklab, var(--dab-champion-theme) 12%, transparent), transparent 45%);
+  pointer-events: none;
 }
 
 .dab-logo {
@@ -374,6 +384,8 @@ body {
   align-items: center;
   gap: 12px;
   min-width: 120px;
+  position: relative;
+  z-index: 1;
 }
 
 .dab-logo__mark {
@@ -398,6 +410,10 @@ body {
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+  color: #f7fbff;
+  text-shadow:
+    0 0 1px rgba(0, 0, 0, 0.8),
+    0 0 14px color-mix(in oklab, var(--dab-champion-theme) 42%, transparent);
 }
 
 .dab-menu__nav {
@@ -552,21 +568,43 @@ body {
   pointer-events: none;
 }
 
+.dab-menu__watermark::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -16px;
+  width: min(760px, 72vw);
+  height: 168px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at center, rgba(4, 8, 18, 0.62), rgba(4, 8, 18, 0)),
+    radial-gradient(circle at center, color-mix(in oklab, var(--dab-champion-theme) 24%, transparent), transparent 72%);
+  filter: blur(2px);
+}
+
 .dab-menu__watermark h1 {
+  position: relative;
   margin: 0;
   font-size: clamp(3.4rem, 8vw, 7.2rem);
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.18);
+  text-shadow:
+    0 2px 0 rgba(2, 6, 23, 0.6),
+    0 0 16px rgba(2, 6, 23, 0.44);
 }
 
 .dab-menu__watermark p {
+  position: relative;
   margin: 4px 0 0;
   font-size: clamp(1rem, 2.6vw, 1.75rem);
   letter-spacing: 0.38em;
-  color: rgba(34, 211, 238, 0.82);
+  color: color-mix(in oklab, var(--dab-champion-theme) 75%, white 12%);
   font-weight: 500;
-  text-shadow: 0 0 12px rgba(34, 211, 238, 0.35);
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.75),
+    0 0 16px color-mix(in oklab, var(--dab-champion-theme) 38%, transparent);
 }
 
 .dab-menu__stage {
@@ -613,6 +651,39 @@ body {
   cursor: default;
 }
 
+.dab-champion-preview::before {
+  content: "";
+  position: absolute;
+  width: min(58%, 360px);
+  height: min(58%, 360px);
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--dab-champion-theme) 42%, transparent) 0%,
+    transparent 72%
+  );
+  filter: blur(18px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.dab-champion-preview::after {
+  content: "";
+  position: absolute;
+  bottom: 11%;
+  width: min(52%, 300px);
+  height: 46px;
+  border-radius: 999px;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in oklab, var(--dab-champion-theme) 48%, transparent) 0%,
+    transparent 78%
+  );
+  filter: blur(10px);
+  z-index: 0;
+  pointer-events: none;
+}
+
 .dab-champion-preview__canvas {
   position: absolute;
   inset: 0;
@@ -621,7 +692,11 @@ body {
   display: block;
   z-index: 1;
   outline: none;
-  filter: brightness(1.06) contrast(1.07) saturate(1.06);
+  filter:
+    brightness(1.08)
+    contrast(1.08)
+    saturate(1.08)
+    drop-shadow(0 0 26px color-mix(in oklab, var(--dab-champion-theme) 35%, transparent));
 }
 
 .dab-champion-preview__icon {

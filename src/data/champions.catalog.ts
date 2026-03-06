@@ -23,20 +23,20 @@ export const UNIVERSE_CHAMPION_CATALOG: readonly ChampionCatalogItem[] = [
     id: "sukuna",
     displayName: "Ryomen Sukuna",
     universeName: "Jujutsu Kaisen",
-    modelUrl: "/assets/models/champions/sukuna/sukuna.glb",
+    modelUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/models/champions/sukuna/sukuna.glb",
     cardImageUrl: "https://imgs.search.brave.com/4xKnueO8sbGhJzX-a3xpjeXEV_9S-XH6Aa2iVyP_83Q/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9jZG4u/d2FsbHBhcGVyc2Fm/YXJpLmNvbS84NC84/L1ptdXM1Ny5qcGc",
     splashImageUrl: "https://wallpapercave.com/wp/wp9146052.jpg",
-    selectAudioUrl: "/assets/sounds/champions/sukuna/sukuna_audio_lobby.mp3",
+    selectAudioUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/sounds/champions/sukuna/sukuna_audio_lobby.mp3",
     themeColor: "#fa1515"
   },
   {
     id: "kaiju_no_8",
     displayName: "Kaiju No. 8",
     universeName: "Kaiju No. 8",
-    modelUrl: "/assets/models/champions/kaiju_no_8/kaiju_no_8.glb",
+    modelUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/models/champions/kaiju_no_8/kaiju_no_8.glb",
     cardImageUrl: "https://imgs.search.brave.com/DqGG85r2no3aQUCEDlwL4NeHAzcqujcGyRDSlT1xZI4/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pLnBp/bmltZy5jb20vdmlk/ZW9zL3RodW1ibmFp/bHMvb3JpZ2luYWxz/LzIzLzNmLzlhLzIz/M2Y5YTVjNDJhZWJk/OGE4NmRiYzdlZTNh/YWIwNjA4LjAwMDAw/MDAuanBn",
     splashImageUrl: "https://imgs.search.brave.com/pFl7v2bGLXWoylvyxLS44rNt1vvB1UG8o3rU1eD1VZ8/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly93YWxs/cGFwZXJzLmNvbS9p/bWFnZXMvZmVhdHVy/ZWQva2FpanUtbm8t/OC1tcHZ3d2F0NG5z/dGEwNGtsLmpwZw",
-    selectAudioUrl: "/assets/sounds/champions/kaiju_no_8/kaiju_no_8_audio_lobby.mp3",
+    selectAudioUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/sounds/champions/kaiju_no_8/kaiju_no_8_audio_lobby.mp3",
     themeColor: "#012bfb"
   },
 ] as const;
