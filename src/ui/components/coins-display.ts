@@ -1,5 +1,5 @@
 // Responsável por renderizar e atualizar o indicador de moedas no topo da interface.
-import type { Locale } from "../../i18n";
+import { t, type Locale } from "../../i18n";
 
 export type CoinsDisplayOptions = {
   container: HTMLElement;
@@ -14,6 +14,10 @@ export type CoinsDisplayHandle = {
 
 function formatCoins(locale: Locale, coins: number): string {
   return new Intl.NumberFormat(locale).format(Math.max(0, Math.floor(coins)));
+}
+
+function createCoinsAriaLabel(locale: Locale, coins: number): string {
+  return t(locale, "menu.currency.coin", { value: formatCoins(locale, coins) });
 }
 
 export function mountCoinsDisplay(options: CoinsDisplayOptions): CoinsDisplayHandle {
@@ -37,7 +41,7 @@ export function mountCoinsDisplay(options: CoinsDisplayOptions): CoinsDisplayHan
 
   const setCoins = (coins: number): void => {
     const normalizedCoins = Math.max(0, Math.floor(coins));
-    root.setAttribute("aria-label", `Moedas: ${formatCoins(options.locale, normalizedCoins)}`);
+    root.setAttribute("aria-label", createCoinsAriaLabel(options.locale, normalizedCoins));
     value.textContent = formatCoins(options.locale, normalizedCoins);
   };
 

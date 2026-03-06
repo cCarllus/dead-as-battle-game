@@ -11,13 +11,13 @@ function cloneNotification(notification: NotificationItem): NotificationItem {
 
 function isDuplicateTeamInviteNotification(
   notifications: readonly NotificationItem[],
-  candidate: NotificationInput
+  incomingNotification: NotificationInput
 ): boolean {
-  if (candidate.type !== "team_invite") {
+  if (incomingNotification.type !== "team_invite") {
     return false;
   }
 
-  const inviteId = (candidate.actionPayload as { inviteId?: string } | undefined)?.inviteId;
+  const inviteId = (incomingNotification.actionPayload as { inviteId?: string } | undefined)?.inviteId;
   if (typeof inviteId !== "string" || inviteId.trim().length === 0) {
     return false;
   }
@@ -46,7 +46,7 @@ export type NotificationServiceDependencies = {
 export function createNotificationService({
   userService
 }: NotificationServiceDependencies): NotificationService {
-  const getNotifications = (): NotificationItem[] => {
+  const getNotificationsSnapshot = (): NotificationItem[] => {
     const user = userService.getCurrentUser();
     if (!user) {
       return [];
@@ -56,29 +56,29 @@ export function createNotificationService({
   };
 
   return {
-    getNotifications,
+    getNotifications: getNotificationsSnapshot,
     getUnreadCount: () => {
-      return getNotifications().reduce((count, notification) => {
+      return getNotificationsSnapshot().reduce((count, notification) => {
         return notification.isRead ? count : count + 1;
       }, 0);
     },
-    addNotification: (notification) => {
-      const title = notification.title.trim();
-      const message = notification.message.trim();
+    addNotification: (incomingNotification) => {
+      const title = incomingNotification.title.trim();
+      const message = incomingNotification.message.trim();
 
       if (!title || !message) {
         return null;
       }
 
-      const created = createNotification(notification);
+      const createdNotification = createNotification(incomingNotification);
       const nextUser = userService.updateCurrentUser((user) => {
-        if (isDuplicateTeamInviteNotification(user.notifications, notification)) {
+        if (isDuplicateTeamInviteNotification(user.notifications, incomingNotification)) {
           return user;
         }
 
         return {
           ...user,
-          notifications: [created, ...user.notifications]
+          notifications: [createdNotification, ...user.notifications]
         };
       });
 
@@ -86,8 +86,8 @@ export function createNotificationService({
         return null;
       }
 
-      const matched = nextUser.notifications.find((entry) => entry.id === created.id);
-      return matched ? cloneNotification(matched) : null;
+      const persistedNotification = nextUser.notifications.find((entry) => entry.id === createdNotification.id);
+      return persistedNotification ? cloneNotification(persistedNotification) : null;
     },
     markNotificationsAsRead: () => {
       let unreadCount = 0;

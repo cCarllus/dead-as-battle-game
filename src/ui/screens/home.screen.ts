@@ -16,13 +16,11 @@ import { mountTeamPanel } from "../components/team-panel";
 import { mountTeamInvitePopup } from "../components/team-invite-popup";
 import { createSpotifyLobbyPlayer, destroySpotifyLobbyPlayer } from "../components/spotify-player";
 import { qs } from "../components/dom";
-import { mountCoinsDisplay } from "../components/coins-display";
-import { mountNotificationBell } from "../components/notification-bell";
-import { mountNotificationModal } from "../components/notification-modal";
-import { mountRewardToast } from "../components/reward-toast";
+import type { NotificationInput, NotificationItem } from "../../models/notification.model";
 import type { NotificationService } from "../../services/notification.service";
 import type { RewardService } from "../../services/reward.service";
 import type { UserService } from "../../services/user.service";
+import { mountHomeHud } from "../components/home-hud";
 
 export type HomeActions = {
   onOpenMultiplayer: () => void;
@@ -41,7 +39,6 @@ export type HomeActions = {
   activeTab?: MenuTabId;
   onNavigateTab?: (tab: MenuTabId) => void;
   coins: number;
-  pendingCoinRewards: number;
   playerName: string;
   selectedChampionName: string;
   selectedChampionLevel: number;
@@ -67,6 +64,83 @@ function createActionHandlers(
   };
 }
 
+function collectTrackedTeamInviteIds(notifications: readonly NotificationItem[]): Set<string> {
+  const trackedInviteIds = new Set<string>();
+
+  notifications.forEach((notification) => {
+    if (notification.type !== "team_invite") {
+      return;
+    }
+
+    const payload = notification.actionPayload as { inviteId?: string } | undefined;
+    if (typeof payload?.inviteId !== "string") {
+      return;
+    }
+
+    trackedInviteIds.add(payload.inviteId);
+  });
+
+  return trackedInviteIds;
+}
+
+function createTeamInviteNotification(params: {
+  locale: Locale;
+  fromNickname: string;
+  inviteId: string;
+  fromUserId: string;
+}): NotificationInput {
+  return {
+    type: "team_invite",
+    title: t(params.locale, "notifications.teamInvite.title"),
+    message: t(params.locale, "team.invite.message", { nickname: params.fromNickname }),
+    actionType: "team_invite",
+    actionPayload: {
+      inviteId: params.inviteId,
+      fromUserId: params.fromUserId
+    }
+  };
+}
+
+function bindTeamInviteNotificationBridge(params: {
+  locale: Locale;
+  teamService: TeamService;
+  notificationService: NotificationService;
+  onNotificationsChanged: () => void;
+}): () => void {
+  const trackedInviteIds = collectTrackedTeamInviteIds(params.notificationService.getNotifications());
+
+  return params.teamService.onPendingInvitesUpdated((pendingInvites) => {
+    let hasNewNotification = false;
+
+    pendingInvites.forEach((pendingInvite) => {
+      if (trackedInviteIds.has(pendingInvite.id)) {
+        return;
+      }
+
+      trackedInviteIds.add(pendingInvite.id);
+
+      const createdNotification = params.notificationService.addNotification(
+        createTeamInviteNotification({
+          locale: params.locale,
+          fromNickname: pendingInvite.fromNickname,
+          inviteId: pendingInvite.id,
+          fromUserId: pendingInvite.fromUserId
+        })
+      );
+
+      if (createdNotification) {
+        hasNewNotification = true;
+      }
+    });
+
+    if (!hasNewNotification) {
+      return;
+    }
+
+    params.onNotificationsChanged();
+  });
+}
+
 export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () => void {
   const locale = resolveScreenLocale(actions.locale);
   const activeTab = actions.activeTab ?? DEFAULT_ACTIVE_TAB;
@@ -89,73 +163,14 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     selectedChampionStats: actions.selectedChampionStats
   });
 
-  const menuTools = qs<HTMLElement>(homeView.menu, '[data-slot="menu-tools"]');
-  menuTools.replaceChildren();
-
-  const coinsDisplay = mountCoinsDisplay({
-    container: menuTools,
+  const homeHud = mountHomeHud({
+    menu: homeView.menu,
     locale,
+    userService: actions.userService,
+    rewardService: actions.rewardService,
+    notificationService: actions.notificationService,
     initialCoins: actions.coins
   });
-
-  const markNotificationsAsRead = (): void => {
-    actions.notificationService.markNotificationsAsRead();
-    const unreadCount = actions.notificationService.getUnreadCount();
-    notificationBell.setUnreadCount(unreadCount);
-  };
-
-  const notificationModal = mountNotificationModal({
-    menu: homeView.menu,
-    locale,
-    getNotifications: () => actions.notificationService.getNotifications(),
-    onOpen: () => {
-      markNotificationsAsRead();
-    },
-    onMarkAllRead: () => {
-      markNotificationsAsRead();
-    }
-  });
-
-  const notificationBell = mountNotificationBell({
-    container: menuTools,
-    locale,
-    unreadCount: actions.notificationService.getUnreadCount(),
-    onClick: () => {
-      notificationModal.open();
-    }
-  });
-
-  const rewardToast = mountRewardToast({
-    menu: homeView.menu,
-    locale,
-    onClaim: () => {
-      const claimedUser = actions.rewardService.claimReward();
-      if (!claimedUser) {
-        return;
-      }
-
-      coinsDisplay.setCoins(claimedUser.coins);
-      rewardToast.setPendingRewards(claimedUser.pendingCoinRewards);
-      notificationBell.setUnreadCount(actions.notificationService.getUnreadCount());
-      notificationModal.refresh();
-    }
-  });
-
-  const refreshRewardAndNotifications = (): void => {
-    const currentUser = actions.userService.getCurrentUser();
-    if (!currentUser) {
-      rewardToast.setPendingRewards(0);
-      notificationBell.setUnreadCount(0);
-      return;
-    }
-
-    coinsDisplay.setCoins(currentUser.coins);
-    rewardToast.setPendingRewards(currentUser.pendingCoinRewards);
-    notificationBell.setUnreadCount(actions.notificationService.getUnreadCount());
-    notificationModal.refresh();
-  };
-
-  refreshRewardAndNotifications();
 
   const settingsModal = mountSettingsModal({
     locale,
@@ -194,61 +209,23 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     teamService: actions.teamService
   });
 
-  const trackedInviteIds = new Set(
-    actions.notificationService
-      .getNotifications()
-      .map((notification) => {
-        if (notification.type !== "team_invite") {
-          return null;
-        }
-
-        const payload = notification.actionPayload as { inviteId?: string } | undefined;
-        return typeof payload?.inviteId === "string" ? payload.inviteId : null;
-      })
-      .filter((inviteId): inviteId is string => Boolean(inviteId))
-  );
-
-  const disposeTeamInviteNotificationBridge = actions.teamService.onPendingInvitesUpdated((invites) => {
-    let hasNewNotification = false;
-
-    invites.forEach((invite) => {
-      if (trackedInviteIds.has(invite.id)) {
-        return;
-      }
-
-      trackedInviteIds.add(invite.id);
-      const createdNotification = actions.notificationService.addNotification({
-        type: "team_invite",
-        title: t(locale, "notifications.teamInvite.title"),
-        message: t(locale, "team.invite.message", { nickname: invite.fromNickname }),
-        actionType: "team_invite",
-        actionPayload: {
-          inviteId: invite.id,
-          fromUserId: invite.fromUserId
-        }
-      });
-
-      if (createdNotification) {
-        hasNewNotification = true;
-      }
-    });
-
-    if (!hasNewNotification) {
-      return;
+  const disposeTeamInviteNotificationBridge = bindTeamInviteNotificationBridge({
+    locale,
+    teamService: actions.teamService,
+    notificationService: actions.notificationService,
+    onNotificationsChanged: () => {
+      homeHud.refresh();
     }
-
-    notificationBell.setUnreadCount(actions.notificationService.getUnreadCount());
-    notificationModal.refresh();
   });
 
   let currentTeamMemberIds = new Set<string>();
-  const seedTeam = actions.teamService.getCurrentTeam();
-  if (seedTeam) {
-    currentTeamMemberIds = new Set(seedTeam.members.map((member) => member.userId));
+  const seededTeam = actions.teamService.getCurrentTeam();
+  if (seededTeam) {
+    currentTeamMemberIds = new Set(seededTeam.members.map((teamMember) => teamMember.userId));
   }
 
   const disposeTeamMembersTracker = actions.teamService.onTeamUpdated((team) => {
-    currentTeamMemberIds = new Set(team?.members.map((member) => member.userId) ?? []);
+    currentTeamMemberIds = new Set(team?.members.map((teamMember) => teamMember.userId) ?? []);
   });
 
   const chatPanelSlot = qs<HTMLElement>(menu, '[data-slot="global-chat-panel"]');
@@ -308,10 +285,6 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     showTeamToast(toast);
   });
 
-  const disposeRewardAvailableListener = actions.rewardService.onRewardAvailable(() => {
-    refreshRewardAndNotifications();
-  });
-
   void actions.teamService.connect().catch((error: unknown) => {
     if (error instanceof Error) {
       showTeamToast({
@@ -336,7 +309,7 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
       return;
     }
 
-    if (notificationModal.isOpen()) {
+    if (homeHud.isNotificationModalOpen()) {
       return;
     }
 
@@ -364,17 +337,13 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     exitConfirmModal.dispose();
     disposeTeamMembersTracker();
     disposeTeamToastListener();
-    disposeRewardAvailableListener();
     clearTeamToast();
     disposeTeamInviteNotificationBridge();
     disposeTeamInvitePopup();
     disposeTeamPanel();
     disposeChatPanel();
     disposeChatPresenceListener();
-    notificationModal.dispose();
-    notificationBell.dispose();
-    coinsDisplay.dispose();
-    rewardToast.dispose();
+    homeHud.dispose();
     destroySpotifyLobbyPlayer(spotifyPlayer);
     homeView.dispose();
   };

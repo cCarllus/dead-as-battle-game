@@ -148,7 +148,6 @@ function createScreenRegistry(
         notificationService,
         rewardService,
         coins: user.coins,
-        pendingCoinRewards: user.pendingCoinRewards,
         playerName: user.nickname,
         selectedChampionName: selectedChampion.displayName,
         selectedChampionLevel: selectedChampionProgress.level,

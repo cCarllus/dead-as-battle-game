@@ -2179,12 +2179,15 @@ body {
 
 .dab-toast {
   position: absolute;
-  left: 50%;
-  bottom: 86px;
+  right: 34px;
+  top: 228px;
+  left: auto;
+  bottom: auto;
   z-index: 92;
-  transform: translate(-50%, 14px);
+  transform: translate(0, 14px);
   opacity: 0;
   pointer-events: none;
+  width: min(330px, calc(100vw - 28px));
   border-radius: 10px;
   border: 1px solid rgba(34, 211, 238, 0.34);
   background: rgba(7, 21, 38, 0.92);
@@ -2200,7 +2203,7 @@ body {
 
 .dab-toast.is-visible {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translate(0, 0);
 }
 
 .dab-toast.is-error {
@@ -2216,9 +2219,10 @@ body {
 }
 
 .dab-toast--team {
+  right: 34px;
+  top: 282px;
   left: auto;
-  right: 40px;
-  bottom: 90px;
+  bottom: auto;
   transform: translate(0, 14px);
 }
 
@@ -2229,7 +2233,8 @@ body {
 .dab-reward-toast {
   position: absolute;
   right: 34px;
-  bottom: 140px;
+  top: 96px;
+  bottom: auto;
   z-index: 93;
   width: min(330px, calc(100vw - 28px));
   border-radius: 14px;
@@ -2754,23 +2759,28 @@ body {
   }
 
   .dab-toast {
-    bottom: 24px;
-    width: calc(100vw - 24px);
-    text-align: center;
+    right: 12px;
+    top: 248px;
+    left: auto;
+    bottom: auto;
+    width: min(320px, calc(100vw - 24px));
+    text-align: left;
   }
 
   .dab-toast--team {
-    left: 12px;
     right: 12px;
-    width: auto;
-    bottom: 72px;
+    top: 300px;
+    left: auto;
+    bottom: auto;
+    width: min(320px, calc(100vw - 24px));
   }
 
   .dab-reward-toast {
-    left: 12px;
+    left: auto;
     right: 12px;
-    width: auto;
-    bottom: 126px;
+    top: 128px;
+    bottom: auto;
+    width: min(320px, calc(100vw - 24px));
   }
 
   .dab-notification-modal__panel {

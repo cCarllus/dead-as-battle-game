@@ -33,6 +33,23 @@ function isDocumentVisible(): boolean {
   return typeof document !== "undefined" ? document.visibilityState === "visible" : true;
 }
 
+function normalizeSeconds(rawSeconds: number): number {
+  if (!Number.isFinite(rawSeconds)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor(rawSeconds));
+}
+
+function createRewardAvailabilityMessage(generatedRewards: number): string {
+  if (generatedRewards <= 1) {
+    return `Você pode resgatar ${COIN_REWARD_AMOUNT} coins por 10 minutos jogados.`;
+  }
+
+  const accumulatedCoins = generatedRewards * COIN_REWARD_AMOUNT;
+  return `Você pode resgatar ${accumulatedCoins} coins acumuladas por tempo jogado.`;
+}
+
 export function createRewardService({
   userService,
   notificationService
@@ -78,7 +95,7 @@ export function createRewardService({
   };
 
   const incrementActivePlayTime = (deltaSeconds: number): RewardComputationResult | null => {
-    const normalizedDelta = Number.isFinite(deltaSeconds) ? Math.max(0, Math.floor(deltaSeconds)) : 0;
+    const normalizedDelta = normalizeSeconds(deltaSeconds);
     const currentUser = userService.getCurrentUser();
     if (!currentUser) {
       return null;
@@ -101,14 +118,10 @@ export function createRewardService({
     }
 
     if (computation.generatedRewards > 0) {
-      const rewardCoins = computation.generatedRewards * COIN_REWARD_AMOUNT;
       notificationService.addNotification({
         type: "reward",
         title: "Recompensa disponível",
-        message:
-          computation.generatedRewards === 1
-            ? `Você pode resgatar ${COIN_REWARD_AMOUNT} coins por 10 minutos jogados.`
-            : `Você pode resgatar ${rewardCoins} coins acumuladas por tempo jogado.`,
+        message: createRewardAvailabilityMessage(computation.generatedRewards),
         actionType: "claim_reward"
       });
 
