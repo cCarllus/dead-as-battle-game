@@ -11,6 +11,7 @@ export type ChampionProgress = {
   xp: number;
   kills: number;
   deaths: number;
+  isUnlocked: boolean;
   createdAt: string;
   lastSelectedAt?: string;
 };
@@ -67,19 +68,32 @@ export function normalizeNickname(nickname: string): string | null {
   return isValidLength ? normalized : null;
 }
 
-export function createDefaultChampionProgress(now: Date = new Date()): ChampionProgress {
+export function createDefaultChampionProgress(params?: {
+  now?: Date;
+  isUnlocked?: boolean;
+}): ChampionProgress {
+  const now = params?.now ?? new Date();
+
   return {
     level: 1,
     xp: 0,
     kills: 0,
     deaths: 0,
+    isUnlocked: params?.isUnlocked === true,
     createdAt: now.toISOString()
   };
 }
 
-export function sanitizeChampionProgress(value: unknown): ChampionProgress {
+export function sanitizeChampionProgress(
+  value: unknown,
+  options?: {
+    isUnlockedDefault?: boolean;
+  }
+): ChampionProgress {
   if (!value || typeof value !== "object") {
-    return createDefaultChampionProgress();
+    return createDefaultChampionProgress({
+      isUnlocked: options?.isUnlockedDefault === true
+    });
   }
 
   const progress = value as Partial<ChampionProgress>;
@@ -89,6 +103,10 @@ export function sanitizeChampionProgress(value: unknown): ChampionProgress {
     xp: toSafeCounter(Number(progress.xp ?? 0), 0),
     kills: toSafeCounter(Number(progress.kills ?? 0), 0),
     deaths: toSafeCounter(Number(progress.deaths ?? 0), 0),
+    isUnlocked:
+      typeof progress.isUnlocked === "boolean"
+        ? progress.isUnlocked
+        : options?.isUnlockedDefault === true,
     createdAt: isValidIsoDate(progress.createdAt) ? progress.createdAt : new Date().toISOString()
   };
 
@@ -102,15 +120,20 @@ export function sanitizeChampionProgress(value: unknown): ChampionProgress {
 export function createUserProfile(params: {
   nickname: string;
   championIds: readonly ChampionId[];
+  defaultUnlockedChampionIds: readonly ChampionId[];
   selectedChampionId: ChampionId;
   now?: Date;
 }): UserProfile {
   const normalizedNickname = normalizeNickname(params.nickname) ?? DEFAULT_NICKNAME;
   const now = params.now ?? new Date();
   const createdAt = now.toISOString();
+  const defaultUnlockedChampionIdSet = new Set<ChampionId>(params.defaultUnlockedChampionIds);
 
   const champions = params.championIds.reduce((acc, championId) => {
-    acc[championId] = createDefaultChampionProgress(now);
+    acc[championId] = createDefaultChampionProgress({
+      now,
+      isUnlocked: defaultUnlockedChampionIdSet.has(championId)
+    });
     return acc;
   }, {} as Record<ChampionId, ChampionProgress>);
 

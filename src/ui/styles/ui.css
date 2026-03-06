@@ -3696,6 +3696,49 @@ body {
   text-transform: uppercase;
 }
 
+.dab-champion-card__actions {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 78px;
+  z-index: 3;
+}
+
+.dab-champion-card__action {
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 160ms ease, transform 160ms ease;
+}
+
+.dab-champion-card__action:active {
+  transform: translateY(1px);
+}
+
+.dab-champion-card__action--unlock {
+  background: linear-gradient(130deg, #facc15, #f59e0b);
+  color: #0f172a;
+  box-shadow: 0 8px 16px rgba(250, 204, 21, 0.3);
+}
+
+.dab-champion-card__action--unlock:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+
+.dab-champion-card__action--unlock.is-insufficient {
+  opacity: 0.78;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(130deg, #4b5563, #374151);
+  color: rgba(241, 245, 249, 0.86);
+  box-shadow: none;
+}
+
 .dab-champion-card__footer small {
   color: rgba(255, 255, 255, 0.56);
   font-size: 0.76rem;
@@ -3725,19 +3768,16 @@ body {
 }
 
 .dab-champion-card--locked {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-color: rgba(255, 255, 255, 0.08);
   background: linear-gradient(180deg, rgba(26, 28, 42, 0.94), rgba(13, 14, 23, 0.98));
-  cursor: not-allowed;
 }
 
 .dab-champion-card--locked::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(2, 6, 23, 0.42);
+  background: rgba(2, 6, 23, 0.56);
+  z-index: 1;
 }
 
 .dab-champion-card--locked:hover {
@@ -3746,21 +3786,55 @@ body {
   box-shadow: 0 12px 24px rgba(2, 6, 23, 0.45);
 }
 
+.dab-champion-card--locked .dab-champion-card__image {
+  opacity: 0.55;
+  filter: grayscale(0.75);
+}
+
+.dab-champion-card__lock-panel {
+  position: relative;
+  border-radius: 10px;
+  border: 1px solid rgba(250, 204, 21, 0.42);
+  background: rgba(8, 12, 24, 0.9);
+  padding: 10px;
+  display: grid;
+  gap: 7px;
+}
+
+.dab-champion-card__lock-icon {
+  position: absolute;
+  top: -10px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(250, 204, 21, 0.58);
+  background: rgba(69, 26, 3, 0.94);
+  font-size: 0.8rem;
+}
+
 .dab-champion-card__locked-text {
   position: relative;
-  z-index: 2;
-  color: rgba(255, 255, 255, 0.24);
-  font-size: 1rem;
+  z-index: 1;
+  color: rgba(250, 204, 21, 0.86);
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.dab-champion-card__locked-line {
-  width: 72%;
-  height: 10px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.1);
+.dab-champion-card__price {
+  color: rgba(254, 243, 199, 0.92);
+  font-size: 0.74rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.dab-toast--champions {
+  top: 96px;
+  right: 24px;
 }
 
 .dab-champions__footer {
@@ -3878,6 +3952,10 @@ body {
     padding-right: 20px;
     padding-left: 20px;
   }
+
+  .dab-toast--champions {
+    right: 18px;
+  }
 }
 
 @media (max-width: 760px) {
@@ -3921,5 +3999,11 @@ body {
   .dab-champions__actions {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .dab-toast--champions {
+    top: 124px;
+    right: 12px;
+    width: min(320px, calc(100vw - 24px));
   }
 }

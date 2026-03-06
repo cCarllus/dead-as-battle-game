@@ -10,6 +10,8 @@ export const DEFAULT_CHAMPION_ID: ChampionId = "user";
 export const USER_CHAMPION_TEMPLATE: ChampionCatalogItem = {
   id: "user",
   displayName: "Player",
+  priceCoins: 0,
+  isDefault: true,
   universeName: "Dead as Battle",
   modelUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/models/champions/default/default_champion.glb",
   cardImageUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/images/champions/default/default_chart.png",
@@ -22,6 +24,8 @@ export const UNIVERSE_CHAMPION_CATALOG: readonly ChampionCatalogItem[] = [
   {
     id: "sukuna",
     displayName: "Ryomen Sukuna",
+    priceCoins: 1000,
+    isDefault: false,
     universeName: "Jujutsu Kaisen",
     modelUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/models/champions/sukuna/sukuna.glb",
     cardImageUrl: "https://imgs.search.brave.com/4xKnueO8sbGhJzX-a3xpjeXEV_9S-XH6Aa2iVyP_83Q/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9jZG4u/d2FsbHBhcGVyc2Fm/YXJpLmNvbS84NC84/L1ptdXM1Ny5qcGc",
@@ -32,6 +36,8 @@ export const UNIVERSE_CHAMPION_CATALOG: readonly ChampionCatalogItem[] = [
   {
     id: "kaiju_no_8",
     displayName: "Kaiju No. 8",
+    priceCoins: 600,
+    isDefault: false,
     universeName: "Kaiju No. 8",
     modelUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/models/champions/kaiju_no_8/kaiju_no_8.glb",
     cardImageUrl: "https://imgs.search.brave.com/DqGG85r2no3aQUCEDlwL4NeHAzcqujcGyRDSlT1xZI4/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pLnBp/bmltZy5jb20vdmlk/ZW9zL3RodW1ibmFp/bHMvb3JpZ2luYWxz/LzIzLzNmLzlhLzIz/M2Y5YTVjNDJhZWJk/OGE4NmRiYzdlZTNh/YWIwNjA4LjAwMDAw/MDAuanBn",
@@ -69,4 +75,12 @@ export function getBaseChampionById(championId: ChampionId): ChampionCatalogItem
 
   const resolvedChampion = UNIVERSE_CHAMPION_CATALOG.find((champion) => champion.id === championId);
   return resolvedChampion ?? USER_CHAMPION_TEMPLATE;
+}
+
+export function isDefaultChampionId(championId: ChampionId): boolean {
+  return getBaseChampionById(championId).isDefault;
+}
+
+export function getChampionPriceCoins(championId: ChampionId): number {
+  return getBaseChampionById(championId).priceCoins;
 }

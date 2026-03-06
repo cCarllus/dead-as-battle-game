@@ -1,5 +1,10 @@
-// Responsável por regras de negócio de usuário, migração e seleção persistida de campeão.
-import { CHAMPION_IDS, DEFAULT_CHAMPION_ID, isChampionId } from "../data/champions.catalog";
+// Responsável por regras de negócio de usuário, migração de perfil e seleção persistida de campeão.
+import {
+  CHAMPION_IDS,
+  DEFAULT_CHAMPION_ID,
+  isChampionId,
+  isDefaultChampionId
+} from "../data/champions.catalog";
 import type { ChampionId } from "../models/champion.model";
 import { MAX_PENDING_COIN_REWARDS } from "../models/reward.model";
 import {
@@ -49,20 +54,20 @@ function clampPendingRewards(value: unknown): number {
 }
 
 function resolveLegacySelectedChampionId(rawProfile: Record<string, unknown>): string | undefined {
-  const legacyEntry = Object.entries(rawProfile).find(([key, value]) => {
-    return key.startsWith("selected") && key.endsWith("Id") && typeof value === "string";
+  const legacyEntry = Object.entries(rawProfile).find(([key, entryValue]) => {
+    return key.startsWith("selected") && key.endsWith("Id") && typeof entryValue === "string";
   });
 
   return typeof legacyEntry?.[1] === "string" ? legacyEntry[1] : undefined;
 }
 
 function resolveLegacyChampionRecord(rawProfile: Record<string, unknown>): unknown {
-  const legacyEntry = Object.entries(rawProfile).find(([key, value]) => {
-    if (key === "champions" || !isObjectRecord(value)) {
+  const legacyEntry = Object.entries(rawProfile).find(([key, entryValue]) => {
+    if (key === "champions" || !isObjectRecord(entryValue)) {
       return false;
     }
 
-    const sample = Object.values(value)[0];
+    const sample = Object.values(entryValue)[0];
     if (!isObjectRecord(sample)) {
       return false;
     }
@@ -82,9 +87,37 @@ function normalizeChampionProgressRecord(value: unknown): Record<ChampionId, Cha
   const rawRecord = isObjectRecord(value) ? value : {};
 
   return CHAMPION_IDS.reduce((acc, championId) => {
-    acc[championId] = sanitizeChampionProgress(rawRecord[championId]);
+    const progress = sanitizeChampionProgress(rawRecord[championId], {
+      isUnlockedDefault: isDefaultChampionId(championId)
+    });
+
+    if (isDefaultChampionId(championId)) {
+      progress.isUnlocked = true;
+    }
+
+    acc[championId] = progress;
     return acc;
   }, {} as Record<ChampionId, ChampionProgress>);
+}
+
+function isChampionUnlocked(user: Pick<UserProfile, "champions">, championId: ChampionId): boolean {
+  if (isDefaultChampionId(championId)) {
+    return true;
+  }
+
+  return user.champions[championId]?.isUnlocked === true;
+}
+
+function resolveSafeSelectedChampionId(user: Pick<UserProfile, "selectedChampionId" | "champions">): ChampionId {
+  const selectedChampionId = isChampionId(user.selectedChampionId)
+    ? user.selectedChampionId
+    : DEFAULT_CHAMPION_ID;
+
+  if (isChampionUnlocked(user, selectedChampionId)) {
+    return selectedChampionId;
+  }
+
+  return DEFAULT_CHAMPION_ID;
 }
 
 function normalizeLoadedUser(rawProfile: unknown): UserProfile | null {
@@ -97,10 +130,12 @@ function normalizeLoadedUser(rawProfile: unknown): UserProfile | null {
       ? rawProfile.selectedChampionId
       : resolveLegacySelectedChampionId(rawProfile);
 
-  const selectedChampionId = isChampionId(selectedCandidate) ? selectedCandidate : DEFAULT_CHAMPION_ID;
+  const selectedChampionId = isChampionId(selectedCandidate)
+    ? selectedCandidate
+    : DEFAULT_CHAMPION_ID;
   const rawChampionProgress = rawProfile.champions ?? resolveLegacyChampionRecord(rawProfile);
 
-  return {
+  const normalizedUser: UserProfile = {
     id: typeof rawProfile.id === "string" && rawProfile.id.length > 0 ? rawProfile.id : createAnonymousId(),
     nickname: normalizeNicknameOrDefault(rawProfile.nickname),
     createdAt: sanitizeCreatedAt(rawProfile.createdAt),
@@ -111,17 +146,30 @@ function normalizeLoadedUser(rawProfile: unknown): UserProfile | null {
     notifications: sanitizeNotifications(rawProfile.notifications),
     champions: normalizeChampionProgressRecord(rawChampionProgress)
   };
+
+  return {
+    ...normalizedUser,
+    selectedChampionId: resolveSafeSelectedChampionId(normalizedUser)
+  };
 }
 
 export function migrateUserChampions(user: UserProfile): UserProfile {
-  return {
+  const champions = normalizeChampionProgressRecord(user.champions);
+  const migratedUser: UserProfile = {
     ...user,
-    selectedChampionId: isChampionId(user.selectedChampionId) ? user.selectedChampionId : DEFAULT_CHAMPION_ID,
     coins: toSafeCounter(user.coins),
     activePlayTimeSeconds: toSafeCounter(user.activePlayTimeSeconds),
     pendingCoinRewards: clampPendingRewards(user.pendingCoinRewards),
     notifications: sanitizeNotifications(user.notifications),
-    champions: normalizeChampionProgressRecord(user.champions)
+    champions,
+    selectedChampionId: isChampionId(user.selectedChampionId)
+      ? user.selectedChampionId
+      : DEFAULT_CHAMPION_ID
+  };
+
+  return {
+    ...migratedUser,
+    selectedChampionId: resolveSafeSelectedChampionId(migratedUser)
   };
 }
 
@@ -131,7 +179,7 @@ export type UserService = {
   ensureUserProfile: (nickname?: string) => UserProfile;
   registerUser: (nickname: string) => UserProfile;
   clearCurrentUser: () => void;
-  selectChampion: (championId: ChampionId) => void;
+  selectChampion: (championId: ChampionId) => boolean;
   updateCurrentUser: (updater: (user: UserProfile) => UserProfile) => UserProfile | null;
   addCoins: (amount: number) => UserProfile | null;
 };
@@ -181,6 +229,7 @@ export function createUserService({ repository }: UserServiceDependencies): User
       const freshUser = createUserProfile({
         nickname: normalizedNickname,
         championIds: CHAMPION_IDS,
+        defaultUnlockedChampionIds: [DEFAULT_CHAMPION_ID],
         selectedChampionId: DEFAULT_CHAMPION_ID
       });
 
@@ -196,6 +245,7 @@ export function createUserService({ repository }: UserServiceDependencies): User
       const createdUser = createUserProfile({
         nickname: normalizedNickname,
         championIds: CHAMPION_IDS,
+        defaultUnlockedChampionIds: [DEFAULT_CHAMPION_ID],
         selectedChampionId: DEFAULT_CHAMPION_ID
       });
 
@@ -207,12 +257,23 @@ export function createUserService({ repository }: UserServiceDependencies): User
     },
     selectChampion: (championId) => {
       if (!isChampionId(championId)) {
-        return;
+        return false;
       }
 
-      void updateCurrentUser((user) => {
+      let didSelect = false;
+
+      updateCurrentUser((user) => {
+        if (!isChampionUnlocked(user, championId)) {
+          return user;
+        }
+
+        didSelect = true;
         const now = new Date().toISOString();
-        const selectedProgress = user.champions[championId] ?? sanitizeChampionProgress(null);
+        const selectedProgress =
+          user.champions[championId] ??
+          sanitizeChampionProgress(null, {
+            isUnlockedDefault: isDefaultChampionId(championId)
+          });
 
         return {
           ...user,
@@ -221,11 +282,14 @@ export function createUserService({ repository }: UserServiceDependencies): User
             ...user.champions,
             [championId]: {
               ...selectedProgress,
+              isUnlocked: selectedProgress.isUnlocked || isDefaultChampionId(championId),
               lastSelectedAt: now
             }
           }
         };
       });
+
+      return didSelect;
     },
     updateCurrentUser,
     addCoins: (amount) => {

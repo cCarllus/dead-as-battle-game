@@ -19,6 +19,8 @@ import type { ChatService } from "../services/chat.service";
 import type { TeamService } from "../services/team.service";
 import type { NotificationService } from "../services/notification.service";
 import type { RewardService } from "../services/reward.service";
+import type { HeroPurchaseService } from "../services/hero-purchase.service";
+import type { HeroSelectionService } from "../services/hero-selection.service";
 
 export type AppControllerDependencies = {
   uiRoot: HTMLDivElement;
@@ -31,6 +33,8 @@ export type AppControllerDependencies = {
   teamService: TeamService;
   notificationService: NotificationService;
   rewardService: RewardService;
+  heroPurchaseService: HeroPurchaseService;
+  heroSelectionService: HeroSelectionService;
   warmUpAssets: () => Promise<void>;
   startupDelayMs?: number;
 };
@@ -77,7 +81,9 @@ function createScreenRegistry(
   chatService: ChatService,
   teamService: TeamService,
   notificationService: NotificationService,
-  rewardService: RewardService
+  rewardService: RewardService,
+  heroPurchaseService: HeroPurchaseService,
+  heroSelectionService: HeroSelectionService
 ): ScreenRegistry {
   return {
     loading: ({ uiRoot, state }) => {
@@ -95,6 +101,7 @@ function createScreenRegistry(
       });
     },
     home: ({ uiRoot, state, goTo }) => {
+      heroSelectionService.ensureSelectedHeroUnlocked();
       rewardService.generateRewardIfNeeded();
       const user = userService.getCurrentUser();
       if (!user) {
@@ -128,7 +135,9 @@ function createScreenRegistry(
             goTo("notes");
           }
         },
-        onOpenMultiplayer: () => undefined,
+        onOpenMultiplayer: () => {
+          heroSelectionService.ensureSelectedHeroUnlocked();
+        },
         onOpenChampions: () => {
           state.patch({ activeMenuTab: "champions" });
           goTo("champions");
@@ -196,6 +205,9 @@ function createScreenRegistry(
         displayName: champion.displayName,
         universeName: champion.universeName,
         level: champion.level,
+        isUnlocked: champion.isUnlocked,
+        isDefault: champion.isDefault,
+        priceCoins: champion.priceCoins,
         imageUrl: champion.cardImageUrl,
         themeColor: champion.themeColor
       }));
@@ -223,9 +235,17 @@ function createScreenRegistry(
           audioService.playChampionSelect(championId);
         },
         onConfirmSelection: (championId: ChampionId) => {
-          userService.selectChampion(championId);
+          const selectionResult = heroSelectionService.setSelectedHero(championId);
+          if (selectionResult.status !== "selected") {
+            return false;
+          }
+
           state.patch({ activeMenuTab: "home" });
           goTo("home");
+          return true;
+        },
+        onUnlockChampion: (championId: ChampionId) => {
+          return heroPurchaseService.unlockHero(championId);
         },
         onBack: () => {
           state.patch({ activeMenuTab: "home" });
@@ -308,6 +328,8 @@ export function createAppController({
   teamService,
   notificationService,
   rewardService,
+  heroPurchaseService,
+  heroSelectionService,
   warmUpAssets,
   startupDelayMs = 1200
 }: AppControllerDependencies): AppController {
@@ -324,7 +346,9 @@ export function createAppController({
       chatService,
       teamService,
       notificationService,
-      rewardService
+      rewardService,
+      heroPurchaseService,
+      heroSelectionService
     )
   );
 

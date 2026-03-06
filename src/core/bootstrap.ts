@@ -15,6 +15,8 @@ import { createTeamService } from "../services/team.service";
 import { getSelectedChampionForUser } from "../services/champion.service";
 import { createNotificationService } from "../services/notification.service";
 import { createRewardService } from "../services/reward.service";
+import { createHeroPurchaseService } from "../services/hero-purchase.service";
+import { createHeroSelectionService } from "../services/hero-selection.service";
 
 export function bootstrap(): void {
   const uiRoot = document.getElementById("ui-root") as HTMLDivElement | null;
@@ -25,6 +27,11 @@ export function bootstrap(): void {
   const userService = createUserService({ repository: createUserRepository() });
   const notificationService = createNotificationService({ userService });
   const rewardService = createRewardService({ userService, notificationService });
+  const heroPurchaseService = createHeroPurchaseService({
+    userService,
+    notificationService
+  });
+  const heroSelectionService = createHeroSelectionService({ userService });
   const sessionService = createSessionService();
   const settingsService = createSettingsService();
   const initialSettings = settingsService.load();
@@ -93,6 +100,8 @@ export function bootstrap(): void {
     teamService,
     notificationService,
     rewardService,
+    heroPurchaseService,
+    heroSelectionService,
     warmUpAssets: warmUpAssetCache
   });
 

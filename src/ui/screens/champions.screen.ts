@@ -1,10 +1,12 @@
-// Responsável por renderizar a tela de campeões com seleção persistente por usuário.
+// Responsável por renderizar a tela de campeões com desbloqueio por moedas e seleção segura.
 import { t, type Locale } from "../../i18n";
 import type { ChampionId } from "../../models/champion.model";
 import type { NotificationService } from "../../services/notification.service";
 import type { UserService } from "../../services/user.service";
+import type { HeroUnlockResult } from "../../services/hero-purchase.service";
 import template from "../layout/champions.html?raw";
-import { bindDelegatedClick, qs } from "../components/dom";
+import { bind, bindDelegatedClick, qs } from "../components/dom";
+import { createHeroCardElement, type HeroCardData } from "../components/hero-card";
 import { renderNavbar } from "../components/navbar";
 import { mountNavbarNotificationCenter } from "../components/navbar-notification-center";
 import { MENU_NAV_ITEMS, type MenuTabId } from "../navigation/menu.model";
@@ -30,58 +32,36 @@ function updateActiveTab(screen: HTMLElement, activeTab: MenuTabId): void {
   });
 }
 
-export type ChampionSelectionCard = {
-  id: ChampionId;
-  displayName: string;
-  universeName: string;
-  level: number;
-  imageUrl: string;
-  themeColor: string;
-};
+export type ChampionSelectionCard = HeroCardData;
 
-function createChampionCard(params: {
+function findFirstUnlockedChampionId(cards: readonly ChampionSelectionCard[]): ChampionId | null {
+  return cards.find((card) => card.isUnlocked)?.id ?? null;
+}
+
+function findCardById(
+  cards: readonly ChampionSelectionCard[],
+  championId: ChampionId
+): ChampionSelectionCard | null {
+  return cards.find((card) => card.id === championId) ?? null;
+}
+
+function resolveUnlockFeedbackMessage(params: {
   locale: Locale;
-  card: ChampionSelectionCard;
-  selectedChampionId: ChampionId | null;
-}): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "dab-champion-card";
-  button.dataset.action = "select-champion";
-  button.dataset.championId = params.card.id;
-  button.style.setProperty("--dab-card-theme", params.card.themeColor);
-
-  if (params.selectedChampionId === params.card.id) {
-    button.classList.add("is-selected");
+  result: HeroUnlockResult;
+  heroName: string;
+}): string {
+  switch (params.result.status) {
+    case "unlocked":
+      return t(params.locale, "champions.feedback.unlocked", { champion: params.heroName });
+    case "insufficient_coins":
+      return t(params.locale, "champions.feedback.insufficientCoins");
+    case "already_unlocked":
+      return t(params.locale, "champions.feedback.alreadyUnlocked");
+    case "default_hero":
+      return t(params.locale, "champions.feedback.defaultHero");
+    default:
+      return t(params.locale, "champions.feedback.unlockFailed");
   }
-
-  const image = document.createElement("img");
-  image.className = "dab-champion-card__image";
-  image.src = params.card.imageUrl;
-  image.alt = params.card.displayName;
-  image.loading = "lazy";
-
-  const level = document.createElement("span");
-  level.className = "dab-champion-card__level";
-  level.textContent = t(params.locale, "champions.level", { value: params.card.level });
-
-  const check = document.createElement("span");
-  check.className = "dab-champion-card__check";
-  check.textContent = "✓";
-
-  const footer = document.createElement("span");
-  footer.className = "dab-champion-card__footer";
-
-  const title = document.createElement("strong");
-  title.textContent = params.card.displayName;
-
-  const subtitle = document.createElement("small");
-  subtitle.textContent = params.card.universeName;
-
-  footer.append(title, subtitle);
-  button.append(image, level, check, footer);
-
-  return button;
 }
 
 export type ChampionsActions = {
@@ -94,7 +74,8 @@ export type ChampionsActions = {
   selectedChampionId: ChampionId;
   onNavigateTab?: (tab: MenuTabId) => void;
   onPreviewSelection?: (championId: ChampionId) => void;
-  onConfirmSelection: (championId: ChampionId) => void;
+  onConfirmSelection: (championId: ChampionId) => boolean;
+  onUnlockChampion: (championId: ChampionId) => HeroUnlockResult;
   onBack: () => void;
 };
 
@@ -119,18 +100,76 @@ export function renderChampionsScreen(root: HTMLElement, actions: ChampionsActio
   const grid = qs<HTMLElement>(screen, '[data-slot="champion-grid"]');
   const confirmButton = qs<HTMLButtonElement>(screen, 'button[data-action="confirm"]');
 
+  const feedbackToast = document.createElement("div");
+  feedbackToast.className = "dab-toast dab-toast--champions";
+  feedbackToast.setAttribute("role", "status");
+  feedbackToast.setAttribute("aria-live", "polite");
+  screen.appendChild(feedbackToast);
+
+  let feedbackTimeoutId: number | null = null;
+
+  const championCards = actions.cards.map((card) => ({ ...card }));
+  let currentCoins = Math.max(0, Math.floor(actions.coins ?? 0));
+
   let previewSelectedChampionId: ChampionId | null =
-    actions.selectedChampionId ?? actions.cards[0]?.id ?? null;
+    championCards.find((card) => card.id === actions.selectedChampionId && card.isUnlocked)?.id ??
+    findFirstUnlockedChampionId(championCards);
+
+  const clearFeedback = (): void => {
+    if (feedbackTimeoutId !== null) {
+      window.clearTimeout(feedbackTimeoutId);
+      feedbackTimeoutId = null;
+    }
+
+    feedbackToast.classList.remove("is-visible", "is-error", "is-success");
+    feedbackToast.textContent = "";
+  };
+
+  const showFeedback = (message: string, tone: "error" | "success" = "error"): void => {
+    clearFeedback();
+    feedbackToast.textContent = message;
+    feedbackToast.classList.add("is-visible");
+
+    if (tone === "error") {
+      feedbackToast.classList.add("is-error");
+    }
+
+    if (tone === "success") {
+      feedbackToast.classList.add("is-success");
+    }
+
+    feedbackTimeoutId = window.setTimeout(() => {
+      clearFeedback();
+    }, 2400);
+  };
+
+  const syncCoins = (nextCoins: number): void => {
+    currentCoins = Math.max(0, Math.floor(nextCoins));
+    navbarNotificationCenter.setCoins(currentCoins);
+  };
+
+  const selectPreviewChampion = (championId: ChampionId): void => {
+    const champion = findCardById(championCards, championId);
+    if (!champion || !champion.isUnlocked) {
+      showFeedback(t(locale, "champions.feedback.locked"));
+      return;
+    }
+
+    previewSelectedChampionId = championId;
+    actions.onPreviewSelection?.(championId);
+    renderGrid();
+  };
 
   function renderGrid(): void {
     grid.replaceChildren();
 
-    actions.cards.forEach((card) => {
+    championCards.forEach((card) => {
       grid.appendChild(
-        createChampionCard({
+        createHeroCardElement({
           locale,
-          card,
-          selectedChampionId: previewSelectedChampionId
+          hero: card,
+          isSelected: previewSelectedChampionId === card.id,
+          currentCoins
         })
       );
     });
@@ -160,21 +199,64 @@ export function renderChampionsScreen(root: HTMLElement, actions: ChampionsActio
       }
 
       const action = button.dataset.action;
-      if (action === "select-champion") {
+      if (action === "unlock-champion") {
         const championId = button.dataset.championId as ChampionId | undefined;
         if (!championId) {
           return;
         }
 
-        previewSelectedChampionId = championId;
-        actions.onPreviewSelection?.(championId);
+        const champion = findCardById(championCards, championId);
+        if (!champion) {
+          showFeedback(t(locale, "champions.feedback.unlockFailed"));
+          return;
+        }
+
+        const unlockResult = actions.onUnlockChampion(championId);
+        if (unlockResult.user) {
+          syncCoins(unlockResult.user.coins);
+        }
+
+        if (unlockResult.status === "unlocked") {
+          champion.isUnlocked = true;
+          previewSelectedChampionId = champion.id;
+          actions.onPreviewSelection?.(champion.id);
+          showFeedback(
+            resolveUnlockFeedbackMessage({
+              locale,
+              result: unlockResult,
+              heroName: champion.displayName
+            }),
+            "success"
+          );
+        } else {
+          showFeedback(
+            resolveUnlockFeedbackMessage({
+              locale,
+              result: unlockResult,
+              heroName: champion.displayName
+            })
+          );
+        }
+
+        navbarNotificationCenter.refresh();
         renderGrid();
         return;
       }
 
       if (action === "confirm") {
-        if (previewSelectedChampionId) {
-          actions.onConfirmSelection(previewSelectedChampionId);
+        if (!previewSelectedChampionId) {
+          return;
+        }
+
+        const selectedCard = findCardById(championCards, previewSelectedChampionId);
+        if (!selectedCard || !selectedCard.isUnlocked) {
+          showFeedback(t(locale, "champions.feedback.locked"));
+          return;
+        }
+
+        const didSelect = actions.onConfirmSelection(previewSelectedChampionId);
+        if (!didSelect) {
+          showFeedback(t(locale, "champions.feedback.locked"));
         }
         return;
       }
@@ -182,11 +264,35 @@ export function renderChampionsScreen(root: HTMLElement, actions: ChampionsActio
       if (action === "back") {
         actions.onBack();
       }
+    }),
+    bind(screen, "click", (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) {
+        return;
+      }
+
+      if (target.closest("button")) {
+        return;
+      }
+
+      const cardElement = target.closest<HTMLElement>(".dab-champion-card[data-champion-id]");
+      if (!cardElement || !screen.contains(cardElement)) {
+        return;
+      }
+
+      const championId = cardElement.dataset.championId as ChampionId | undefined;
+      if (!championId) {
+        return;
+      }
+
+      selectPreviewChampion(championId);
     })
   ];
 
   return () => {
     window.removeEventListener("keydown", onKeyDown);
+    clearFeedback();
+    feedbackToast.remove();
     navbarNotificationCenter.dispose();
     cleanups.forEach((cleanup) => {
       cleanup();
