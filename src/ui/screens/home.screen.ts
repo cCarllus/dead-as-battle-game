@@ -14,6 +14,7 @@ import { mountChatPanel } from "../components/chat-panel";
 import type { TeamService, TeamToast } from "../../services/team.service";
 import { mountTeamPanel } from "../components/team-panel";
 import { mountTeamInvitePopup } from "../components/team-invite-popup";
+import { createSpotifyLobbyPlayer, destroySpotifyLobbyPlayer } from "../components/spotify-player";
 import { qs } from "../components/dom";
 
 export type HomeActions = {
@@ -57,6 +58,7 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
   const locale = resolveScreenLocale(actions.locale);
   const activeTab = actions.activeTab ?? DEFAULT_ACTIVE_TAB;
   const menu = renderScreenTemplate(root, template, '[data-screen="home"]', locale);
+  const spotifyPlayer = createSpotifyLobbyPlayer({ root: menu });
 
   const homeView = renderHomeView({
     root,
@@ -223,6 +225,7 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     disposeTeamInvitePopup();
     disposeTeamPanel();
     disposeChatPanel();
+    destroySpotifyLobbyPlayer(spotifyPlayer);
     homeView.dispose();
   };
 }
