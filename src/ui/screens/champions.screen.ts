@@ -1,9 +1,12 @@
 // Responsável por renderizar a tela de campeões com seleção persistente por usuário.
 import { t, type Locale } from "../../i18n";
 import type { ChampionId } from "../../models/champion.model";
+import type { NotificationService } from "../../services/notification.service";
+import type { UserService } from "../../services/user.service";
 import template from "../layout/champions.html?raw";
 import { bindDelegatedClick, qs } from "../components/dom";
 import { renderNavbar } from "../components/navbar";
+import { mountNavbarNotificationCenter } from "../components/navbar-notification-center";
 import { MENU_NAV_ITEMS, type MenuTabId } from "../navigation/menu.model";
 import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
 
@@ -85,6 +88,8 @@ export type ChampionsActions = {
   locale?: Locale;
   activeTab?: MenuTabId;
   coins?: number;
+  userService: UserService;
+  notificationService: NotificationService;
   cards: readonly ChampionSelectionCard[];
   selectedChampionId: ChampionId;
   onNavigateTab?: (tab: MenuTabId) => void;
@@ -100,6 +105,13 @@ export function renderChampionsScreen(root: HTMLElement, actions: ChampionsActio
 
   const navbar = qs<HTMLElement>(screen, '[data-slot="navbar"]');
   renderNavbar(navbar, { locale, activeTab, coins: actions.coins });
+  const navbarNotificationCenter = mountNavbarNotificationCenter({
+    menu: screen,
+    locale,
+    userService: actions.userService,
+    notificationService: actions.notificationService,
+    initialCoins: actions.coins ?? 0
+  });
 
   const filterLabel = qs<HTMLElement>(screen, '[data-slot="filter-label"]');
   filterLabel.textContent = t(locale, "champions.filter.allChampions");
@@ -175,6 +187,7 @@ export function renderChampionsScreen(root: HTMLElement, actions: ChampionsActio
 
   return () => {
     window.removeEventListener("keydown", onKeyDown);
+    navbarNotificationCenter.dispose();
     cleanups.forEach((cleanup) => {
       cleanup();
     });

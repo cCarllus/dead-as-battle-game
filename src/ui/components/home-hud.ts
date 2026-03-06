@@ -3,11 +3,8 @@ import type { Locale } from "../../i18n";
 import type { NotificationService } from "../../services/notification.service";
 import type { RewardService } from "../../services/reward.service";
 import type { UserService } from "../../services/user.service";
-import { qs } from "./dom";
-import { mountCoinsDisplay } from "./coins-display";
-import { mountNotificationBell } from "./notification-bell";
-import { mountNotificationModal } from "./notification-modal";
 import { mountRewardToast } from "./reward-toast";
+import { mountNavbarNotificationCenter } from "./navbar-notification-center";
 
 export type HomeHudOptions = {
   menu: HTMLElement;
@@ -19,63 +16,30 @@ export type HomeHudOptions = {
 };
 
 export type HomeHudHandle = {
-  refresh: () => void;
   isNotificationModalOpen: () => boolean;
   dispose: () => void;
 };
 
 export function mountHomeHud(options: HomeHudOptions): HomeHudHandle {
-  const menuToolsContainer = qs<HTMLElement>(options.menu, '[data-slot="menu-tools"]');
-  menuToolsContainer.replaceChildren();
-
-  const coinsDisplay = mountCoinsDisplay({
-    container: menuToolsContainer,
+  const notificationCenter = mountNavbarNotificationCenter({
+    menu: options.menu,
     locale: options.locale,
+    userService: options.userService,
+    notificationService: options.notificationService,
     initialCoins: options.initialCoins
   });
 
-  const refreshCoinsAndRewards = (): void => {
+  const refreshCoinsAndPendingRewards = (): void => {
     const currentUser = options.userService.getCurrentUser();
     if (!currentUser) {
-      coinsDisplay.setCoins(0);
+      notificationCenter.setCoins(0);
       rewardToast.setPendingRewards(0);
       return;
     }
 
-    coinsDisplay.setCoins(currentUser.coins);
+    notificationCenter.setCoins(currentUser.coins);
     rewardToast.setPendingRewards(currentUser.pendingCoinRewards);
   };
-
-  const refreshUnreadNotifications = (): void => {
-    notificationBell.setUnreadCount(options.notificationService.getUnreadCount());
-    notificationModal.refresh();
-  };
-
-  const markNotificationsAsRead = (): void => {
-    options.notificationService.markNotificationsAsRead();
-    refreshUnreadNotifications();
-  };
-
-  const notificationModal = mountNotificationModal({
-    menu: options.menu,
-    locale: options.locale,
-    getNotifications: () => options.notificationService.getNotifications(),
-    onOpen: () => {
-      markNotificationsAsRead();
-    },
-    onMarkAllRead: () => {
-      markNotificationsAsRead();
-    }
-  });
-
-  const notificationBell = mountNotificationBell({
-    container: menuToolsContainer,
-    locale: options.locale,
-    unreadCount: options.notificationService.getUnreadCount(),
-    onClick: () => {
-      notificationModal.open();
-    }
-  });
 
   const rewardToast = mountRewardToast({
     menu: options.menu,
@@ -86,32 +50,29 @@ export function mountHomeHud(options: HomeHudOptions): HomeHudHandle {
         return;
       }
 
-      coinsDisplay.setCoins(claimedUser.coins);
+      notificationCenter.setCoins(claimedUser.coins);
       rewardToast.setPendingRewards(claimedUser.pendingCoinRewards);
-      refreshUnreadNotifications();
+      notificationCenter.refresh();
     }
   });
 
   const disposeRewardListener = options.rewardService.onRewardAvailable(() => {
-    refreshCoinsAndRewards();
-    refreshUnreadNotifications();
+    refreshCoinsAndPendingRewards();
+    notificationCenter.refresh();
   });
 
-  const refresh = (): void => {
-    refreshCoinsAndRewards();
-    refreshUnreadNotifications();
+  const syncHud = (): void => {
+    refreshCoinsAndPendingRewards();
+    notificationCenter.refresh();
   };
 
-  refresh();
+  syncHud();
 
   return {
-    refresh,
-    isNotificationModalOpen: () => notificationModal.isOpen(),
+    isNotificationModalOpen: () => notificationCenter.isNotificationModalOpen(),
     dispose: () => {
       disposeRewardListener();
-      notificationModal.dispose();
-      notificationBell.dispose();
-      coinsDisplay.dispose();
+      notificationCenter.dispose();
       rewardToast.dispose();
     }
   };

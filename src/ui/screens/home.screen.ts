@@ -1,6 +1,6 @@
 // Responsável por compor renderização e interações da tela Home.
 import template from "../layout/home.html?raw";
-import { t, type Locale } from "../../i18n";
+import type { Locale } from "../../i18n";
 import { DEFAULT_ACTIVE_TAB, type MenuTabId } from "../navigation/menu.model";
 import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
 import { bindHomeEvents } from "./home.events";
@@ -16,7 +16,6 @@ import { mountTeamPanel } from "../components/team-panel";
 import { mountTeamInvitePopup } from "../components/team-invite-popup";
 import { createSpotifyLobbyPlayer, destroySpotifyLobbyPlayer } from "../components/spotify-player";
 import { qs } from "../components/dom";
-import type { NotificationInput, NotificationItem } from "../../models/notification.model";
 import type { NotificationService } from "../../services/notification.service";
 import type { RewardService } from "../../services/reward.service";
 import type { UserService } from "../../services/user.service";
@@ -62,83 +61,6 @@ function createActionHandlers(
     settings: openSettingsModal,
     exit: openExitConfirmModal
   };
-}
-
-function collectTrackedTeamInviteIds(notifications: readonly NotificationItem[]): Set<string> {
-  const trackedInviteIds = new Set<string>();
-
-  notifications.forEach((notification) => {
-    if (notification.type !== "team_invite") {
-      return;
-    }
-
-    const payload = notification.actionPayload as { inviteId?: string } | undefined;
-    if (typeof payload?.inviteId !== "string") {
-      return;
-    }
-
-    trackedInviteIds.add(payload.inviteId);
-  });
-
-  return trackedInviteIds;
-}
-
-function createTeamInviteNotification(params: {
-  locale: Locale;
-  fromNickname: string;
-  inviteId: string;
-  fromUserId: string;
-}): NotificationInput {
-  return {
-    type: "team_invite",
-    title: t(params.locale, "notifications.teamInvite.title"),
-    message: t(params.locale, "team.invite.message", { nickname: params.fromNickname }),
-    actionType: "team_invite",
-    actionPayload: {
-      inviteId: params.inviteId,
-      fromUserId: params.fromUserId
-    }
-  };
-}
-
-function bindTeamInviteNotificationBridge(params: {
-  locale: Locale;
-  teamService: TeamService;
-  notificationService: NotificationService;
-  onNotificationsChanged: () => void;
-}): () => void {
-  const trackedInviteIds = collectTrackedTeamInviteIds(params.notificationService.getNotifications());
-
-  return params.teamService.onPendingInvitesUpdated((pendingInvites) => {
-    let hasNewNotification = false;
-
-    pendingInvites.forEach((pendingInvite) => {
-      if (trackedInviteIds.has(pendingInvite.id)) {
-        return;
-      }
-
-      trackedInviteIds.add(pendingInvite.id);
-
-      const createdNotification = params.notificationService.addNotification(
-        createTeamInviteNotification({
-          locale: params.locale,
-          fromNickname: pendingInvite.fromNickname,
-          inviteId: pendingInvite.id,
-          fromUserId: pendingInvite.fromUserId
-        })
-      );
-
-      if (createdNotification) {
-        hasNewNotification = true;
-      }
-    });
-
-    if (!hasNewNotification) {
-      return;
-    }
-
-    params.onNotificationsChanged();
-  });
 }
 
 export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () => void {
@@ -207,15 +129,6 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     locale,
     menu: homeView.menu,
     teamService: actions.teamService
-  });
-
-  const disposeTeamInviteNotificationBridge = bindTeamInviteNotificationBridge({
-    locale,
-    teamService: actions.teamService,
-    notificationService: actions.notificationService,
-    onNotificationsChanged: () => {
-      homeHud.refresh();
-    }
   });
 
   let currentTeamMemberIds = new Set<string>();
@@ -338,7 +251,6 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     disposeTeamMembersTracker();
     disposeTeamToastListener();
     clearTeamToast();
-    disposeTeamInviteNotificationBridge();
     disposeTeamInvitePopup();
     disposeTeamPanel();
     disposeChatPanel();

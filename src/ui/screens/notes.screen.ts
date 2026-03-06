@@ -1,7 +1,10 @@
 // Responsável por renderizar a tela de notes com navegação e detalhes expansíveis.
 import type { Locale } from "../../i18n";
+import type { NotificationService } from "../../services/notification.service";
+import type { UserService } from "../../services/user.service";
 import template from "../layout/notes.html?raw";
 import { bindDelegatedClick, qs } from "../components/dom";
+import { mountNavbarNotificationCenter } from "../components/navbar-notification-center";
 import { renderNavbar } from "../components/navbar";
 import { MENU_NAV_ITEMS, type MenuTabId } from "../navigation/menu.model";
 import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
@@ -43,6 +46,8 @@ export type NotesActions = {
   locale?: Locale;
   activeTab?: MenuTabId;
   coins?: number;
+  userService: UserService;
+  notificationService: NotificationService;
   onNavigateTab?: (tab: MenuTabId) => void;
 };
 
@@ -53,8 +58,15 @@ export function renderNotesScreen(root: HTMLElement, actions: NotesActions): () 
 
   const navbar = qs<HTMLElement>(screen, '[data-slot="navbar"]');
   renderNavbar(navbar, { locale, activeTab, coins: actions.coins });
+  const navbarNotificationCenter = mountNavbarNotificationCenter({
+    menu: screen,
+    locale,
+    userService: actions.userService,
+    notificationService: actions.notificationService,
+    initialCoins: actions.coins ?? 0
+  });
 
-  return bindDelegatedClick(screen, "button", (button) => {
+  const disposeClick = bindDelegatedClick(screen, "button", (button) => {
     const tab = button.dataset.tab;
     if (isMenuTabId(tab)) {
       activeTab = tab;
@@ -76,4 +88,9 @@ export function renderNotesScreen(root: HTMLElement, actions: NotesActions): () 
     const expanded = button.getAttribute("aria-expanded") === "true";
     setNoteExpanded(screen, noteId, !expanded);
   });
+
+  return () => {
+    disposeClick();
+    navbarNotificationCenter.dispose();
+  };
 }

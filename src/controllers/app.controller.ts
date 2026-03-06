@@ -3,6 +3,7 @@ import type { AppRouter, ScreenRegistry } from "../core/router";
 import { createRouter } from "../core/router";
 import type { AppStateStore } from "../core/state";
 import type { SessionService } from "../core/storage";
+import { t } from "../i18n";
 import type { ChampionId } from "../models/champion.model";
 import { getChampionCardsForUser, getSelectedChampionForUser } from "../services/champion.service";
 import type { AudioService } from "../services/audio.service";
@@ -42,6 +43,29 @@ export type AppController = {
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
+  });
+}
+
+function bindGlobalTeamInviteNotifications(params: {
+  teamService: TeamService;
+  notificationService: NotificationService;
+  state: AppStateStore;
+}): () => void {
+  return params.teamService.onPendingInvitesUpdated((pendingInvites) => {
+    const locale = params.state.get().locale;
+
+    pendingInvites.forEach((pendingInvite) => {
+      params.notificationService.addNotification({
+        type: "team_invite",
+        title: t(locale, "notifications.teamInvite.title"),
+        message: t(locale, "team.invite.message", { nickname: pendingInvite.fromNickname }),
+        actionType: "team_invite",
+        actionPayload: {
+          inviteId: pendingInvite.id,
+          fromUserId: pendingInvite.fromUserId
+        }
+      });
+    });
   });
 }
 
@@ -180,6 +204,8 @@ function createScreenRegistry(
         locale: state.get().locale,
         activeTab: state.get().activeMenuTab,
         coins: user.coins,
+        userService,
+        notificationService,
         cards,
         selectedChampionId: user.selectedChampionId,
         onNavigateTab: (tab) => {
@@ -218,6 +244,8 @@ function createScreenRegistry(
         locale: state.get().locale,
         activeTab: state.get().activeMenuTab,
         coins: user.coins,
+        userService,
+        notificationService,
         onNavigateTab: (tab) => {
           state.patch({ activeMenuTab: tab });
 
@@ -301,6 +329,11 @@ export function createAppController({
   );
 
   let stopRewardTracking: (() => void) | null = null;
+  const disposeTeamInviteNotifications = bindGlobalTeamInviteNotifications({
+    teamService,
+    notificationService,
+    state
+  });
 
   return {
     start: () => {
@@ -321,6 +354,7 @@ export function createAppController({
     dispose: () => {
       stopRewardTracking?.();
       stopRewardTracking = null;
+      disposeTeamInviteNotifications();
       router.dispose();
       audioService.dispose();
       chatService.disconnect();

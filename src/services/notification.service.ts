@@ -37,6 +37,7 @@ export type NotificationService = {
   getUnreadCount: () => number;
   addNotification: (notification: NotificationInput) => NotificationItem | null;
   markNotificationsAsRead: () => number;
+  onNotificationsChanged: (listener: () => void) => () => void;
 };
 
 export type NotificationServiceDependencies = {
@@ -46,6 +47,14 @@ export type NotificationServiceDependencies = {
 export function createNotificationService({
   userService
 }: NotificationServiceDependencies): NotificationService {
+  const listeners = new Set<() => void>();
+
+  const emitNotificationsChanged = (): void => {
+    listeners.forEach((listener) => {
+      listener();
+    });
+  };
+
   const getNotificationsSnapshot = (): NotificationItem[] => {
     const user = userService.getCurrentUser();
     if (!user) {
@@ -87,7 +96,12 @@ export function createNotificationService({
       }
 
       const persistedNotification = nextUser.notifications.find((entry) => entry.id === createdNotification.id);
-      return persistedNotification ? cloneNotification(persistedNotification) : null;
+      if (!persistedNotification) {
+        return null;
+      }
+
+      emitNotificationsChanged();
+      return cloneNotification(persistedNotification);
     },
     markNotificationsAsRead: () => {
       let unreadCount = 0;
@@ -110,7 +124,21 @@ export function createNotificationService({
         };
       });
 
-      return nextUser ? unreadCount : 0;
+      if (!nextUser) {
+        return 0;
+      }
+
+      if (unreadCount > 0) {
+        emitNotificationsChanged();
+      }
+
+      return unreadCount;
+    },
+    onNotificationsChanged: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
     }
   };
 }
