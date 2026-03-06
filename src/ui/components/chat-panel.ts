@@ -2,6 +2,7 @@ import { t, type Locale } from "../../i18n";
 import type { ChatMessage } from "../../models/chat-message.model";
 import { CHAT_MAX_MESSAGE_LENGTH, type ChatError, type ChatService } from "../../services/chat.service";
 import { bind, qs } from "./dom";
+import { createChatMessageItem } from "./chat-message-item";
 
 const MAX_RENDERED_MESSAGES = 100;
 
@@ -10,17 +11,12 @@ type ChatPanelOptions = {
   container: HTMLElement;
   chatService: ChatService;
   currentUserId: string;
+  onInvitePlayer?: (userId: string, nickname: string) => void;
+  isPlayerInTeam?: (userId: string) => boolean;
+  onInviteStateChanged?: (callback: () => void) => () => void;
   triggerButton?: HTMLButtonElement | null;
   onMessageSound?: (message: ChatMessage) => void;
 };
-
-function formatTime(locale: Locale, timestamp: number): string {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString(locale, {
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
 
 function resolveErrorMessage(locale: Locale, error: ChatError): string {
   switch (error.code) {
@@ -39,56 +35,6 @@ function resolveErrorMessage(locale: Locale, error: ChatError): string {
   }
 }
 
-function toUserHue(seed: string): number {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
-  }
-
-  return Math.abs(hash) % 360;
-}
-
-function createMessageElement(locale: Locale, message: ChatMessage, currentUserId: string): HTMLLIElement {
-  const isSelf = message.userId === currentUserId;
-  const item = document.createElement("li");
-  item.className = isSelf
-    ? "dab-global-chat__message is-self"
-    : "dab-global-chat__message is-other";
-
-  if (!isSelf) {
-    const hue = toUserHue(message.userId || message.nickname);
-    item.style.setProperty("--dab-chat-user-color", `hsl(${hue} 100% 74%)`);
-  }
-
-  const header = document.createElement("div");
-  header.className = "dab-global-chat__message-head";
-
-  const identity = document.createElement("span");
-  identity.className = "dab-global-chat__identity";
-
-  const nickname = document.createElement("strong");
-  nickname.className = "dab-global-chat__nickname";
-  nickname.textContent = message.nickname;
-
-  const championMeta = document.createElement("small");
-  championMeta.className = "dab-global-chat__champion-meta";
-  championMeta.textContent = `${message.championName} (${t(locale, "champions.level", { value: message.championLevel })})`;
-  identity.append(nickname, championMeta);
-
-  const timestamp = document.createElement("time");
-  timestamp.className = "dab-global-chat__time";
-  timestamp.dateTime = new Date(message.timestamp).toISOString();
-  timestamp.textContent = formatTime(locale, message.timestamp);
-
-  header.append(identity, timestamp);
-
-  const text = document.createElement("p");
-  text.className = "dab-global-chat__text";
-  text.textContent = message.text;
-
-  item.append(header, text);
-  return item;
-}
 
 export function mountChatPanel(options: ChatPanelOptions): () => void {
   const panel = document.createElement("section");
@@ -164,7 +110,15 @@ export function mountChatPanel(options: ChatPanelOptions): () => void {
     messagesList.replaceChildren();
 
     renderedMessages.forEach((message) => {
-      messagesList.appendChild(createMessageElement(options.locale, message, options.currentUserId));
+      messagesList.appendChild(
+        createChatMessageItem({
+          locale: options.locale,
+          message,
+          currentUserId: options.currentUserId,
+          onInvitePlayer: options.onInvitePlayer,
+          isPlayerInTeam: options.isPlayerInTeam
+        })
+      );
     });
 
     scrollMessagesToBottom();
@@ -176,7 +130,15 @@ export function mountChatPanel(options: ChatPanelOptions): () => void {
       renderedMessages.shift();
     }
 
-    messagesList.appendChild(createMessageElement(options.locale, message, options.currentUserId));
+    messagesList.appendChild(
+      createChatMessageItem({
+        locale: options.locale,
+        message,
+        currentUserId: options.currentUserId,
+        onInvitePlayer: options.onInvitePlayer,
+        isPlayerInTeam: options.isPlayerInTeam
+      })
+    );
     while (messagesList.children.length > MAX_RENDERED_MESSAGES) {
       messagesList.removeChild(messagesList.firstElementChild as Node);
     }
@@ -261,6 +223,14 @@ export function mountChatPanel(options: ChatPanelOptions): () => void {
       showError(resolveErrorMessage(options.locale, error));
     })
   );
+
+  if (options.onInviteStateChanged) {
+    cleanups.push(
+      options.onInviteStateChanged(() => {
+        renderAllMessages();
+      })
+    );
+  }
 
   void options.chatService.connect().catch((error: unknown) => {
     if (error instanceof Error) {

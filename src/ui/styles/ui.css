@@ -724,6 +724,12 @@ body {
   overflow: visible;
 }
 
+.dab-team-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .dab-roster__summary {
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(10, 18, 34, 0.68);
@@ -766,18 +772,31 @@ body {
 
 .dab-roster__title {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   border-left: 4px solid var(--dab-champion-theme);
   padding-left: 12px;
+  transition: border-color 180ms ease;
 }
 
-.dab-roster__title h2 {
+.dab-roster__team-tab {
   margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
   letter-spacing: 0.03em;
   font-size: clamp(1.5rem, 2.3vw, 2rem);
   font-style: italic;
   text-transform: uppercase;
+  font-family: inherit;
+  cursor: default;
+  transition: color 180ms ease, text-shadow 180ms ease;
+}
+
+.dab-roster__team-tab.is-active-team {
+  color: #facc15;
+  text-shadow: 0 0 14px rgba(250, 204, 21, 0.5);
 }
 
 .dab-roster__title span {
@@ -786,10 +805,142 @@ body {
   font-weight: 600;
 }
 
+.is-team-active .dab-roster__title {
+  border-left-color: #facc15;
+}
+
 .dab-roster__slots {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.dab-team-panel {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(8, 16, 32, 0.74);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.36);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dab-team-panel--empty {
+  align-items: center;
+  justify-content: center;
+  min-height: 94px;
+  padding: 14px;
+}
+
+.dab-team-panel--empty p {
+  margin: 0;
+  font-size: 0.86rem;
+  letter-spacing: 0.03em;
+  color: rgba(226, 232, 240, 0.72);
+  text-align: center;
+}
+
+.dab-team-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dab-team-panel__header strong {
+  font-size: 0.88rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(250, 250, 250, 0.86);
+}
+
+.dab-team-panel__members {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dab-team-panel__member {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.78);
+  padding: 9px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.dab-team-panel__member-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dab-team-panel__member-copy strong {
+  font-size: 1rem;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dab-team-panel__member-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dab-team-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.44);
+  color: rgba(226, 232, 240, 0.94);
+  background: rgba(15, 23, 42, 0.62);
+  font-size: 0.63rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.dab-team-panel__badge--leader {
+  border-color: rgba(250, 204, 21, 0.75);
+  color: #fde68a;
+  background: rgba(146, 64, 14, 0.35);
+}
+
+.dab-team-panel__kick,
+.dab-team-panel__leave {
+  border-radius: 8px;
+  border: 1px solid rgba(251, 113, 133, 0.56);
+  background: rgba(127, 29, 29, 0.32);
+  color: #fecdd3;
+  min-height: 30px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+
+.dab-team-panel__kick:hover,
+.dab-team-panel__leave:hover {
+  border-color: rgba(251, 113, 133, 0.8);
+  background: rgba(127, 29, 29, 0.48);
+}
+
+.dab-team-panel__leave {
+  width: 100%;
 }
 
 .dab-roster__slot {
@@ -1218,7 +1369,7 @@ body {
 .dab-global-chat__identity {
   min-width: 0;
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
 }
 
@@ -1233,6 +1384,54 @@ body {
   color: var(--dab-chat-user-color);
   font-size: 0.82rem;
   letter-spacing: 0.02em;
+}
+
+.dab-global-chat__nickname-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dab-global-chat__invite {
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(250, 204, 21, 0.6);
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.18);
+  color: #fef08a;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.dab-global-chat__invite:hover {
+  border-color: rgba(250, 204, 21, 0.85);
+  background: rgba(250, 204, 21, 0.35);
+  transform: translateY(-1px);
+}
+
+.dab-global-chat__invite.is-checked {
+  border-color: rgba(74, 222, 128, 0.7);
+  background: rgba(22, 101, 52, 0.42);
+  color: #86efac;
+  cursor: default;
+  transform: none;
+}
+
+.dab-global-chat__invite:disabled {
+  opacity: 1;
+}
+
+.dab-global-chat__invite.is-checked:hover {
+  border-color: rgba(74, 222, 128, 0.7);
+  background: rgba(22, 101, 52, 0.42);
+  transform: none;
 }
 
 .dab-global-chat__message.is-self .dab-global-chat__nickname {
@@ -1324,6 +1523,75 @@ body {
   letter-spacing: 0.04em;
   color: rgba(148, 163, 184, 0.9);
   text-align: right;
+}
+
+.dab-team-invite-popup {
+  position: absolute;
+  left: 50%;
+  bottom: 150px;
+  z-index: 89;
+  transform: translateX(-50%);
+}
+
+.dab-team-invite-popup__panel {
+  width: min(420px, calc(100vw - 28px));
+  border-radius: 14px;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  background:
+    radial-gradient(circle at top right, rgba(250, 204, 21, 0.2), transparent 56%),
+    linear-gradient(160deg, rgba(9, 16, 32, 0.94), rgba(14, 23, 45, 0.86));
+  box-shadow:
+    0 18px 38px rgba(2, 6, 23, 0.52),
+    0 0 20px rgba(250, 204, 21, 0.12);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dab-team-invite-popup__text {
+  margin: 0;
+  color: rgba(248, 250, 252, 0.96);
+  font-size: 0.94rem;
+  letter-spacing: 0.03em;
+}
+
+.dab-team-invite-popup__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dab-team-invite-popup__accept,
+.dab-team-invite-popup__decline {
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 170ms ease, background-color 170ms ease;
+}
+
+.dab-team-invite-popup__accept {
+  border-color: rgba(252, 211, 77, 0.72);
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.94), rgba(245, 158, 11, 0.9));
+  color: #111827;
+}
+
+.dab-team-invite-popup__accept:hover {
+  filter: brightness(1.05);
+}
+
+.dab-team-invite-popup__decline:hover {
+  border-color: rgba(251, 113, 133, 0.76);
+  background: rgba(127, 29, 29, 0.48);
 }
 
 .dab-settings-modal {
@@ -1759,6 +2027,29 @@ body {
   transform: translate(-50%, 0);
 }
 
+.dab-toast.is-error {
+  border-color: rgba(248, 113, 113, 0.64);
+  background: rgba(69, 10, 10, 0.88);
+  color: #fecaca;
+}
+
+.dab-toast.is-success {
+  border-color: rgba(250, 204, 21, 0.64);
+  background: rgba(67, 20, 7, 0.9);
+  color: #fef08a;
+}
+
+.dab-toast--team {
+  left: auto;
+  right: 40px;
+  bottom: 90px;
+  transform: translate(0, 14px);
+}
+
+.dab-toast--team.is-visible {
+  transform: translate(0, 0);
+}
+
 .dab-exit-modal {
   position: absolute;
   inset: 0;
@@ -2043,6 +2334,24 @@ body {
     bottom: 24px;
     width: calc(100vw - 24px);
     text-align: center;
+  }
+
+  .dab-toast--team {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    bottom: 72px;
+  }
+
+  .dab-team-invite-popup {
+    left: 10px;
+    right: 10px;
+    bottom: 136px;
+    transform: none;
+  }
+
+  .dab-team-invite-popup__panel {
+    width: auto;
   }
 
   .dab-exit-modal__actions {

@@ -25,15 +25,18 @@
       <p class="dab-roster__summary-line dab-roster__summary-line--accent" data-slot="champion-message"></p>
       <p class="dab-roster__summary-line dab-roster__summary-line--badge" data-slot="user-champion-badge" hidden></p>
     </div>
-    <div class="dab-roster__title">
-      <h2 data-i18n="menu.roster.title"></h2>
-      <span data-slot="roster-count"></span>
-    </div>
-    <div class="dab-roster__slots" data-slot="team-slots"></div>
     <aside class="dab-global-chat-anchor" data-slot="global-chat-panel"></aside>
   </aside>
 
   <aside class="dab-play">
+    <section class="dab-team-queue">
+      <div class="dab-roster__title">
+        <button type="button" class="dab-roster__team-tab" data-slot="team-tab" data-i18n="menu.roster.title"></button>
+        <span data-slot="roster-count"></span>
+      </div>
+      <div class="dab-roster__slots" data-slot="team-slots"></div>
+    </section>
+
     <div class="dab-play__shell">
       <article class="dab-play__card">
         <div class="dab-play__mode">
@@ -172,6 +175,7 @@
   </div>
 
   <div class="dab-toast" data-slot="settings-toast" role="status" aria-live="polite"></div>
+  <div class="dab-toast dab-toast--team" data-slot="team-toast" role="status" aria-live="polite"></div>
 
   <footer class="dab-menu__footer">
     <button type="button" class="dab-chat-button">

@@ -14,6 +14,7 @@ import { renderChampionsScreen } from "../ui/screens/champions.screen";
 import type { UserService } from "../services/user.service";
 import type { SettingsService } from "../services/settings.service";
 import type { ChatService } from "../services/chat.service";
+import type { TeamService } from "../services/team.service";
 
 export type AppControllerDependencies = {
   uiRoot: HTMLDivElement;
@@ -23,6 +24,7 @@ export type AppControllerDependencies = {
   audioService: AudioService;
   settingsService: SettingsService;
   chatService: ChatService;
+  teamService: TeamService;
   warmUpAssets: () => Promise<void>;
   startupDelayMs?: number;
 };
@@ -43,7 +45,8 @@ function createScreenRegistry(
   sessionService: SessionService,
   audioService: AudioService,
   settingsService: SettingsService,
-  chatService: ChatService
+  chatService: ChatService,
+  teamService: TeamService
 ): ScreenRegistry {
   return {
     loading: ({ uiRoot, state }) => {
@@ -64,6 +67,7 @@ function createScreenRegistry(
       const user = userService.getCurrentUser();
       if (!user) {
         chatService.disconnect();
+        teamService.disconnect();
         sessionService.clear();
         goTo("nickname");
         return;
@@ -89,12 +93,14 @@ function createScreenRegistry(
         },
         onExit: () => {
           chatService.disconnect();
+          teamService.disconnect();
           userService.clearCurrentUser();
           sessionService.clear();
           goTo("nickname");
         },
         onClearSession: () => {
           chatService.disconnect();
+          teamService.disconnect();
           userService.clearCurrentUser();
           sessionService.clear();
           settingsService.clear();
@@ -119,6 +125,7 @@ function createScreenRegistry(
         },
         settingsService,
         chatService,
+        teamService,
         playerName: user.nickname,
         selectedChampionName: selectedChampion.displayName,
         selectedChampionLevel: selectedChampionProgress.level,
@@ -187,6 +194,7 @@ async function runStartupFlow(params: {
   userService: UserService;
   sessionService: SessionService;
   chatService: ChatService;
+  teamService: TeamService;
   warmUpAssets: () => Promise<void>;
   startupDelayMs: number;
 }): Promise<void> {
@@ -196,6 +204,7 @@ async function runStartupFlow(params: {
 
   if (!params.userService.hasUserProfile()) {
     params.chatService.disconnect();
+    params.teamService.disconnect();
     params.sessionService.clear();
     params.router.goTo("nickname");
     return;
@@ -214,6 +223,7 @@ export function createAppController({
   audioService,
   settingsService,
   chatService,
+  teamService,
   warmUpAssets,
   startupDelayMs = 1200
 }: AppControllerDependencies): AppController {
@@ -222,7 +232,7 @@ export function createAppController({
       uiRoot,
       state
     },
-    createScreenRegistry(userService, sessionService, audioService, settingsService, chatService)
+    createScreenRegistry(userService, sessionService, audioService, settingsService, chatService, teamService)
   );
 
   return {
@@ -232,6 +242,7 @@ export function createAppController({
         userService,
         sessionService,
         chatService,
+        teamService,
         warmUpAssets,
         startupDelayMs
       });
@@ -240,6 +251,7 @@ export function createAppController({
       router.dispose();
       audioService.dispose();
       chatService.disconnect();
+      teamService.disconnect();
     }
   };
 }

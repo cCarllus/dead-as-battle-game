@@ -11,6 +11,9 @@ import { mountExitConfirmModal } from "../components/exit-confirm-modal";
 import type { GameSettings, SettingsService } from "../../services/settings.service";
 import type { ChatService } from "../../services/chat.service";
 import { mountChatPanel } from "../components/chat-panel";
+import type { TeamService, TeamToast } from "../../services/team.service";
+import { mountTeamPanel } from "../components/team-panel";
+import { mountTeamInvitePopup } from "../components/team-invite-popup";
 import { qs } from "../components/dom";
 
 export type HomeActions = {
@@ -22,6 +25,7 @@ export type HomeActions = {
   onApplyLocale: (locale: Locale) => boolean;
   settingsService: SettingsService;
   chatService: ChatService;
+  teamService: TeamService;
   locale?: Locale;
   activeTab?: MenuTabId;
   onNavigateTab?: (tab: MenuTabId) => void;
@@ -82,6 +86,38 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     onConfirmExit: actions.onExit
   });
 
+  const teamRoot = qs<HTMLElement>(menu, ".dab-team-queue");
+  const rosterCountNode = qs<HTMLElement>(menu, '[data-slot="roster-count"]');
+  const teamPanelSlot = qs<HTMLElement>(menu, '[data-slot="team-slots"]');
+  const teamTabButton = qs<HTMLButtonElement>(menu, '[data-slot="team-tab"]');
+  const teamToast = qs<HTMLElement>(menu, '[data-slot="team-toast"]');
+
+  const disposeTeamPanel = mountTeamPanel({
+    locale,
+    container: teamPanelSlot,
+    rosterRoot: teamRoot,
+    rosterCountNode,
+    teamTabButton,
+    teamService: actions.teamService,
+    currentUserId: actions.currentUserId
+  });
+
+  const disposeTeamInvitePopup = mountTeamInvitePopup({
+    locale,
+    menu: homeView.menu,
+    teamService: actions.teamService
+  });
+
+  let currentTeamMemberIds = new Set<string>();
+  const seedTeam = actions.teamService.getCurrentTeam();
+  if (seedTeam) {
+    currentTeamMemberIds = new Set(seedTeam.members.map((member) => member.userId));
+  }
+
+  const disposeTeamMembersTracker = actions.teamService.onTeamUpdated((team) => {
+    currentTeamMemberIds = new Set(team?.members.map((member) => member.userId) ?? []);
+  });
+
   const chatPanelSlot = qs<HTMLElement>(menu, '[data-slot="global-chat-panel"]');
   const chatTriggerButton = menu.querySelector<HTMLButtonElement>(".dab-chat-button");
   const disposeChatPanel = mountChatPanel({
@@ -89,7 +125,59 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     container: chatPanelSlot,
     chatService: actions.chatService,
     triggerButton: chatTriggerButton,
-    currentUserId: actions.currentUserId
+    currentUserId: actions.currentUserId,
+    onInvitePlayer: (targetUserId) => {
+      actions.teamService.sendInvite(targetUserId);
+    },
+    isPlayerInTeam: (userId) => currentTeamMemberIds.has(userId),
+    onInviteStateChanged: (callback) => {
+      return actions.teamService.onTeamUpdated(() => {
+        callback();
+      });
+    }
+  });
+
+  let teamToastTimeoutId: number | null = null;
+
+  const clearTeamToast = (): void => {
+    if (teamToastTimeoutId !== null) {
+      window.clearTimeout(teamToastTimeoutId);
+      teamToastTimeoutId = null;
+    }
+
+    teamToast.classList.remove("is-visible", "is-error", "is-success");
+    teamToast.textContent = "";
+  };
+
+  const showTeamToast = (toast: TeamToast): void => {
+    clearTeamToast();
+    teamToast.textContent = toast.message;
+    teamToast.classList.add("is-visible");
+
+    if (toast.tone === "error") {
+      teamToast.classList.add("is-error");
+    }
+
+    if (toast.tone === "success") {
+      teamToast.classList.add("is-success");
+    }
+
+    teamToastTimeoutId = window.setTimeout(() => {
+      clearTeamToast();
+    }, 2600);
+  };
+
+  const disposeTeamToastListener = actions.teamService.onToast((toast) => {
+    showTeamToast(toast);
+  });
+
+  void actions.teamService.connect().catch((error: unknown) => {
+    if (error instanceof Error) {
+      showTeamToast({
+        message: error.message,
+        tone: "error"
+      });
+    }
   });
 
   const actionHandlers = createActionHandlers(actions, settingsModal.open, exitConfirmModal.open);
@@ -129,6 +217,11 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     disposeEvents();
     settingsModal.dispose();
     exitConfirmModal.dispose();
+    disposeTeamMembersTracker();
+    disposeTeamToastListener();
+    clearTeamToast();
+    disposeTeamInvitePopup();
+    disposeTeamPanel();
     disposeChatPanel();
     homeView.dispose();
   };

@@ -11,6 +11,7 @@ import { createUserService } from "../services/user.service";
 import { createAudioService } from "../services/audio.service";
 import { createSettingsService } from "../services/settings.service";
 import { createChatService } from "../services/chat.service";
+import { createTeamService } from "../services/team.service";
 import { getSelectedChampionForUser } from "../services/champion.service";
 
 export function bootstrap(): void {
@@ -34,41 +35,47 @@ export function bootstrap(): void {
   });
   audioService.applySettings(initialSettings);
 
-  const chatService = createChatService({
-    endpoint: import.meta.env.VITE_COLYSEUS_ENDPOINT,
-    getIdentity: () => {
-      const snapshot = sessionService.getSnapshot();
-      const localUser = userService.getCurrentUser();
-      let championName = "Unknown";
-      let championLevel = 1;
+  const resolveNetworkIdentity = () => {
+    const snapshot = sessionService.getSnapshot();
+    const localUser = userService.getCurrentUser();
+    let championName = "Unknown";
+    let championLevel = 1;
 
-      if (localUser) {
-        const selectedChampion = getSelectedChampionForUser(localUser);
-        championName = selectedChampion.displayName;
-        championLevel = localUser.champions[selectedChampion.id].level;
-      }
+    if (localUser) {
+      const selectedChampion = getSelectedChampionForUser(localUser);
+      championName = selectedChampion.displayName;
+      championLevel = localUser.champions[selectedChampion.id].level;
+    }
 
-      if (snapshot) {
-        return {
-          userId: snapshot.userId,
-          nickname: snapshot.nickname,
-          championName,
-          championLevel
-        };
-      }
-
-      const fallbackUser = localUser;
-      if (!fallbackUser) {
-        return null;
-      }
-
+    if (snapshot) {
       return {
-        userId: fallbackUser.id,
-        nickname: fallbackUser.nickname,
+        userId: snapshot.userId,
+        nickname: snapshot.nickname,
         championName,
         championLevel
       };
     }
+
+    if (!localUser) {
+      return null;
+    }
+
+    return {
+      userId: localUser.id,
+      nickname: localUser.nickname,
+      championName,
+      championLevel
+    };
+  };
+
+  const chatService = createChatService({
+    endpoint: import.meta.env.VITE_COLYSEUS_ENDPOINT,
+    getIdentity: resolveNetworkIdentity
+  });
+
+  const teamService = createTeamService({
+    endpoint: import.meta.env.VITE_COLYSEUS_ENDPOINT,
+    getIdentity: resolveNetworkIdentity
   });
 
   const appController = createAppController({
@@ -79,6 +86,7 @@ export function bootstrap(): void {
     audioService,
     settingsService,
     chatService,
+    teamService,
     warmUpAssets: warmUpAssetCache
   });
 
