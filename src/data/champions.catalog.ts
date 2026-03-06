@@ -3,7 +3,7 @@ import type { ChampionCatalogItem, ChampionId } from "../models/champion.model";
 
 export const CHAMPION_IDS: readonly ChampionId[] = ["user", "sukuna", "kaiju_no_8"];
 
-const DEFAULT_USER_CHAMPION_THEME = "#FFD54A" as const;
+const DEFAULT_USER_CHAMPION_THEME = "#ff4a4a" as const;
 
 export const DEFAULT_CHAMPION_ID: ChampionId = "user";
 
@@ -11,10 +11,10 @@ export const USER_CHAMPION_TEMPLATE: ChampionCatalogItem = {
   id: "user",
   displayName: "Player",
   universeName: "Dead as Battle",
-  modelUrl: null,
-  cardImageUrl: "/assets/images/champions/user/card.png",
+  modelUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/models/champions/default/default_champion.glb",
+  cardImageUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/images/champions/default/default_chart.png",
   splashImageUrl: "https://imgs.search.brave.com/aenZAYJGTuXL89r7XCaO2E788nw3F7osgmTKkUj5-2Y/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pMS5z/bmRjZG4uY29tL2Fy/dHdvcmtzLWl5VXZT/UDVvSDBPQS0wLXQx/MDgweDEwODAuanBn",
-  selectAudioUrl: "/assets/audio/ui/select_user.mp3",
+  selectAudioUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/sounds/champions/default/default_audio_lobby.mp3",
   themeColor: DEFAULT_USER_CHAMPION_THEME
 };
 
@@ -46,59 +46,11 @@ function normalizeNickname(nickname: string): string {
   return normalized.length > 0 ? normalized : "Player";
 }
 
-function hashNicknameColor(nickname: string): `#${string}` {
-  const normalized = normalizeNickname(nickname);
-  let hash = 0;
-
-  for (let index = 0; index < normalized.length; index += 1) {
-    hash = normalized.charCodeAt(index) + ((hash << 5) - hash);
-  }
-
-  const hue = Math.abs(hash) % 360;
-  const saturation = 72;
-  const lightness = 60;
-
-  const c = ((100 - Math.abs(2 * lightness - 100)) * saturation) / 10000;
-  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
-  const m = lightness / 100 - c / 2;
-
-  let r = 0;
-  let g = 0;
-  let b = 0;
-
-  if (hue < 60) {
-    r = c;
-    g = x;
-  } else if (hue < 120) {
-    r = x;
-    g = c;
-  } else if (hue < 180) {
-    g = c;
-    b = x;
-  } else if (hue < 240) {
-    g = x;
-    b = c;
-  } else if (hue < 300) {
-    r = x;
-    b = c;
-  } else {
-    r = c;
-    b = x;
-  }
-
-  const toHex = (channel: number): string => {
-    const value = Math.round((channel + m) * 255);
-    return value.toString(16).padStart(2, "0");
-  };
-
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
 export function createUserChampionEntry(nickname: string): ChampionCatalogItem {
   return {
     ...USER_CHAMPION_TEMPLATE,
     displayName: normalizeNickname(nickname),
-    themeColor: hashNicknameColor(nickname)
+    themeColor: DEFAULT_USER_CHAMPION_THEME
   };
 }
 
