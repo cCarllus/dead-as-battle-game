@@ -9,6 +9,9 @@ import type { MenuActionId } from "./home.model";
 import { mountSettingsModal } from "../components/settings-modal";
 import { mountExitConfirmModal } from "../components/exit-confirm-modal";
 import type { GameSettings, SettingsService } from "../../services/settings.service";
+import type { ChatService } from "../../services/chat.service";
+import { mountChatPanel } from "../components/chat-panel";
+import { qs } from "../components/dom";
 
 export type HomeActions = {
   onOpenMultiplayer: () => void;
@@ -18,6 +21,7 @@ export type HomeActions = {
   onApplyAudioSettings: (settings: GameSettings) => void;
   onApplyLocale: (locale: Locale) => boolean;
   settingsService: SettingsService;
+  chatService: ChatService;
   locale?: Locale;
   activeTab?: MenuTabId;
   onNavigateTab?: (tab: MenuTabId) => void;
@@ -29,6 +33,7 @@ export type HomeActions = {
   selectedChampionThemeColor: string;
   isUserChampion: boolean;
   isSessionActive: boolean;
+  currentUserId: string;
 };
 
 function createActionHandlers(
@@ -77,6 +82,16 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     onConfirmExit: actions.onExit
   });
 
+  const chatPanelSlot = qs<HTMLElement>(menu, '[data-slot="global-chat-panel"]');
+  const chatTriggerButton = menu.querySelector<HTMLButtonElement>(".dab-chat-button");
+  const disposeChatPanel = mountChatPanel({
+    locale,
+    container: chatPanelSlot,
+    chatService: actions.chatService,
+    triggerButton: chatTriggerButton,
+    currentUserId: actions.currentUserId
+  });
+
   const actionHandlers = createActionHandlers(actions, settingsModal.open, exitConfirmModal.open);
 
   const onWindowKeyDown = (event: KeyboardEvent): void => {
@@ -114,6 +129,7 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     disposeEvents();
     settingsModal.dispose();
     exitConfirmModal.dispose();
+    disposeChatPanel();
     homeView.dispose();
   };
 }

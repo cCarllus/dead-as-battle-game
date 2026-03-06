@@ -10,6 +10,8 @@ import { createUserRepository } from "../repositories/user.repository";
 import { createUserService } from "../services/user.service";
 import { createAudioService } from "../services/audio.service";
 import { createSettingsService } from "../services/settings.service";
+import { createChatService } from "../services/chat.service";
+import { getSelectedChampionForUser } from "../services/champion.service";
 
 export function bootstrap(): void {
   const uiRoot = document.getElementById("ui-root") as HTMLDivElement | null;
@@ -32,6 +34,43 @@ export function bootstrap(): void {
   });
   audioService.applySettings(initialSettings);
 
+  const chatService = createChatService({
+    endpoint: import.meta.env.VITE_COLYSEUS_ENDPOINT,
+    getIdentity: () => {
+      const snapshot = sessionService.getSnapshot();
+      const localUser = userService.getCurrentUser();
+      let championName = "Unknown";
+      let championLevel = 1;
+
+      if (localUser) {
+        const selectedChampion = getSelectedChampionForUser(localUser);
+        championName = selectedChampion.displayName;
+        championLevel = localUser.champions[selectedChampion.id].level;
+      }
+
+      if (snapshot) {
+        return {
+          userId: snapshot.userId,
+          nickname: snapshot.nickname,
+          championName,
+          championLevel
+        };
+      }
+
+      const fallbackUser = localUser;
+      if (!fallbackUser) {
+        return null;
+      }
+
+      return {
+        userId: fallbackUser.id,
+        nickname: fallbackUser.nickname,
+        championName,
+        championLevel
+      };
+    }
+  });
+
   const appController = createAppController({
     uiRoot,
     state: appState,
@@ -39,6 +78,7 @@ export function bootstrap(): void {
     sessionService,
     audioService,
     settingsService,
+    chatService,
     warmUpAssets: warmUpAssetCache
   });
 

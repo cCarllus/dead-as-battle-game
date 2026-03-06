@@ -5,16 +5,28 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:server": "tsx watch server/src/index.ts",
+    "game:server:dev": "concurrently -k -n SERVER,WEB -c cyan,yellow \"npm:dev:server\" \"npm:dev\"",
+    "dev:all": "npm run game:server:dev",
+    "start:server": "tsx server/src/index.ts",
+    "build:server": "tsc --project server/tsconfig.json",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
     "@types/node": "^25.3.3",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.1"
   },
   "dependencies": {
     "@babylonjs/core": "^8.53.1",
-    "@babylonjs/loaders": "^8.53.1"
+    "@babylonjs/loaders": "^8.53.1",
+    "@colyseus/core": "^0.17.39",
+    "@colyseus/sdk": "^0.17.34",
+    "@colyseus/ws-transport": "^0.17.9",
+    "express": "^5.2.1",
+    "zod": "^4.3.6"
   }
 }

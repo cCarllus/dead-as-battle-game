@@ -721,6 +721,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: visible;
 }
 
 .dab-roster__summary {
@@ -1126,6 +1127,203 @@ body {
 .dab-footer-button__icon {
   font-size: 0.95rem;
   color: rgba(255, 255, 255, 0.8);
+}
+
+.dab-global-chat-anchor {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  z-index: 1;
+  width: min(430px, 40vw);
+  pointer-events: none;
+  margin-top: 12px;
+}
+
+.dab-global-chat-panel {
+  height: 430px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(34, 211, 238, 0.14), transparent 46%),
+    linear-gradient(165deg, rgba(9, 15, 30, 0.86), rgba(9, 16, 34, 0.74));
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 16px 38px rgba(2, 6, 23, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: 12px;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dab-global-chat__header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #e2e8f0;
+}
+
+.dab-global-chat__header p {
+  margin: 3px 0 0;
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.dab-global-chat__messages {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(2, 6, 23, 0.52);
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dab-global-chat__messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dab-global-chat__messages::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.42);
+  border-radius: 999px;
+}
+
+.dab-global-chat__message {
+  --dab-chat-user-color: #67e8f9;
+  width: min(92%, 100%);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.74);
+  padding: 6px 8px;
+  align-self: flex-start;
+}
+
+.dab-global-chat__message.is-self {
+  align-self: flex-end;
+  border-color: rgba(56, 189, 248, 0.35);
+  background: linear-gradient(150deg, rgba(8, 47, 73, 0.92), rgba(12, 74, 110, 0.84));
+}
+
+.dab-global-chat__message.is-other {
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.dab-global-chat__identity {
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.dab-global-chat__message-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.dab-global-chat__nickname {
+  color: var(--dab-chat-user-color);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+
+.dab-global-chat__message.is-self .dab-global-chat__nickname {
+  color: #7dd3fc;
+}
+
+.dab-global-chat__champion-meta {
+  color: rgba(191, 219, 254, 0.86);
+  font-size: 0.69rem;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dab-global-chat__message.is-self .dab-global-chat__champion-meta {
+  color: rgba(186, 230, 253, 0.92);
+}
+
+.dab-global-chat__time {
+  color: rgba(148, 163, 184, 0.88);
+  font-size: 0.72rem;
+}
+
+.dab-global-chat__text {
+  margin: 2px 0 0;
+  color: rgba(241, 245, 249, 0.95);
+  font-size: 0.85rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.dab-global-chat__error {
+  margin: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(248, 113, 113, 0.56);
+  background: rgba(127, 29, 29, 0.42);
+  color: #fecaca;
+  font-size: 0.76rem;
+  letter-spacing: 0.01em;
+  padding: 5px 7px;
+}
+
+.dab-global-chat__composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.dab-global-chat__input {
+  min-width: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(2, 6, 23, 0.6);
+  color: #f8fafc;
+  padding: 8px 10px;
+  font-size: 0.86rem;
+}
+
+.dab-global-chat__input::placeholder {
+  color: rgba(148, 163, 184, 0.82);
+}
+
+.dab-global-chat__input:focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.82);
+  outline-offset: 1px;
+}
+
+.dab-global-chat__send {
+  border: 1px solid rgba(34, 211, 238, 0.54);
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(8, 145, 178, 0.96), rgba(14, 116, 144, 0.9));
+  color: #ecfeff;
+  padding: 0 11px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.dab-global-chat__send:hover {
+  filter: brightness(1.08);
+}
+
+.dab-global-chat__counter {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: rgba(148, 163, 184, 0.9);
+  text-align: right;
 }
 
 .dab-settings-modal {
@@ -1664,6 +1862,7 @@ body {
     right: 20px;
     left: 20px;
   }
+
 }
 
 @media (max-width: 980px) {
@@ -1698,6 +1897,7 @@ body {
     left: auto;
     right: auto;
     bottom: auto;
+    top: auto;
     width: min(92vw, 440px);
     margin: 0 auto 14px;
   }
@@ -1708,6 +1908,10 @@ body {
 
   .dab-play {
     width: min(92vw, 440px);
+  }
+
+  .dab-global-chat-panel {
+    height: 390px;
   }
 
   .dab-menu__footer {
@@ -1798,6 +2002,10 @@ body {
     width: min(94vw, 440px);
   }
 
+  .dab-global-chat-panel {
+    height: 360px;
+  }
+
   .dab-settings-panel {
     width: calc(100vw - 12px);
     max-height: calc(100vh - 16px);
@@ -1855,6 +2063,11 @@ body {
   .dab-footer-button {
     font-size: 0.88rem;
     padding: 8px 12px;
+  }
+
+  .dab-global-chat-panel {
+    height: 330px;
+    padding: 10px;
   }
 
   .dab-settings-control {
