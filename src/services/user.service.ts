@@ -1,6 +1,7 @@
 // Responsável por regras de negócio de usuário, migração e seleção persistida de campeão.
 import { CHAMPION_IDS, DEFAULT_CHAMPION_ID, isChampionId } from "../data/champions.catalog";
 import type { ChampionId } from "../models/champion.model";
+import { MAX_PENDING_COIN_REWARDS } from "../models/reward.model";
 import {
   DEFAULT_NICKNAME,
   createUserProfile,
@@ -10,6 +11,7 @@ import {
   type ChampionProgress,
   type UserProfile
 } from "../models/user.model";
+import { sanitizeNotifications } from "../models/notification.model";
 import type { UserRepository } from "../repositories/user.repository";
 import { createUserRepository } from "../repositories/user.repository";
 
@@ -31,6 +33,19 @@ function normalizeNicknameOrDefault(value: unknown): string {
   }
 
   return normalizeNickname(value) ?? DEFAULT_NICKNAME;
+}
+
+function toSafeCounter(value: unknown): number {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor(normalized));
+}
+
+function clampPendingRewards(value: unknown): number {
+  return Math.min(MAX_PENDING_COIN_REWARDS, toSafeCounter(value));
 }
 
 function resolveLegacySelectedChampionId(rawProfile: Record<string, unknown>): string | undefined {
@@ -90,6 +105,10 @@ function normalizeLoadedUser(rawProfile: unknown): UserProfile | null {
     nickname: normalizeNicknameOrDefault(rawProfile.nickname),
     createdAt: sanitizeCreatedAt(rawProfile.createdAt),
     selectedChampionId,
+    coins: toSafeCounter(rawProfile.coins),
+    activePlayTimeSeconds: toSafeCounter(rawProfile.activePlayTimeSeconds),
+    pendingCoinRewards: clampPendingRewards(rawProfile.pendingCoinRewards),
+    notifications: sanitizeNotifications(rawProfile.notifications),
     champions: normalizeChampionProgressRecord(rawChampionProgress)
   };
 }
@@ -98,6 +117,10 @@ export function migrateUserChampions(user: UserProfile): UserProfile {
   return {
     ...user,
     selectedChampionId: isChampionId(user.selectedChampionId) ? user.selectedChampionId : DEFAULT_CHAMPION_ID,
+    coins: toSafeCounter(user.coins),
+    activePlayTimeSeconds: toSafeCounter(user.activePlayTimeSeconds),
+    pendingCoinRewards: clampPendingRewards(user.pendingCoinRewards),
+    notifications: sanitizeNotifications(user.notifications),
     champions: normalizeChampionProgressRecord(user.champions)
   };
 }
@@ -109,6 +132,8 @@ export type UserService = {
   registerUser: (nickname: string) => UserProfile;
   clearCurrentUser: () => void;
   selectChampion: (championId: ChampionId) => void;
+  updateCurrentUser: (updater: (user: UserProfile) => UserProfile) => UserProfile | null;
+  addCoins: (amount: number) => UserProfile | null;
 };
 
 export type UserServiceDependencies = {
@@ -130,6 +155,17 @@ export function createUserService({ repository }: UserServiceDependencies): User
     const migrated = migrateUserChampions(normalized);
     repository.save(migrated);
     return migrated;
+  };
+
+  const updateCurrentUser = (updater: (user: UserProfile) => UserProfile): UserProfile | null => {
+    const currentUser = loadNormalizedUser();
+    if (!currentUser) {
+      return null;
+    }
+
+    const nextUser = migrateUserChampions(updater(currentUser));
+    repository.save(nextUser);
+    return nextUser;
   };
 
   return {
@@ -174,27 +210,34 @@ export function createUserService({ repository }: UserServiceDependencies): User
         return;
       }
 
-      const user = loadNormalizedUser();
-      if (!user) {
-        return;
+      void updateCurrentUser((user) => {
+        const now = new Date().toISOString();
+        const selectedProgress = user.champions[championId] ?? sanitizeChampionProgress(null);
+
+        return {
+          ...user,
+          selectedChampionId: championId,
+          champions: {
+            ...user.champions,
+            [championId]: {
+              ...selectedProgress,
+              lastSelectedAt: now
+            }
+          }
+        };
+      });
+    },
+    updateCurrentUser,
+    addCoins: (amount) => {
+      const normalizedAmount = Number.isFinite(amount) ? Math.floor(amount) : 0;
+      if (normalizedAmount <= 0) {
+        return loadNormalizedUser();
       }
 
-      const now = new Date().toISOString();
-      const selectedProgress = user.champions[championId] ?? sanitizeChampionProgress(null);
-
-      const nextUser: UserProfile = {
+      return updateCurrentUser((user) => ({
         ...user,
-        selectedChampionId: championId,
-        champions: {
-          ...user.champions,
-          [championId]: {
-            ...selectedProgress,
-            lastSelectedAt: now
-          }
-        }
-      };
-
-      repository.save(nextUser);
+        coins: user.coins + normalizedAmount
+      }));
     }
   };
 }

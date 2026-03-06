@@ -1,11 +1,11 @@
 // Responsável por renderizar cabeçalho de navegação e indicadores de moeda da Home.
 import { t, type Locale } from "../../i18n";
 import { MENU_NAV_ITEMS, type MenuTabId } from "../navigation/menu.model";
-import { CURRENCY_ITEMS } from "../screens/home.model";
 
 export type NavbarProps = {
   locale: Locale;
   activeTab: MenuTabId;
+  coins?: number;
 };
 
 function formatNumber(locale: Locale, value: number): string {
@@ -52,35 +52,27 @@ export function renderNavbar(container: HTMLElement, props: NavbarProps): void {
 
   const tools = document.createElement("div");
   tools.className = "dab-menu__tools";
+  tools.dataset.slot = "menu-tools";
 
   const currency = document.createElement("div");
   currency.className = "dab-currency";
+  currency.dataset.slot = "coins-display";
 
-  CURRENCY_ITEMS.forEach((item, index) => {
-    const itemNode = document.createElement("div");
-    itemNode.className = "dab-currency__item";
-    itemNode.setAttribute("aria-label", t(props.locale, item.labelKey, { value: formatNumber(props.locale, item.value) }));
+  const normalizedCoins = Math.max(0, Math.floor(props.coins ?? 0));
+  const itemNode = document.createElement("div");
+  itemNode.className = "dab-currency__item";
+  itemNode.setAttribute("aria-label", t(props.locale, "menu.currency.coin", { value: formatNumber(props.locale, normalizedCoins) }));
 
-    const icon = document.createElement("span");
-    icon.className = item.id === "coin"
-      ? "dab-currency__icon dab-currency__icon--coin"
-      : "dab-currency__icon dab-currency__icon--gem";
-    icon.textContent = item.id === "coin" ? "M" : "◆";
+  const icon = document.createElement("span");
+  icon.className = "dab-currency__icon dab-currency__icon--coin";
+  icon.textContent = "M";
 
-    const value = document.createElement("span");
-    value.className = "dab-currency__value";
-    value.textContent = formatNumber(props.locale, item.value);
+  const value = document.createElement("span");
+  value.className = "dab-currency__value";
+  value.textContent = formatNumber(props.locale, normalizedCoins);
 
-    itemNode.append(icon, value);
-    currency.appendChild(itemNode);
-
-    if (index < CURRENCY_ITEMS.length - 1) {
-      const divider = document.createElement("span");
-      divider.className = "dab-currency__divider";
-      divider.setAttribute("aria-hidden", "true");
-      currency.appendChild(divider);
-    }
-  });
+  itemNode.append(icon, value);
+  currency.appendChild(itemNode);
 
   tools.append(currency);
   header.append(logo, nav, tools);

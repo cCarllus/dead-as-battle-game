@@ -84,6 +84,7 @@ function createChampionCard(params: {
 export type ChampionsActions = {
   locale?: Locale;
   activeTab?: MenuTabId;
+  coins?: number;
   cards: readonly ChampionSelectionCard[];
   selectedChampionId: ChampionId;
   onNavigateTab?: (tab: MenuTabId) => void;
@@ -98,7 +99,7 @@ export function renderChampionsScreen(root: HTMLElement, actions: ChampionsActio
   const screen = renderScreenTemplate(root, template, '[data-screen="champions"]', locale);
 
   const navbar = qs<HTMLElement>(screen, '[data-slot="navbar"]');
-  renderNavbar(navbar, { locale, activeTab });
+  renderNavbar(navbar, { locale, activeTab, coins: actions.coins });
 
   const filterLabel = qs<HTMLElement>(screen, '[data-slot="filter-label"]');
   filterLabel.textContent = t(locale, "champions.filter.allChampions");

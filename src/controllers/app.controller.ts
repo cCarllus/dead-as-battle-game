@@ -16,6 +16,8 @@ import type { UserService } from "../services/user.service";
 import type { SettingsService } from "../services/settings.service";
 import type { ChatService } from "../services/chat.service";
 import type { TeamService } from "../services/team.service";
+import type { NotificationService } from "../services/notification.service";
+import type { RewardService } from "../services/reward.service";
 
 export type AppControllerDependencies = {
   uiRoot: HTMLDivElement;
@@ -26,6 +28,8 @@ export type AppControllerDependencies = {
   settingsService: SettingsService;
   chatService: ChatService;
   teamService: TeamService;
+  notificationService: NotificationService;
+  rewardService: RewardService;
   warmUpAssets: () => Promise<void>;
   startupDelayMs?: number;
 };
@@ -47,7 +51,9 @@ function createScreenRegistry(
   audioService: AudioService,
   settingsService: SettingsService,
   chatService: ChatService,
-  teamService: TeamService
+  teamService: TeamService,
+  notificationService: NotificationService,
+  rewardService: RewardService
 ): ScreenRegistry {
   return {
     loading: ({ uiRoot, state }) => {
@@ -65,6 +71,7 @@ function createScreenRegistry(
       });
     },
     home: ({ uiRoot, state, goTo }) => {
+      rewardService.generateRewardIfNeeded();
       const user = userService.getCurrentUser();
       if (!user) {
         chatService.disconnect();
@@ -135,8 +142,13 @@ function createScreenRegistry(
           return true;
         },
         settingsService,
+        userService,
         chatService,
         teamService,
+        notificationService,
+        rewardService,
+        coins: user.coins,
+        pendingCoinRewards: user.pendingCoinRewards,
         playerName: user.nickname,
         selectedChampionName: selectedChampion.displayName,
         selectedChampionLevel: selectedChampionProgress.level,
@@ -168,6 +180,7 @@ function createScreenRegistry(
       return renderChampionsScreen(uiRoot, {
         locale: state.get().locale,
         activeTab: state.get().activeMenuTab,
+        coins: user.coins,
         cards,
         selectedChampionId: user.selectedChampionId,
         onNavigateTab: (tab) => {
@@ -205,6 +218,7 @@ function createScreenRegistry(
       return renderNotesScreen(uiRoot, {
         locale: state.get().locale,
         activeTab: state.get().activeMenuTab,
+        coins: user.coins,
         onNavigateTab: (tab) => {
           state.patch({ activeMenuTab: tab });
 
@@ -265,6 +279,8 @@ export function createAppController({
   settingsService,
   chatService,
   teamService,
+  notificationService,
+  rewardService,
   warmUpAssets,
   startupDelayMs = 1200
 }: AppControllerDependencies): AppController {
@@ -273,11 +289,26 @@ export function createAppController({
       uiRoot,
       state
     },
-    createScreenRegistry(userService, sessionService, audioService, settingsService, chatService, teamService)
+    createScreenRegistry(
+      userService,
+      sessionService,
+      audioService,
+      settingsService,
+      chatService,
+      teamService,
+      notificationService,
+      rewardService
+    )
   );
+
+  let stopRewardTracking: (() => void) | null = null;
 
   return {
     start: () => {
+      if (!stopRewardTracking) {
+        stopRewardTracking = rewardService.startActiveTracking();
+      }
+
       void runStartupFlow({
         router,
         userService,
@@ -289,6 +320,8 @@ export function createAppController({
       });
     },
     dispose: () => {
+      stopRewardTracking?.();
+      stopRewardTracking = null;
       router.dispose();
       audioService.dispose();
       chatService.disconnect();

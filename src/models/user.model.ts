@@ -1,5 +1,6 @@
 // Responsável por tipar e normalizar o perfil local do usuário com progresso por campeão.
 import type { ChampionId } from "./champion.model";
+import type { NotificationItem } from "./notification.model";
 
 export const MIN_NICKNAME_LENGTH = 3;
 export const MAX_NICKNAME_LENGTH = 16;
@@ -19,6 +20,10 @@ export type UserProfile = {
   nickname: string;
   createdAt: string;
   selectedChampionId: ChampionId;
+  coins: number;
+  activePlayTimeSeconds: number;
+  pendingCoinRewards: number;
+  notifications: NotificationItem[];
   champions: Record<ChampionId, ChampionProgress>;
 };
 
@@ -114,6 +119,10 @@ export function createUserProfile(params: {
     nickname: normalizedNickname,
     createdAt,
     selectedChampionId: params.selectedChampionId,
+    coins: 0,
+    activePlayTimeSeconds: 0,
+    pendingCoinRewards: 0,
+    notifications: [],
     champions
   };
 }

@@ -16,6 +16,7 @@ export type HomeViewOptions = {
   root: HTMLElement;
   locale: Locale;
   activeTab: MenuTabId;
+  coins: number;
   playerName: string;
   selectedChampionName: string;
   selectedChampionLevel: number;
@@ -86,7 +87,8 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
   const navbar = qs<HTMLElement>(menu, '[data-slot="navbar"]');
   renderNavbar(navbar, {
     locale: options.locale,
-    activeTab: options.activeTab
+    activeTab: options.activeTab,
+    coins: options.coins
   });
 
   const welcomeMessage = qs<HTMLElement>(menu, '[data-slot="welcome-message"]');

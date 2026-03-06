@@ -42,6 +42,7 @@ function setNoteExpanded(screen: HTMLElement, noteId: string, expanded: boolean)
 export type NotesActions = {
   locale?: Locale;
   activeTab?: MenuTabId;
+  coins?: number;
   onNavigateTab?: (tab: MenuTabId) => void;
 };
 
@@ -51,7 +52,7 @@ export function renderNotesScreen(root: HTMLElement, actions: NotesActions): () 
   const screen = renderScreenTemplate(root, template, '[data-screen="notes"]', locale);
 
   const navbar = qs<HTMLElement>(screen, '[data-slot="navbar"]');
-  renderNavbar(navbar, { locale, activeTab });
+  renderNavbar(navbar, { locale, activeTab, coins: actions.coins });
 
   return bindDelegatedClick(screen, "button", (button) => {
     const tab = button.dataset.tab;

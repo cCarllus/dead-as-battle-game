@@ -1,6 +1,6 @@
 // Responsável por compor renderização e interações da tela Home.
 import template from "../layout/home.html?raw";
-import type { Locale } from "../../i18n";
+import { t, type Locale } from "../../i18n";
 import { DEFAULT_ACTIVE_TAB, type MenuTabId } from "../navigation/menu.model";
 import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
 import { bindHomeEvents } from "./home.events";
@@ -16,6 +16,13 @@ import { mountTeamPanel } from "../components/team-panel";
 import { mountTeamInvitePopup } from "../components/team-invite-popup";
 import { createSpotifyLobbyPlayer, destroySpotifyLobbyPlayer } from "../components/spotify-player";
 import { qs } from "../components/dom";
+import { mountCoinsDisplay } from "../components/coins-display";
+import { mountNotificationBell } from "../components/notification-bell";
+import { mountNotificationModal } from "../components/notification-modal";
+import { mountRewardToast } from "../components/reward-toast";
+import type { NotificationService } from "../../services/notification.service";
+import type { RewardService } from "../../services/reward.service";
+import type { UserService } from "../../services/user.service";
 
 export type HomeActions = {
   onOpenMultiplayer: () => void;
@@ -25,11 +32,16 @@ export type HomeActions = {
   onApplyAudioSettings: (settings: GameSettings) => void;
   onApplyLocale: (locale: Locale) => boolean;
   settingsService: SettingsService;
+  userService: UserService;
   chatService: ChatService;
   teamService: TeamService;
+  notificationService: NotificationService;
+  rewardService: RewardService;
   locale?: Locale;
   activeTab?: MenuTabId;
   onNavigateTab?: (tab: MenuTabId) => void;
+  coins: number;
+  pendingCoinRewards: number;
   playerName: string;
   selectedChampionName: string;
   selectedChampionLevel: number;
@@ -65,6 +77,7 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     root,
     locale,
     activeTab,
+    coins: actions.coins,
     playerName: actions.playerName,
     selectedChampionName: actions.selectedChampionName,
     selectedChampionLevel: actions.selectedChampionLevel,
@@ -75,6 +88,74 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     isSessionActive: actions.isSessionActive,
     selectedChampionStats: actions.selectedChampionStats
   });
+
+  const menuTools = qs<HTMLElement>(homeView.menu, '[data-slot="menu-tools"]');
+  menuTools.replaceChildren();
+
+  const coinsDisplay = mountCoinsDisplay({
+    container: menuTools,
+    locale,
+    initialCoins: actions.coins
+  });
+
+  const markNotificationsAsRead = (): void => {
+    actions.notificationService.markNotificationsAsRead();
+    const unreadCount = actions.notificationService.getUnreadCount();
+    notificationBell.setUnreadCount(unreadCount);
+  };
+
+  const notificationModal = mountNotificationModal({
+    menu: homeView.menu,
+    locale,
+    getNotifications: () => actions.notificationService.getNotifications(),
+    onOpen: () => {
+      markNotificationsAsRead();
+    },
+    onMarkAllRead: () => {
+      markNotificationsAsRead();
+    }
+  });
+
+  const notificationBell = mountNotificationBell({
+    container: menuTools,
+    locale,
+    unreadCount: actions.notificationService.getUnreadCount(),
+    onClick: () => {
+      notificationModal.open();
+    }
+  });
+
+  const rewardToast = mountRewardToast({
+    menu: homeView.menu,
+    locale,
+    onClaim: () => {
+      const claimedUser = actions.rewardService.claimReward();
+      if (!claimedUser) {
+        return;
+      }
+
+      coinsDisplay.setCoins(claimedUser.coins);
+      rewardToast.setPendingRewards(claimedUser.pendingCoinRewards);
+      notificationBell.setUnreadCount(actions.notificationService.getUnreadCount());
+      notificationModal.refresh();
+    }
+  });
+
+  const refreshRewardAndNotifications = (): void => {
+    const currentUser = actions.userService.getCurrentUser();
+    if (!currentUser) {
+      rewardToast.setPendingRewards(0);
+      notificationBell.setUnreadCount(0);
+      return;
+    }
+
+    coinsDisplay.setCoins(currentUser.coins);
+    rewardToast.setPendingRewards(currentUser.pendingCoinRewards);
+    notificationBell.setUnreadCount(actions.notificationService.getUnreadCount());
+    notificationModal.refresh();
+  };
+
+  refreshRewardAndNotifications();
 
   const settingsModal = mountSettingsModal({
     locale,
@@ -111,6 +192,53 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     locale,
     menu: homeView.menu,
     teamService: actions.teamService
+  });
+
+  const trackedInviteIds = new Set(
+    actions.notificationService
+      .getNotifications()
+      .map((notification) => {
+        if (notification.type !== "team_invite") {
+          return null;
+        }
+
+        const payload = notification.actionPayload as { inviteId?: string } | undefined;
+        return typeof payload?.inviteId === "string" ? payload.inviteId : null;
+      })
+      .filter((inviteId): inviteId is string => Boolean(inviteId))
+  );
+
+  const disposeTeamInviteNotificationBridge = actions.teamService.onPendingInvitesUpdated((invites) => {
+    let hasNewNotification = false;
+
+    invites.forEach((invite) => {
+      if (trackedInviteIds.has(invite.id)) {
+        return;
+      }
+
+      trackedInviteIds.add(invite.id);
+      const createdNotification = actions.notificationService.addNotification({
+        type: "team_invite",
+        title: t(locale, "notifications.teamInvite.title"),
+        message: t(locale, "team.invite.message", { nickname: invite.fromNickname }),
+        actionType: "team_invite",
+        actionPayload: {
+          inviteId: invite.id,
+          fromUserId: invite.fromUserId
+        }
+      });
+
+      if (createdNotification) {
+        hasNewNotification = true;
+      }
+    });
+
+    if (!hasNewNotification) {
+      return;
+    }
+
+    notificationBell.setUnreadCount(actions.notificationService.getUnreadCount());
+    notificationModal.refresh();
   });
 
   let currentTeamMemberIds = new Set<string>();
@@ -180,6 +308,10 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     showTeamToast(toast);
   });
 
+  const disposeRewardAvailableListener = actions.rewardService.onRewardAvailable(() => {
+    refreshRewardAndNotifications();
+  });
+
   void actions.teamService.connect().catch((error: unknown) => {
     if (error instanceof Error) {
       showTeamToast({
@@ -201,6 +333,10 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     }
 
     if (exitConfirmModal.isOpen()) {
+      return;
+    }
+
+    if (notificationModal.isOpen()) {
       return;
     }
 
@@ -228,11 +364,17 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     exitConfirmModal.dispose();
     disposeTeamMembersTracker();
     disposeTeamToastListener();
+    disposeRewardAvailableListener();
     clearTeamToast();
+    disposeTeamInviteNotificationBridge();
     disposeTeamInvitePopup();
     disposeTeamPanel();
     disposeChatPanel();
     disposeChatPresenceListener();
+    notificationModal.dispose();
+    notificationBell.dispose();
+    coinsDisplay.dispose();
+    rewardToast.dispose();
     destroySpotifyLobbyPlayer(spotifyPlayer);
     homeView.dispose();
   };

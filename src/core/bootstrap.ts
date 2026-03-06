@@ -13,6 +13,8 @@ import { createSettingsService } from "../services/settings.service";
 import { createChatService } from "../services/chat.service";
 import { createTeamService } from "../services/team.service";
 import { getSelectedChampionForUser } from "../services/champion.service";
+import { createNotificationService } from "../services/notification.service";
+import { createRewardService } from "../services/reward.service";
 
 export function bootstrap(): void {
   const uiRoot = document.getElementById("ui-root") as HTMLDivElement | null;
@@ -21,6 +23,8 @@ export function bootstrap(): void {
   }
 
   const userService = createUserService({ repository: createUserRepository() });
+  const notificationService = createNotificationService({ userService });
+  const rewardService = createRewardService({ userService, notificationService });
   const sessionService = createSessionService();
   const settingsService = createSettingsService();
   const initialSettings = settingsService.load();
@@ -87,6 +91,8 @@ export function bootstrap(): void {
     settingsService,
     chatService,
     teamService,
+    notificationService,
+    rewardService,
     warmUpAssets: warmUpAssetCache
   });
 
