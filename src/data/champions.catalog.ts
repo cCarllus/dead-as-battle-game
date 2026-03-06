@@ -13,7 +13,7 @@ export const USER_CHAMPION_TEMPLATE: ChampionCatalogItem = {
   universeName: "Dead as Battle",
   modelUrl: null,
   cardImageUrl: "/assets/images/champions/user/card.png",
-  splashImageUrl: "/assets/images/ui/loading_1.png",
+  splashImageUrl: "https://imgs.search.brave.com/aenZAYJGTuXL89r7XCaO2E788nw3F7osgmTKkUj5-2Y/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pMS5z/bmRjZG4uY29tL2Fy/dHdvcmtzLWl5VXZT/UDVvSDBPQS0wLXQx/MDgweDEwODAuanBn",
   selectAudioUrl: "/assets/audio/ui/select_user.mp3",
   themeColor: DEFAULT_USER_CHAMPION_THEME
 };
