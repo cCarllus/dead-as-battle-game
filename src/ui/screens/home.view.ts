@@ -185,6 +185,9 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
   const pingSlot = qs<HTMLElement>(menu, '[data-slot="ping"]');
   pingSlot.textContent = t(options.locale, "menu.play.ping", { value: 42 });
 
+  const matchOnlineLabel = qs<HTMLElement>(menu, '[data-slot="match-online-label"]');
+  matchOnlineLabel.textContent = t(options.locale, "home.match.online", { count: 0 });
+
   return {
     menu,
     dispose: () => {

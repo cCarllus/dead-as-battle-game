@@ -1,6 +1,6 @@
 // Responsável por compor renderização e interações da tela Home.
 import template from "../layout/home.html?raw";
-import type { Locale } from "../../i18n";
+import { t, type Locale } from "../../i18n";
 import { DEFAULT_ACTIVE_TAB, type MenuTabId } from "../navigation/menu.model";
 import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
 import { bindHomeEvents } from "./home.events";
@@ -20,6 +20,7 @@ import type { NotificationService } from "../../services/notification.service";
 import type { RewardService } from "../../services/reward.service";
 import type { UserService } from "../../services/user.service";
 import { mountHomeHud } from "../components/home-hud";
+import type { MatchPresenceService } from "../../services/match-presence.service";
 
 export type HomeActions = {
   onOpenMultiplayer: () => void;
@@ -34,6 +35,7 @@ export type HomeActions = {
   teamService: TeamService;
   notificationService: NotificationService;
   rewardService: RewardService;
+  matchPresenceService: MatchPresenceService;
   locale?: Locale;
   activeTab?: MenuTabId;
   onNavigateTab?: (tab: MenuTabId) => void;
@@ -164,6 +166,44 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     onlineUsersCountNode.textContent = String(presence.onlineUsers);
   });
 
+  const matchOnlineLabel = qs<HTMLElement>(menu, '[data-slot="match-online-label"]');
+  const matchOnlineList = qs<HTMLElement>(menu, '[data-slot="match-online-list"]');
+
+  const renderMatchPresence = (snapshot: { onlineCount: number; playerNicknames: string[] }): void => {
+    matchOnlineLabel.textContent = t(locale, "home.match.online", {
+      count: snapshot.onlineCount
+    });
+
+    matchOnlineList.replaceChildren();
+
+    if (snapshot.playerNicknames.length === 0) {
+      const emptyItem = document.createElement("li");
+      emptyItem.textContent = t(locale, "home.match.empty");
+      matchOnlineList.appendChild(emptyItem);
+      return;
+    }
+
+    snapshot.playerNicknames.slice(0, 6).forEach((nickname) => {
+      const playerItem = document.createElement("li");
+      playerItem.textContent = nickname;
+      matchOnlineList.appendChild(playerItem);
+    });
+  };
+
+  const disposeMatchPresenceListener = actions.matchPresenceService.onSnapshotChange((snapshot) => {
+    renderMatchPresence(snapshot);
+  });
+
+  const disposeMatchPresenceError = actions.matchPresenceService.onError((error) => {
+    console.warn("[global_match] Lobby presence unavailable.", error.message);
+  });
+
+  void actions.matchPresenceService.connect().catch((error: unknown) => {
+    if (error instanceof Error) {
+      console.warn("[global_match] Unable to connect lobby presence.", error.message);
+    }
+  });
+
   let teamToastTimeoutId: number | null = null;
 
   const clearTeamToast = (): void => {
@@ -255,6 +295,9 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     disposeTeamPanel();
     disposeChatPanel();
     disposeChatPresenceListener();
+    disposeMatchPresenceListener();
+    disposeMatchPresenceError();
+    actions.matchPresenceService.disconnect();
     homeHud.dispose();
     destroySpotifyLobbyPlayer(spotifyPlayer);
     homeView.dispose();

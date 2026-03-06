@@ -17,6 +17,8 @@ import { createNotificationService } from "../services/notification.service";
 import { createRewardService } from "../services/reward.service";
 import { createHeroPurchaseService } from "../services/hero-purchase.service";
 import { createHeroSelectionService } from "../services/hero-selection.service";
+import { createMatchService } from "../services/match.service";
+import { createMatchPresenceService } from "../services/match-presence.service";
 
 export function bootstrap(): void {
   const uiRoot = document.getElementById("ui-root") as HTMLDivElement | null;
@@ -79,6 +81,20 @@ export function bootstrap(): void {
     };
   };
 
+  const resolveMatchIdentity = () => {
+    const snapshot = sessionService.getSnapshot();
+    const localUser = heroSelectionService.ensureSelectedHeroUnlocked() ?? userService.getCurrentUser();
+    if (!localUser) {
+      return null;
+    }
+
+    return {
+      userId: snapshot?.userId ?? localUser.id,
+      nickname: snapshot?.nickname ?? localUser.nickname,
+      selectedHeroId: heroSelectionService.resolveSafeSelectedHeroId(localUser)
+    };
+  };
+
   const chatService = createChatService({
     endpoint: import.meta.env.VITE_COLYSEUS_ENDPOINT,
     getIdentity: resolveNetworkIdentity
@@ -87,6 +103,15 @@ export function bootstrap(): void {
   const teamService = createTeamService({
     endpoint: import.meta.env.VITE_COLYSEUS_ENDPOINT,
     getIdentity: resolveNetworkIdentity
+  });
+
+  const matchService = createMatchService({
+    endpoint: import.meta.env.VITE_COLYSEUS_ENDPOINT,
+    getIdentity: resolveMatchIdentity
+  });
+  const matchPresenceService = createMatchPresenceService({
+    endpoint: import.meta.env.VITE_COLYSEUS_ENDPOINT,
+    roomName: "global_match"
   });
 
   const appController = createAppController({
@@ -102,6 +127,8 @@ export function bootstrap(): void {
     rewardService,
     heroPurchaseService,
     heroSelectionService,
+    matchService,
+    matchPresenceService,
     warmUpAssets: warmUpAssetCache
   });
 

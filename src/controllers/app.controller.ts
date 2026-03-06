@@ -13,6 +13,7 @@ import { renderNicknameScreen } from "../ui/screens/nickname.screen";
 import { renderSettingsScreen } from "../ui/screens/settings.screen";
 import { renderChampionsScreen } from "../ui/screens/champions.screen";
 import { renderNotesScreen } from "../ui/screens/notes.screen";
+import { renderMatchScreen } from "../ui/screens/match.screen";
 import type { UserService } from "../services/user.service";
 import type { SettingsService } from "../services/settings.service";
 import type { ChatService } from "../services/chat.service";
@@ -21,6 +22,8 @@ import type { NotificationService } from "../services/notification.service";
 import type { RewardService } from "../services/reward.service";
 import type { HeroPurchaseService } from "../services/hero-purchase.service";
 import type { HeroSelectionService } from "../services/hero-selection.service";
+import type { MatchService } from "../services/match.service";
+import type { MatchPresenceService } from "../services/match-presence.service";
 
 export type AppControllerDependencies = {
   uiRoot: HTMLDivElement;
@@ -35,6 +38,8 @@ export type AppControllerDependencies = {
   rewardService: RewardService;
   heroPurchaseService: HeroPurchaseService;
   heroSelectionService: HeroSelectionService;
+  matchService: MatchService;
+  matchPresenceService: MatchPresenceService;
   warmUpAssets: () => Promise<void>;
   startupDelayMs?: number;
 };
@@ -83,7 +88,9 @@ function createScreenRegistry(
   notificationService: NotificationService,
   rewardService: RewardService,
   heroPurchaseService: HeroPurchaseService,
-  heroSelectionService: HeroSelectionService
+  heroSelectionService: HeroSelectionService,
+  matchService: MatchService,
+  matchPresenceService: MatchPresenceService
 ): ScreenRegistry {
   return {
     loading: ({ uiRoot, state }) => {
@@ -137,6 +144,8 @@ function createScreenRegistry(
         },
         onOpenMultiplayer: () => {
           heroSelectionService.ensureSelectedHeroUnlocked();
+          state.patch({ activeMenuTab: "home" });
+          goTo("match");
         },
         onOpenChampions: () => {
           state.patch({ activeMenuTab: "champions" });
@@ -180,6 +189,7 @@ function createScreenRegistry(
         teamService,
         notificationService,
         rewardService,
+        matchPresenceService,
         coins: user.coins,
         playerName: user.nickname,
         selectedChampionName: selectedChampion.displayName,
@@ -280,6 +290,57 @@ function createScreenRegistry(
         }
       });
     },
+    match: ({ uiRoot, state, goTo }) => {
+      heroSelectionService.ensureSelectedHeroUnlocked();
+      rewardService.generateRewardIfNeeded();
+
+      const user = userService.getCurrentUser();
+      if (!user) {
+        matchService.disconnect();
+        chatService.disconnect();
+        teamService.disconnect();
+        sessionService.clear();
+        goTo("nickname");
+        return;
+      }
+
+      return renderMatchScreen(uiRoot, {
+        locale: state.get().locale,
+        settingsService,
+        matchService,
+        teamService,
+        onApplyAudioSettings: (settings) => {
+          audioService.applySettings(settings);
+        },
+        onApplyLocale: (locale) => {
+          const currentLocale = state.get().locale;
+          document.documentElement.lang = locale;
+          if (currentLocale === locale) {
+            return false;
+          }
+
+          state.patch({ locale });
+          goTo("match");
+          return true;
+        },
+        onClearSession: () => {
+          matchService.disconnect();
+          chatService.disconnect();
+          teamService.disconnect();
+          userService.clearCurrentUser();
+          sessionService.clear();
+          settingsService.clear();
+          document.documentElement.lang = "pt-BR";
+          state.patch({ locale: "pt-BR" });
+          state.patch({ activeMenuTab: "home" });
+          goTo("nickname");
+        },
+        onLeaveMatch: () => {
+          state.patch({ activeMenuTab: "home" });
+          goTo("home");
+        }
+      });
+    },
     settings: ({ uiRoot, state, goTo }) => {
       return renderSettingsScreen(uiRoot, {
         locale: state.get().locale,
@@ -330,6 +391,8 @@ export function createAppController({
   rewardService,
   heroPurchaseService,
   heroSelectionService,
+  matchService,
+  matchPresenceService,
   warmUpAssets,
   startupDelayMs = 1200
 }: AppControllerDependencies): AppController {
@@ -348,7 +411,9 @@ export function createAppController({
       notificationService,
       rewardService,
       heroPurchaseService,
-      heroSelectionService
+      heroSelectionService,
+      matchService,
+      matchPresenceService
     )
   );
 
@@ -381,6 +446,8 @@ export function createAppController({
       disposeTeamInviteNotifications();
       router.dispose();
       audioService.dispose();
+      matchPresenceService.disconnect();
+      matchService.disconnect();
       chatService.disconnect();
       teamService.disconnect();
     }
