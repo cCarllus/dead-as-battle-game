@@ -1,0 +1,216 @@
+<!-- Responsável por estruturar a tela de notícias e patch notes do jogo. -->
+<section class="dab-notes" data-screen="notes">
+  <div class="dab-notes__bg" aria-hidden="true">
+    <div class="dab-notes__bg-gradient"></div>
+    <div class="dab-notes__orb dab-notes__orb--left"></div>
+    <div class="dab-notes__orb dab-notes__orb--right"></div>
+    <div class="dab-notes__grid"></div>
+  </div>
+
+  <div data-slot="navbar"></div>
+
+  <main class="dab-notes__main">
+    <section class="dab-notes__content">
+      <header class="dab-notes__hero">
+        <h1>Game Notes</h1>
+        <p>Updates, patch notes and developer announcements.</p>
+      </header>
+
+      <div class="dab-notes__list">
+        <article class="dab-note-card is-open" data-note-card>
+          <button
+            type="button"
+            class="dab-note-card__summary"
+            data-action="toggle-note"
+            data-note-id="patch-alpha-100"
+            aria-expanded="true"
+          >
+            <div class="dab-note-card__summary-copy">
+              <div class="dab-note-card__title-row">
+                <strong>Alpha 1.0.0</strong>
+                <span>Released March 06, 2026</span>
+              </div>
+              <p>Party system, global chat improvements, online presence, lobby soundtrack and champion preview polish.</p>
+              <div class="dab-note-card__tags">
+                <span>Party</span>
+                <span>Lobby</span>
+                <span>UI/UX</span>
+                <span>Audio</span>
+              </div>
+            </div>
+            <span class="dab-note-card__toggle">
+              <span>View Details</span>
+              <span class="dab-note-card__chevron" aria-hidden="true">⌄</span>
+            </span>
+          </button>
+
+          <div class="dab-note-card__details" data-note-details="patch-alpha-100">
+            <section class="dab-note-section">
+              <h3>New Features</h3>
+              <ul>
+                <li>Team/party system integrated with global chat invite flow.</li>
+                <li>Invite popup with accept/decline, team panel controls and leader permissions.</li>
+                <li>Global online presence counter synced from the websocket room.</li>
+                <li>Lobby Spotify player rendered only on Home screen.</li>
+              </ul>
+            </section>
+
+            <section class="dab-note-section">
+              <h3>Gameplay & UX</h3>
+              <ul>
+                <li>Champion preview scaled and framed to prioritize waist-up visibility.</li>
+                <li>Team area moved above Quick Match controls for better flow.</li>
+                <li>Chat invite action now shows check state for members already in your team.</li>
+                <li>Dedicated K/D card for selected champion with clear icon indicators.</li>
+              </ul>
+            </section>
+
+            <section class="dab-note-section">
+              <h3>Known Issues</h3>
+              <ul>
+                <li>Team state is in-memory only and resets when the server restarts.</li>
+                <li>Spotify autoplay may require first user interaction depending on browser policy.</li>
+              </ul>
+            </section>
+          </div>
+        </article>
+
+        <article class="dab-note-card" data-note-card>
+          <button
+            type="button"
+            class="dab-note-card__summary"
+            data-action="toggle-note"
+            data-note-id="patch-020"
+            aria-expanded="false"
+          >
+            <div class="dab-note-card__summary-copy">
+              <div class="dab-note-card__title-row">
+                <strong>Update 0.2.0</strong>
+                <span>Released May 18</span>
+              </div>
+              <p>New character: Sukuna added to the roster, movement balance updates and critical bug fixes.</p>
+              <div class="dab-note-card__tags">
+                <span>Heroes</span>
+                <span>Balance</span>
+                <span>Bug Fixes</span>
+              </div>
+            </div>
+            <span class="dab-note-card__toggle">
+              <span>View Details</span>
+              <span class="dab-note-card__chevron" aria-hidden="true">⌄</span>
+            </span>
+          </button>
+
+          <div class="dab-note-card__details" data-note-details="patch-020" hidden>
+            <section class="dab-note-section">
+              <h3>New Heroes</h3>
+              <ul>
+                <li>Sukuna added to the roster with high-pressure damage profile.</li>
+                <li>New ultimate attack focused on burst damage against unshielded targets.</li>
+              </ul>
+            </section>
+
+            <section class="dab-note-section">
+              <h3>Gameplay Changes</h3>
+              <ul>
+                <li>Improved server-side hit detection for projectile-based weapons.</li>
+                <li>Strafe acceleration reduced by 5% for more readable tracking duels.</li>
+              </ul>
+            </section>
+
+            <section class="dab-note-section">
+              <h3>Bug Fixes</h3>
+              <ul>
+                <li>Fixed reload animation freeze when interrupted by dash actions.</li>
+                <li>Resolved collision issues blocking map doorway traversal.</li>
+              </ul>
+            </section>
+          </div>
+        </article>
+
+        <article class="dab-note-card" data-note-card>
+          <button
+            type="button"
+            class="dab-note-card__summary"
+            data-action="toggle-note"
+            data-note-id="patch-019"
+            aria-expanded="false"
+          >
+            <div class="dab-note-card__summary-copy">
+              <div class="dab-note-card__title-row">
+                <strong>Update 0.1.9</strong>
+                <span>Released May 02</span>
+              </div>
+              <p>Minor performance improvements and store interface overhaul.</p>
+              <div class="dab-note-card__tags">
+                <span>System</span>
+                <span>UI/UX</span>
+              </div>
+            </div>
+            <span class="dab-note-card__toggle">
+              <span>View Details</span>
+              <span class="dab-note-card__chevron" aria-hidden="true">⌄</span>
+            </span>
+          </button>
+
+          <div class="dab-note-card__details" data-note-details="patch-019" hidden>
+            <section class="dab-note-section">
+              <h3>Status</h3>
+              <ul>
+                <li>Detailed notes are loading...</li>
+              </ul>
+            </section>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <aside class="dab-notes__sidebar">
+      <article class="dab-notes-widget">
+        <h3>Latest Updates</h3>
+        <div class="dab-notes-widget__items">
+          <a href="#">
+            <small>March 06, 2026</small>
+            <strong>Alpha 1.0 launched with new lobby systems.</strong>
+          </a>
+          <a href="#">
+            <small>May 20, 2024</small>
+            <strong>Server maintenance complete. All regions back online.</strong>
+          </a>
+        </div>
+      </article>
+
+      <article class="dab-notes-widget">
+        <h3>Coming Soon</h3>
+        <ul class="dab-notes-timeline">
+          <li>
+            <strong>Session persistence for team reconnection</strong>
+            <small>In progress</small>
+          </li>
+          <li>
+            <strong>New Map: Neo-Tokyo</strong>
+            <small>In development</small>
+          </li>
+          <li>
+            <strong>Clan System V1</strong>
+            <small>Planning phase</small>
+          </li>
+        </ul>
+      </article>
+
+      <article class="dab-notes-widget">
+        <h3>Community</h3>
+        <div class="dab-notes-widget__links">
+          <a href="#">
+            <span class="dab-notes-widget__icon" aria-hidden="true">◉</span>
+            <span>Discord Server</span>
+          </a>
+          <a href="#">
+            <span class="dab-notes-widget__icon" aria-hidden="true">◎</span>
+            <span>Twitter Updates</span>
+          </a>
+        </div>
+      </article>
+    </aside>
+  </main>
+</section>

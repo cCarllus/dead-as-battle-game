@@ -11,6 +11,7 @@ import { renderHomeScreen } from "../ui/screens/home.screen";
 import { renderNicknameScreen } from "../ui/screens/nickname.screen";
 import { renderSettingsScreen } from "../ui/screens/settings.screen";
 import { renderChampionsScreen } from "../ui/screens/champions.screen";
+import { renderNotesScreen } from "../ui/screens/notes.screen";
 import type { UserService } from "../services/user.service";
 import type { SettingsService } from "../services/settings.service";
 import type { ChatService } from "../services/chat.service";
@@ -89,6 +90,11 @@ function createScreenRegistry(
           state.patch({ activeMenuTab: tab });
           if (tab === "champions") {
             goTo("champions");
+            return;
+          }
+
+          if (tab === "notes") {
+            goTo("notes");
           }
         },
         onOpenMultiplayer: () => undefined,
@@ -168,6 +174,11 @@ function createScreenRegistry(
           state.patch({ activeMenuTab: tab });
           if (tab === "home") {
             goTo("home");
+            return;
+          }
+
+          if (tab === "notes") {
+            goTo("notes");
           }
         },
         onPreviewSelection: (championId: ChampionId) => {
@@ -181,6 +192,30 @@ function createScreenRegistry(
         onBack: () => {
           state.patch({ activeMenuTab: "home" });
           goTo("home");
+        }
+      });
+    },
+    notes: ({ uiRoot, state, goTo }) => {
+      const user = userService.getCurrentUser();
+      if (!user) {
+        goTo("nickname");
+        return;
+      }
+
+      return renderNotesScreen(uiRoot, {
+        locale: state.get().locale,
+        activeTab: state.get().activeMenuTab,
+        onNavigateTab: (tab) => {
+          state.patch({ activeMenuTab: tab });
+
+          if (tab === "home") {
+            goTo("home");
+            return;
+          }
+
+          if (tab === "champions") {
+            goTo("champions");
+          }
         }
       });
     },

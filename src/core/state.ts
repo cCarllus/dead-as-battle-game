@@ -2,7 +2,7 @@
 import { resolveLocale, type Locale } from "../i18n";
 import { DEFAULT_ACTIVE_TAB, type MenuTabId } from "../ui/navigation/menu.model";
 
-export type ScreenId = "loading" | "nickname" | "home" | "champions" | "settings";
+export type ScreenId = "loading" | "nickname" | "home" | "champions" | "notes" | "settings";
 
 export type AppState = {
   currentScreen: ScreenId;
