@@ -18,6 +18,12 @@ export type ChatError = {
   timestamp: number;
 };
 
+export type ChatPresence = {
+  onlineUsers: number;
+  connectedSessions: number;
+  timestamp: number;
+};
+
 export type ChatServiceOptions = {
   endpoint?: string;
   roomName?: string;
@@ -30,6 +36,7 @@ export type ChatService = {
   onHistory: (callback: (history: readonly ChatMessage[]) => void) => () => void;
   onMessage: (callback: (message: ChatMessage) => void) => () => void;
   onError: (callback: (error: ChatError) => void) => () => void;
+  onPresence: (callback: (presence: ChatPresence) => void) => () => void;
   disconnect: () => void;
 };
 
@@ -98,6 +105,30 @@ function normalizeError(value: unknown): ChatError {
   };
 }
 
+function normalizePresence(value: unknown): ChatPresence {
+  if (!value || typeof value !== "object") {
+    return {
+      onlineUsers: 0,
+      connectedSessions: 0,
+      timestamp: Date.now()
+    };
+  }
+
+  const presence = value as Partial<ChatPresence>;
+
+  return {
+    onlineUsers:
+      typeof presence.onlineUsers === "number" && Number.isFinite(presence.onlineUsers)
+        ? Math.max(0, Math.floor(presence.onlineUsers))
+        : 0,
+    connectedSessions:
+      typeof presence.connectedSessions === "number" && Number.isFinite(presence.connectedSessions)
+        ? Math.max(0, Math.floor(presence.connectedSessions))
+        : 0,
+    timestamp: typeof presence.timestamp === "number" ? presence.timestamp : Date.now()
+  };
+}
+
 function normalizeIdentity(rawIdentity: ChatIdentity | null): ChatIdentity | null {
   if (!rawIdentity) {
     return null;
@@ -126,7 +157,13 @@ export function createChatService(options: ChatServiceOptions): ChatService {
   const historyListeners = new Set<(history: readonly ChatMessage[]) => void>();
   const messageListeners = new Set<(message: ChatMessage) => void>();
   const errorListeners = new Set<(error: ChatError) => void>();
+  const presenceListeners = new Set<(presence: ChatPresence) => void>();
   let latestHistory: ChatMessage[] = [];
+  let latestPresence: ChatPresence = {
+    onlineUsers: 0,
+    connectedSessions: 0,
+    timestamp: Date.now()
+  };
   let suppressNextDisconnectError = false;
 
   const emitHistory = (history: readonly ChatMessage[]): void => {
@@ -149,6 +186,13 @@ export function createChatService(options: ChatServiceOptions): ChatService {
     });
   };
 
+  const emitPresence = (presence: ChatPresence): void => {
+    latestPresence = presence;
+    presenceListeners.forEach((listener) => {
+      listener(presence);
+    });
+  };
+
   const bindRoomEvents = (connectedRoom: Room): void => {
     connectedRoom.onMessage("chat:history", (payload: unknown) => {
       emitHistory(normalizeHistory(payload));
@@ -165,6 +209,10 @@ export function createChatService(options: ChatServiceOptions): ChatService {
 
     connectedRoom.onMessage("chat:error", (payload: unknown) => {
       emitError(normalizeError(payload));
+    });
+
+    connectedRoom.onMessage("chat:presence", (payload: unknown) => {
+      emitPresence(normalizePresence(payload));
     });
 
     connectedRoom.onLeave(() => {
@@ -289,6 +337,13 @@ export function createChatService(options: ChatServiceOptions): ChatService {
       errorListeners.add(callback);
       return () => {
         errorListeners.delete(callback);
+      };
+    },
+    onPresence: (callback) => {
+      presenceListeners.add(callback);
+      callback(latestPresence);
+      return () => {
+        presenceListeners.delete(callback);
       };
     },
     disconnect: () => {

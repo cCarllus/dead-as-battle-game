@@ -6,6 +6,12 @@ import { renderNavbar } from "../components/navbar";
 import { TEAM_TOTAL_SLOTS, FOOTER_ACTIONS } from "./home.model";
 import type { MenuTabId } from "../navigation/menu.model";
 
+export type HomeSelectedChampionStats = {
+  championName: string;
+  kills: number;
+  deaths: number;
+};
+
 export type HomeViewOptions = {
   root: HTMLElement;
   locale: Locale;
@@ -18,6 +24,7 @@ export type HomeViewOptions = {
   selectedChampionThemeColor: string;
   isUserChampion: boolean;
   isSessionActive: boolean;
+  selectedChampionStats: HomeSelectedChampionStats;
 };
 
 export type HomeViewResult = {
@@ -86,6 +93,61 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
   welcomeMessage.textContent = t(options.locale, "home.welcome", {
     nickname: options.playerName
   });
+
+  const onlineUsersLabel = qs<HTMLElement>(menu, '[data-slot="online-users-label"]');
+  onlineUsersLabel.textContent = t(options.locale, "home.onlineUsers");
+
+  const championKdCard = qs<HTMLElement>(menu, '[data-slot="champion-kd-card"]');
+  championKdCard.replaceChildren();
+
+  const kdHeader = document.createElement("div");
+  kdHeader.className = "dab-kd-card__header";
+
+  const kdTitle = document.createElement("strong");
+  kdTitle.textContent = t(options.locale, "home.stats.title");
+
+  const kdChampionName = document.createElement("small");
+  kdChampionName.textContent = options.selectedChampionStats.championName;
+
+  kdHeader.append(kdTitle, kdChampionName);
+
+  const kdBody = document.createElement("div");
+  kdBody.className = "dab-kd-card__body";
+
+  const killsItem = document.createElement("article");
+  killsItem.className = "dab-kd-card__item is-kills";
+
+  const killsIcon = document.createElement("span");
+  killsIcon.className = "dab-kd-card__icon";
+  killsIcon.setAttribute("aria-hidden", "true");
+  killsIcon.textContent = "✦";
+
+  const killsLabel = document.createElement("small");
+  killsLabel.textContent = t(options.locale, "home.stats.kills");
+
+  const killsValue = document.createElement("strong");
+  killsValue.textContent = String(options.selectedChampionStats.kills);
+
+  killsItem.append(killsIcon, killsLabel, killsValue);
+
+  const deathsItem = document.createElement("article");
+  deathsItem.className = "dab-kd-card__item is-deaths";
+
+  const deathsIcon = document.createElement("span");
+  deathsIcon.className = "dab-kd-card__icon";
+  deathsIcon.setAttribute("aria-hidden", "true");
+  deathsIcon.textContent = "☠";
+
+  const deathsLabel = document.createElement("small");
+  deathsLabel.textContent = t(options.locale, "home.stats.deaths");
+
+  const deathsValue = document.createElement("strong");
+  deathsValue.textContent = String(options.selectedChampionStats.deaths);
+
+  deathsItem.append(deathsIcon, deathsLabel, deathsValue);
+
+  kdBody.append(killsItem, deathsItem);
+  championKdCard.append(kdHeader, kdBody);
 
   const championMessage = qs<HTMLElement>(menu, '[data-slot="champion-message"]');
   championMessage.textContent = t(options.locale, "home.currentChampion", {

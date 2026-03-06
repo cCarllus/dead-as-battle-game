@@ -4,7 +4,7 @@ import type { Locale } from "../../i18n";
 import { DEFAULT_ACTIVE_TAB, type MenuTabId } from "../navigation/menu.model";
 import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
 import { bindHomeEvents } from "./home.events";
-import { renderHomeView } from "./home.view";
+import { renderHomeView, type HomeSelectedChampionStats } from "./home.view";
 import type { MenuActionId } from "./home.model";
 import { mountSettingsModal } from "../components/settings-modal";
 import { mountExitConfirmModal } from "../components/exit-confirm-modal";
@@ -39,6 +39,7 @@ export type HomeActions = {
   isUserChampion: boolean;
   isSessionActive: boolean;
   currentUserId: string;
+  selectedChampionStats: HomeSelectedChampionStats;
 };
 
 function createActionHandlers(
@@ -71,7 +72,8 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     selectedChampionSplashImageUrl: actions.selectedChampionSplashImageUrl,
     selectedChampionThemeColor: actions.selectedChampionThemeColor,
     isUserChampion: actions.isUserChampion,
-    isSessionActive: actions.isSessionActive
+    isSessionActive: actions.isSessionActive,
+    selectedChampionStats: actions.selectedChampionStats
   });
 
   const settingsModal = mountSettingsModal({
@@ -93,6 +95,7 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
   const teamPanelSlot = qs<HTMLElement>(menu, '[data-slot="team-slots"]');
   const teamTabButton = qs<HTMLButtonElement>(menu, '[data-slot="team-tab"]');
   const teamToast = qs<HTMLElement>(menu, '[data-slot="team-toast"]');
+  const onlineUsersCountNode = qs<HTMLElement>(menu, '[data-slot="online-users-count"]');
 
   const disposeTeamPanel = mountTeamPanel({
     locale,
@@ -137,6 +140,10 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
         callback();
       });
     }
+  });
+
+  const disposeChatPresenceListener = actions.chatService.onPresence((presence) => {
+    onlineUsersCountNode.textContent = String(presence.onlineUsers);
   });
 
   let teamToastTimeoutId: number | null = null;
@@ -225,6 +232,7 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     disposeTeamInvitePopup();
     disposeTeamPanel();
     disposeChatPanel();
+    disposeChatPresenceListener();
     destroySpotifyLobbyPlayer(spotifyPlayer);
     homeView.dispose();
   };

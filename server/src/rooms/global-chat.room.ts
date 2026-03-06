@@ -77,6 +77,7 @@ const CHAT_SEND_EVENT = "chat:send";
 const CHAT_MESSAGE_EVENT = "chat:message";
 const CHAT_HISTORY_EVENT = "chat:history";
 const CHAT_ERROR_EVENT = "chat:error";
+const CHAT_PRESENCE_EVENT = "chat:presence";
 
 const TEAM_INVITE_EVENT = "team:invite";
 const TEAM_ACCEPT_EVENT = "team:accept";
@@ -230,6 +231,7 @@ export class GlobalChatRoom extends Room {
     this.clearPendingOfflineCleanup(userId);
 
     client.send(CHAT_HISTORY_EVENT, this.history.getHistory());
+    this.broadcastChatPresence();
 
     const existingTeam = this.teamService.getTeamByUserId(userId);
     if (existingTeam) {
@@ -258,6 +260,8 @@ export class GlobalChatRoom extends Room {
         this.sessionIdsByUserId.delete(participant.userId);
       }
     }
+
+    this.broadcastChatPresence();
 
     if (this.isUserOnline(participant.userId)) {
       return;
@@ -640,6 +644,14 @@ export class GlobalChatRoom extends Room {
 
   private isUserOnline(userId: string): boolean {
     return (this.sessionIdsByUserId.get(userId)?.size ?? 0) > 0;
+  }
+
+  private broadcastChatPresence(): void {
+    this.broadcast(CHAT_PRESENCE_EVENT, {
+      onlineUsers: this.sessionIdsByUserId.size,
+      connectedSessions: this.participantBySessionId.size,
+      timestamp: Date.now()
+    });
   }
 
   private clearPendingOfflineCleanup(userId: string): void {

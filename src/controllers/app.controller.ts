@@ -76,6 +76,11 @@ function createScreenRegistry(
       const selectedChampion = getSelectedChampionForUser(user);
       const selectedChampionProgress = user.champions[selectedChampion.id];
       const isSessionActive = sessionService.isActiveForUser(user.id);
+      const selectedChampionStats = {
+        championName: selectedChampion.displayName,
+        kills: selectedChampionProgress.kills,
+        deaths: selectedChampionProgress.deaths
+      };
 
       return renderHomeScreen(uiRoot, {
         locale: state.get().locale,
@@ -134,7 +139,8 @@ function createScreenRegistry(
         selectedChampionThemeColor: selectedChampion.themeColor,
         isUserChampion: selectedChampion.id === "user",
         isSessionActive,
-        currentUserId: user.id
+        currentUserId: user.id,
+        selectedChampionStats
       });
     },
     champions: ({ uiRoot, state, goTo }) => {

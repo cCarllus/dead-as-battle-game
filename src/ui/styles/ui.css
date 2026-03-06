@@ -738,6 +738,39 @@ body {
   border-radius: 8px;
 }
 
+.dab-roster__presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(74, 222, 128, 0.36);
+  background: rgba(15, 34, 23, 0.42);
+}
+
+.dab-roster__presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #4ade80;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.9);
+  animation: dab-online-pulse 1.2s ease-in-out infinite;
+}
+
+.dab-roster__presence-count {
+  font-size: 0.84rem;
+  color: #dcfce7;
+  letter-spacing: 0.05em;
+}
+
+.dab-roster__presence-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(187, 247, 208, 0.92);
+}
+
 .dab-roster__summary-line {
   margin: 0;
   font-size: 0.9rem;
@@ -768,6 +801,96 @@ body {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
+}
+
+.dab-kd-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background:
+    linear-gradient(150deg, rgba(8, 17, 33, 0.78), rgba(11, 19, 35, 0.64)),
+    radial-gradient(circle at 8% 0%, color-mix(in oklab, var(--dab-champion-theme) 18%, transparent), transparent 60%);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 14px 30px rgba(2, 6, 23, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.dab-kd-card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dab-kd-card__header strong {
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(241, 245, 249, 0.95);
+}
+
+.dab-kd-card__header small {
+  min-width: 0;
+  font-size: 0.72rem;
+  color: rgba(147, 197, 253, 0.86);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dab-kd-card__body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dab-kd-card__item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(5, 11, 24, 0.58);
+}
+
+.dab-kd-card__item small {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(226, 232, 240, 0.86);
+}
+
+.dab-kd-card__item strong {
+  font-size: 0.84rem;
+  letter-spacing: 0.04em;
+  color: #f8fafc;
+}
+
+.dab-kd-card__icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.dab-kd-card__item.is-kills .dab-kd-card__icon {
+  color: #052e16;
+  background: rgba(74, 222, 128, 0.92);
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.4);
+}
+
+.dab-kd-card__item.is-deaths .dab-kd-card__icon {
+  color: #450a0a;
+  background: rgba(251, 113, 133, 0.94);
+  box-shadow: 0 0 12px rgba(251, 113, 133, 0.4);
 }
 
 .dab-roster__title {
@@ -2159,6 +2282,18 @@ body {
 
   to {
     left: 170%;
+  }
+}
+
+@keyframes dab-online-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.44;
+    transform: scale(0.82);
   }
 }
 
