@@ -1,4 +1,5 @@
 import { Client, Room } from "@colyseus/sdk";
+import { resolveServerEndpoint } from "../config/server-endpoint";
 import type { Team } from "../models/team.model";
 import type { TeamInvite } from "../models/team-invite.model";
 import { GLOBAL_CHAT_ROOM_NAME } from "./chat.service";
@@ -69,11 +70,6 @@ export type TeamService = {
   onError: (callback: (error: TeamError) => void) => () => void;
   onToast: (callback: (toast: TeamToast) => void) => () => void;
 };
-
-function resolveDefaultEndpoint(): string {
-  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${protocol}://${window.location.hostname}:2567`;
-}
 
 function normalizeIdentity(rawIdentity: TeamIdentity | null): TeamIdentity | null {
   if (!rawIdentity) {
@@ -293,7 +289,7 @@ function cloneTeam(team: Team | null): Team | null {
 }
 
 export function createTeamService(options: TeamServiceOptions): TeamService {
-  const endpoint = options.endpoint ?? resolveDefaultEndpoint();
+  const endpoint = options.endpoint ?? resolveServerEndpoint();
   const roomName = options.roomName ?? GLOBAL_CHAT_ROOM_NAME;
 
   const client = new Client(endpoint);

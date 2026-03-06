@@ -1,4 +1,5 @@
 import { Client, Room } from "@colyseus/sdk";
+import { resolveServerEndpoint } from "../config/server-endpoint";
 import type { ChatMessage } from "../models/chat-message.model";
 
 export const GLOBAL_CHAT_ROOM_NAME = "global_chat";
@@ -39,11 +40,6 @@ export type ChatService = {
   onPresence: (callback: (presence: ChatPresence) => void) => () => void;
   disconnect: () => void;
 };
-
-function resolveDefaultEndpoint(): string {
-  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${protocol}://${window.location.hostname}:2567`;
-}
 
 function normalizeIncomingMessage(value: unknown): ChatMessage | null {
   if (!value || typeof value !== "object") {
@@ -147,7 +143,7 @@ function normalizeIdentity(rawIdentity: ChatIdentity | null): ChatIdentity | nul
 }
 
 export function createChatService(options: ChatServiceOptions): ChatService {
-  const endpoint = options.endpoint ?? resolveDefaultEndpoint();
+  const endpoint = options.endpoint ?? resolveServerEndpoint();
   const roomName = options.roomName ?? GLOBAL_CHAT_ROOM_NAME;
 
   const client = new Client(endpoint);

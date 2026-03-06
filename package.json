@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:ngrok": "vite --mode ngrok",
     "dev:server": "tsx watch server/src/index.ts",
     "game:server:dev": "concurrently -k -n SERVER,WEB -c cyan,yellow \"npm:dev:server\" \"npm:dev\"",
     "dev:all": "npm run game:server:dev",

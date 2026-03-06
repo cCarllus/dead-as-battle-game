@@ -16,6 +16,7 @@ pnpm-debug.log*
 .env.local
 .env.development
 .env.production
+.env.ngrok
 
 # OS files
 .DS_Store
