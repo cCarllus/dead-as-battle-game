@@ -1,8 +1,10 @@
 // Responsável por pré-carregar e tocar áudio de seleção de campeão após desbloqueio do navegador.
 import type { ChampionId } from "../models/champion.model";
+import type { GameSettings } from "./settings.service";
 
 export type AudioService = {
   playChampionSelect: (championId: ChampionId) => void;
+  applySettings: (settings: Pick<GameSettings, "muteAll" | "masterVolume">) => void;
   dispose: () => void;
 };
 
@@ -19,6 +21,32 @@ export function createAudioService({
   let activeAudio: HTMLAudioElement | null = null;
   let isAudioUnlocked = false;
   let isDisposed = false;
+  let isMuted = false;
+  let masterVolume = 80;
+
+  const normalizeMasterVolume = (value: number): number => {
+    if (!Number.isFinite(value)) {
+      return 80;
+    }
+
+    return Math.max(0, Math.min(100, Math.round(value)));
+  };
+
+  const getOutputVolume = (): number => {
+    if (isMuted) {
+      return 0;
+    }
+
+    const normalizedMaster = normalizeMasterVolume(masterVolume) / 100;
+    return Math.max(0, Math.min(1, normalizedMaster * volume));
+  };
+
+  const refreshVolumes = (): void => {
+    const nextVolume = getOutputVolume();
+    audioByChampionId.forEach((audio) => {
+      audio.volume = nextVolume;
+    });
+  };
 
   const unlockAudio = (): void => {
     if (isDisposed) {
@@ -39,13 +67,28 @@ export function createAudioService({
     const championId = id as ChampionId;
     const audio = new Audio(url);
     audio.preload = "auto";
-    audio.volume = volume;
+    audio.volume = getOutputVolume();
     audioByChampionId.set(championId, audio);
   });
 
   return {
+    applySettings: (settings) => {
+      if (isDisposed) {
+        return;
+      }
+
+      isMuted = settings.muteAll;
+      masterVolume = normalizeMasterVolume(settings.masterVolume);
+      refreshVolumes();
+
+      if (isMuted && activeAudio) {
+        activeAudio.pause();
+        activeAudio.currentTime = 0;
+        activeAudio = null;
+      }
+    },
     playChampionSelect: (championId) => {
-      if (!isAudioUnlocked || isDisposed) {
+      if (!isAudioUnlocked || isDisposed || isMuted) {
         return;
       }
 
@@ -60,7 +103,7 @@ export function createAudioService({
       }
 
       audio.currentTime = 0;
-      audio.volume = volume;
+      audio.volume = getOutputVolume();
       activeAudio = audio;
 
       void audio.play().catch(() => {

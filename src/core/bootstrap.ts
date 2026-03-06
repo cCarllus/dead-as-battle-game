@@ -9,6 +9,7 @@ import { createSessionService } from "./storage";
 import { createUserRepository } from "../repositories/user.repository";
 import { createUserService } from "../services/user.service";
 import { createAudioService } from "../services/audio.service";
+import { createSettingsService } from "../services/settings.service";
 
 export function bootstrap(): void {
   const uiRoot = document.getElementById("ui-root") as HTMLDivElement | null;
@@ -16,9 +17,12 @@ export function bootstrap(): void {
     throw new Error("Elemento principal de UI não encontrado.");
   }
 
-  const appState = createAppState();
   const userService = createUserService({ repository: createUserRepository() });
   const sessionService = createSessionService();
+  const settingsService = createSettingsService();
+  const initialSettings = settingsService.load();
+  document.documentElement.lang = initialSettings.locale;
+  const appState = createAppState({ locale: initialSettings.locale });
   const audioCatalog = getChampionCatalogForUser("Player");
   const audioService = createAudioService({
     selectAudioByChampionId: audioCatalog.reduce((acc, champion) => {
@@ -26,6 +30,7 @@ export function bootstrap(): void {
       return acc;
     }, {} as Record<ChampionId, string>)
   });
+  audioService.applySettings(initialSettings);
 
   const appController = createAppController({
     uiRoot,
@@ -33,6 +38,7 @@ export function bootstrap(): void {
     userService,
     sessionService,
     audioService,
+    settingsService,
     warmUpAssets: warmUpAssetCache
   });
 

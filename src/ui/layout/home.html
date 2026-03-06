@@ -48,6 +48,130 @@
     <div class="dab-play__status" data-slot="ping"></div>
   </aside>
 
+  <div class="dab-settings-modal" data-slot="settings-modal" aria-hidden="true" hidden>
+    <button
+      type="button"
+      class="dab-settings-modal__overlay"
+      data-settings-action="overlay-close"
+      data-i18n-aria-label="settings.close.aria"
+    ></button>
+
+    <section
+      class="dab-settings-panel"
+      data-slot="settings-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dab-settings-title"
+      aria-describedby="dab-settings-subtitle"
+    >
+      <header class="dab-settings-panel__header">
+        <h2 id="dab-settings-title" data-i18n="settings.modal.title"></h2>
+        <p id="dab-settings-subtitle" data-i18n="settings.modal.subtitle"></p>
+      </header>
+
+      <div class="dab-settings-panel__body">
+        <section class="dab-settings-section">
+          <h3 data-i18n="settings.section.video"></h3>
+
+          <label class="dab-settings-control" data-setting-field="fullscreen">
+            <span class="dab-settings-control__copy">
+              <strong data-i18n="settings.fullscreen.label"></strong>
+              <small data-i18n="settings.fullscreen.description"></small>
+              <small data-slot="settings-fullscreen-unsupported" data-i18n="settings.fullscreen.unsupported" hidden></small>
+            </span>
+            <span class="dab-settings-switch">
+              <input type="checkbox" data-setting-toggle="fullscreen" />
+              <span class="dab-settings-switch__track"></span>
+            </span>
+          </label>
+
+          <label class="dab-settings-control">
+            <span class="dab-settings-control__copy">
+              <strong data-i18n="settings.language.label"></strong>
+              <small data-i18n="settings.language.description"></small>
+            </span>
+            <span class="dab-settings-select">
+              <select data-setting-select="locale">
+                <option value="pt-BR" data-i18n="settings.language.option.ptBR"></option>
+                <option value="en-US" data-i18n="settings.language.option.enUS"></option>
+              </select>
+            </span>
+          </label>
+        </section>
+
+        <section class="dab-settings-section">
+          <h3 data-i18n="settings.section.audio"></h3>
+
+          <label class="dab-settings-control">
+            <span class="dab-settings-control__copy">
+              <strong data-i18n="settings.audio.muteAll.label"></strong>
+              <small data-i18n="settings.audio.muteAll.description"></small>
+            </span>
+            <span class="dab-settings-switch">
+              <input type="checkbox" data-setting-toggle="muteAll" />
+              <span class="dab-settings-switch__track"></span>
+            </span>
+          </label>
+
+          <div class="dab-settings-control dab-settings-control--column" data-setting-field="masterVolume">
+            <div class="dab-settings-slider-header">
+              <span class="dab-settings-control__copy">
+                <strong data-i18n="settings.audio.masterVolume.label"></strong>
+              </span>
+              <strong data-setting-value="masterVolume">80%</strong>
+            </div>
+            <input type="range" min="0" max="100" value="80" data-setting-slider="masterVolume" />
+          </div>
+        </section>
+
+        <section class="dab-settings-section">
+          <h3 data-i18n="settings.section.account"></h3>
+
+          <div class="dab-settings-danger">
+            <button type="button" class="dab-settings-danger__button" data-settings-action="logout" data-i18n="settings.account.logout"></button>
+            <small data-i18n="settings.account.logout.helper"></small>
+          </div>
+        </section>
+      </div>
+
+      <footer class="dab-settings-panel__footer">
+        <button type="button" class="dab-settings-ghost" data-settings-action="restore" data-i18n="settings.restore"></button>
+        <div class="dab-settings-actions">
+          <button type="button" class="dab-settings-secondary" data-settings-action="cancel" data-i18n="settings.cancel"></button>
+          <button type="button" class="dab-settings-primary" data-settings-action="save" data-i18n="settings.save"></button>
+        </div>
+      </footer>
+    </section>
+  </div>
+
+  <div class="dab-exit-modal" data-slot="exit-confirm-modal" aria-hidden="true" hidden>
+    <button
+      type="button"
+      class="dab-exit-modal__overlay"
+      data-exit-action="overlay-close"
+      data-i18n-aria-label="exit.confirm.close.aria"
+    ></button>
+
+    <section
+      class="dab-exit-modal__panel"
+      data-slot="exit-confirm-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dab-exit-title"
+      aria-describedby="dab-exit-description"
+    >
+      <h2 id="dab-exit-title" data-i18n="exit.confirm.title"></h2>
+      <p id="dab-exit-description" data-i18n="exit.confirm.description"></p>
+
+      <div class="dab-exit-modal__actions">
+        <button type="button" class="dab-settings-secondary" data-exit-action="cancel" data-i18n="settings.cancel"></button>
+        <button type="button" class="dab-settings-danger__button" data-exit-action="confirm" data-i18n="exit.confirm.confirm"></button>
+      </div>
+    </section>
+  </div>
+
+  <div class="dab-toast" data-slot="settings-toast" role="status" aria-live="polite"></div>
+
   <footer class="dab-menu__footer">
     <button type="button" class="dab-chat-button">
       <span class="dab-keycap">ENTER</span>

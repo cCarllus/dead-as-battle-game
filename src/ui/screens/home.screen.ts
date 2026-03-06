@@ -6,12 +6,18 @@ import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
 import { bindHomeEvents } from "./home.events";
 import { renderHomeView } from "./home.view";
 import type { MenuActionId } from "./home.model";
+import { mountSettingsModal } from "../components/settings-modal";
+import { mountExitConfirmModal } from "../components/exit-confirm-modal";
+import type { GameSettings, SettingsService } from "../../services/settings.service";
 
 export type HomeActions = {
-  onOpenConfig: () => void;
   onOpenMultiplayer: () => void;
   onOpenChampions: () => void;
   onExit: () => void;
+  onClearSession: () => void;
+  onApplyAudioSettings: (settings: GameSettings) => void;
+  onApplyLocale: (locale: Locale) => boolean;
+  settingsService: SettingsService;
   locale?: Locale;
   activeTab?: MenuTabId;
   onNavigateTab?: (tab: MenuTabId) => void;
@@ -25,12 +31,16 @@ export type HomeActions = {
   isSessionActive: boolean;
 };
 
-function createActionHandlers(actions: HomeActions): Record<MenuActionId, () => void> {
+function createActionHandlers(
+  actions: HomeActions,
+  openSettingsModal: () => void,
+  openExitConfirmModal: () => void
+): Record<MenuActionId, () => void> {
   return {
     play: actions.onOpenMultiplayer,
     champions: actions.onOpenChampions,
-    settings: actions.onOpenConfig,
-    exit: actions.onExit
+    settings: openSettingsModal,
+    exit: openExitConfirmModal
   };
 }
 
@@ -53,7 +63,40 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     isSessionActive: actions.isSessionActive
   });
 
-  const actionHandlers = createActionHandlers(actions);
+  const settingsModal = mountSettingsModal({
+    locale,
+    menu: homeView.menu,
+    settingsService: actions.settingsService,
+    onApplyAudioSettings: actions.onApplyAudioSettings,
+    onApplyLocale: actions.onApplyLocale,
+    onClearSession: actions.onClearSession
+  });
+
+  const exitConfirmModal = mountExitConfirmModal({
+    menu: homeView.menu,
+    onConfirmExit: actions.onExit
+  });
+
+  const actionHandlers = createActionHandlers(actions, settingsModal.open, exitConfirmModal.open);
+
+  const onWindowKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== "Escape") {
+      return;
+    }
+
+    if (homeView.menu.classList.contains("is-settings-open")) {
+      return;
+    }
+
+    if (exitConfirmModal.isOpen()) {
+      return;
+    }
+
+    event.preventDefault();
+    exitConfirmModal.open();
+  };
+
+  window.addEventListener("keydown", onWindowKeyDown);
 
   const disposeEvents = bindHomeEvents({
     menu,
@@ -67,7 +110,10 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
   });
 
   return () => {
+    window.removeEventListener("keydown", onWindowKeyDown);
     disposeEvents();
+    settingsModal.dispose();
+    exitConfirmModal.dispose();
     homeView.dispose();
   };
 }

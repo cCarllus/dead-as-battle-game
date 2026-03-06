@@ -12,6 +12,7 @@ import { renderNicknameScreen } from "../ui/screens/nickname.screen";
 import { renderSettingsScreen } from "../ui/screens/settings.screen";
 import { renderChampionsScreen } from "../ui/screens/champions.screen";
 import type { UserService } from "../services/user.service";
+import type { SettingsService } from "../services/settings.service";
 
 export type AppControllerDependencies = {
   uiRoot: HTMLDivElement;
@@ -19,6 +20,7 @@ export type AppControllerDependencies = {
   userService: UserService;
   sessionService: SessionService;
   audioService: AudioService;
+  settingsService: SettingsService;
   warmUpAssets: () => Promise<void>;
   startupDelayMs?: number;
 };
@@ -37,7 +39,8 @@ function delay(ms: number): Promise<void> {
 function createScreenRegistry(
   userService: UserService,
   sessionService: SessionService,
-  audioService: AudioService
+  audioService: AudioService,
+  settingsService: SettingsService
 ): ScreenRegistry {
   return {
     loading: ({ uiRoot, state }) => {
@@ -75,9 +78,6 @@ function createScreenRegistry(
             goTo("champions");
           }
         },
-        onOpenConfig: () => {
-          goTo("settings");
-        },
         onOpenMultiplayer: () => undefined,
         onOpenChampions: () => {
           state.patch({ activeMenuTab: "champions" });
@@ -88,6 +88,30 @@ function createScreenRegistry(
           sessionService.clear();
           goTo("nickname");
         },
+        onClearSession: () => {
+          userService.clearCurrentUser();
+          sessionService.clear();
+          settingsService.clear();
+          document.documentElement.lang = "pt-BR";
+          state.patch({ locale: "pt-BR" });
+          state.patch({ activeMenuTab: "home" });
+          goTo("nickname");
+        },
+        onApplyAudioSettings: (settings) => {
+          audioService.applySettings(settings);
+        },
+        onApplyLocale: (locale) => {
+          const currentLocale = state.get().locale;
+          document.documentElement.lang = locale;
+          if (currentLocale === locale) {
+            return false;
+          }
+
+          state.patch({ locale });
+          goTo("home");
+          return true;
+        },
+        settingsService,
         playerName: user.nickname,
         selectedChampionName: selectedChampion.displayName,
         selectedChampionLevel: selectedChampionProgress.level,
@@ -178,6 +202,7 @@ export function createAppController({
   userService,
   sessionService,
   audioService,
+  settingsService,
   warmUpAssets,
   startupDelayMs = 1200
 }: AppControllerDependencies): AppController {
@@ -186,7 +211,7 @@ export function createAppController({
       uiRoot,
       state
     },
-    createScreenRegistry(userService, sessionService, audioService)
+    createScreenRegistry(userService, sessionService, audioService, settingsService)
   );
 
   return {
