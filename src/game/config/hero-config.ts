@@ -29,10 +29,10 @@ type HeroVisualTuning = {
 };
 
 const DEFAULT_VISUAL_TUNING: HeroVisualTuning = {
-  visualScale: 0.028,
+  visualScale: 1,
   visualOffset: {
     x: 0,
-    y: -1.15,
+    y: 0,
     z: 0
   },
   visualYaw: 0
@@ -40,18 +40,18 @@ const DEFAULT_VISUAL_TUNING: HeroVisualTuning = {
 
 const HERO_VISUAL_TUNING_BY_ID: Record<ChampionId, HeroVisualTuning> = {
   user: {
-    visualScale: 0.028,
-    visualOffset: { x: 0, y: -1.15, z: 0 },
+    visualScale: 1,
+    visualOffset: { x: 0, y: 0, z: 0 },
     visualYaw: 0
   },
   sukuna: {
-    visualScale: 0.024,
-    visualOffset: { x: 0, y: -1.15, z: 0 },
+    visualScale: 1,
+    visualOffset: { x: 0, y: 0, z: 0 },
     visualYaw: 0
   },
   kaiju_no_8: {
-    visualScale: 0.018,
-    visualOffset: { x: 0, y: -1.2, z: 0 },
+    visualScale: 1,
+    visualOffset: { x: 0, y: 0, z: 0 },
     visualYaw: 0
   }
 };

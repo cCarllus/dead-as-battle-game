@@ -186,6 +186,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
   let room: Room | null = null;
   let connectPromise: Promise<void> | null = null;
   let suppressNextDisconnectError = false;
+  let connectedIdentity: MatchIdentity | null = null;
 
   const playersBySessionId = new Map<string, MatchPlayerState>();
 
@@ -344,10 +345,6 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
 
   return {
     connect: async () => {
-      if (room) {
-        return;
-      }
-
       if (connectPromise) {
         return connectPromise;
       }
@@ -358,6 +355,25 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
           throw new Error("Perfil local inválido para entrar na partida global.");
         }
 
+        if (
+          room &&
+          connectedIdentity &&
+          connectedIdentity.userId === identity.userId &&
+          connectedIdentity.nickname === identity.nickname &&
+          connectedIdentity.heroId === identity.heroId
+        ) {
+          return;
+        }
+
+        if (room) {
+          suppressNextDisconnectError = true;
+          room.leave();
+          room = null;
+          connectedIdentity = null;
+          playersBySessionId.clear();
+          emitPlayersChanged();
+        }
+
         const connectedRoom = await client.joinOrCreate(roomName, {
           userId: identity.userId,
           nickname: identity.nickname,
@@ -365,6 +381,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         });
 
         room = connectedRoom;
+        connectedIdentity = identity;
         bindRoomEvents(connectedRoom);
         connectedRoom.send(MATCH_SNAPSHOT_REQUEST_EVENT);
       })();
@@ -380,6 +397,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
     },
     disconnect: () => {
       if (!room) {
+        connectedIdentity = null;
         playersBySessionId.clear();
         emitPlayersChanged();
         return;
@@ -388,6 +406,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       suppressNextDisconnectError = true;
       room.leave();
       room = null;
+      connectedIdentity = null;
       playersBySessionId.clear();
       emitPlayersChanged();
     },

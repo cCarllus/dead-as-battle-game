@@ -4272,6 +4272,7 @@ body {
   width: 22px;
   height: 22px;
   position: relative;
+  transform: translateY(-82px);
   filter: drop-shadow(0 0 6px rgba(248, 250, 252, 0.7));
 }
 
@@ -4528,6 +4529,7 @@ body {
   display: flex;
   align-items: flex-end;
   gap: 12px;
+  pointer-events: auto;
 }
 
 .dab-match__skill {
@@ -4540,6 +4542,14 @@ body {
   display: grid;
   place-items: center;
   box-shadow: 0 12px 22px rgba(2, 6, 23, 0.34);
+  position: relative;
+}
+
+button.dab-match__skill {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
 }
 
 .dab-match__skill.is-disabled {
@@ -4574,6 +4584,37 @@ body {
   text-transform: uppercase;
   position: relative;
   z-index: 1;
+}
+
+.dab-match__skill-key {
+  position: absolute;
+  right: 7px;
+  bottom: 6px;
+  color: rgba(226, 232, 240, 0.8);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dab-match__skill.is-fly {
+  border-color: rgba(250, 204, 21, 0.7);
+  background: linear-gradient(160deg, rgba(234, 179, 8, 0.2), rgba(120, 53, 15, 0.34));
+}
+
+.dab-match__skill.is-fly .dab-match__skill-icon {
+  color: #fde68a;
+}
+
+.dab-match__skill.is-fly:hover {
+  border-color: rgba(254, 240, 138, 0.9);
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.3);
+}
+
+.dab-match__skill.is-fly[aria-pressed="true"] {
+  border-color: rgba(254, 240, 138, 1);
+  background: linear-gradient(160deg, rgba(250, 204, 21, 0.42), rgba(202, 138, 4, 0.42));
+  box-shadow: 0 0 24px rgba(250, 204, 21, 0.44);
 }
 
 .dab-match__player-list {
@@ -4796,6 +4837,10 @@ body {
   .dab-match__skill.is-ultimate {
     width: 58px;
     height: 58px;
+  }
+
+  .dab-match__crosshair {
+    transform: translateY(-60px);
   }
 
   .dab-match__loading {

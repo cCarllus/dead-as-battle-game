@@ -17,6 +17,12 @@ const MATCH_PLAYER_LEFT_EVENT = "match:player:left";
 const MATCH_PLAYER_MOVE_EVENT = "player_move";
 const MATCH_PLAYER_MOVED_EVENT = "match:player:moved";
 const MATCH_STATE_SYNC_INTERVAL_MS = 120;
+const PLAYER_COLLISION_RADIUS = 0.44;
+const PLAYER_COLLISION_HEIGHT = 2.4;
+const PLAYER_COLLISION_MIN_DISTANCE = PLAYER_COLLISION_RADIUS * 2;
+const PLAYER_COLLISION_MIN_DISTANCE_SQUARED = PLAYER_COLLISION_MIN_DISTANCE * PLAYER_COLLISION_MIN_DISTANCE;
+const PLAYER_COLLISION_EPSILON = 0.000001;
+const PLAYER_COLLISION_RESOLVE_PASSES = 5;
 
 const VALID_HERO_IDS = new Set<string>(["user", "sukuna", "kaiju_no_8"]);
 
@@ -104,6 +110,65 @@ function normalizeMovePayload(payload: MatchMovePayload | undefined): {
   return { x, y, z, rotationY };
 }
 
+function resolveHorizontalPlayerCollision(options: {
+  sessionId: string;
+  desiredX: number;
+  desiredY: number;
+  desiredZ: number;
+  rotationY: number;
+  players: Record<string, MatchPlayerState>;
+}): { x: number; z: number } {
+  let resolvedX = options.desiredX;
+  let resolvedZ = options.desiredZ;
+
+  const fallbackDirectionX = Math.sin(options.rotationY);
+  const fallbackDirectionZ = Math.cos(options.rotationY);
+  const fallbackLength = Math.hypot(fallbackDirectionX, fallbackDirectionZ);
+  const safeFallbackX = fallbackLength > PLAYER_COLLISION_EPSILON ? fallbackDirectionX / fallbackLength : 1;
+  const safeFallbackZ = fallbackLength > PLAYER_COLLISION_EPSILON ? fallbackDirectionZ / fallbackLength : 0;
+
+  for (let pass = 0; pass < PLAYER_COLLISION_RESOLVE_PASSES; pass += 1) {
+    let hadOverlap = false;
+
+    for (const otherPlayer of Object.values(options.players)) {
+      if (otherPlayer.sessionId === options.sessionId) {
+        continue;
+      }
+
+      // Evita "colisão infinita" no eixo vertical: só bloqueia quando os corpos se sobrepõem em altura.
+      const verticalDistance = Math.abs(options.desiredY - otherPlayer.y);
+      if (verticalDistance > PLAYER_COLLISION_HEIGHT) {
+        continue;
+      }
+
+      const deltaX = resolvedX - otherPlayer.x;
+      const deltaZ = resolvedZ - otherPlayer.z;
+      const distanceSquared = deltaX * deltaX + deltaZ * deltaZ;
+      if (distanceSquared >= PLAYER_COLLISION_MIN_DISTANCE_SQUARED) {
+        continue;
+      }
+
+      const safeDistance = Math.sqrt(Math.max(distanceSquared, PLAYER_COLLISION_EPSILON));
+      const normalX = safeDistance > PLAYER_COLLISION_EPSILON ? deltaX / safeDistance : safeFallbackX;
+      const normalZ = safeDistance > PLAYER_COLLISION_EPSILON ? deltaZ / safeDistance : safeFallbackZ;
+      const penetrationDepth = PLAYER_COLLISION_MIN_DISTANCE - safeDistance;
+      if (penetrationDepth <= 0) {
+        continue;
+      }
+
+      resolvedX += normalX * (penetrationDepth + 0.0001);
+      resolvedZ += normalZ * (penetrationDepth + 0.0001);
+      hadOverlap = true;
+    }
+
+    if (!hadOverlap) {
+      break;
+    }
+  }
+
+  return { x: resolvedX, z: resolvedZ };
+}
+
 export class GlobalMatchRoom extends Room {
   private readonly spawnService = new SpawnService();
   private stateDirty = false;
@@ -163,15 +228,23 @@ export class GlobalMatchRoom extends Room {
 
     const heroId = normalizeHeroId(options?.heroId);
     const spawn = this.spawnService.getNextSpawnPoint();
+    const resolvedSpawn = resolveHorizontalPlayerCollision({
+      sessionId: client.sessionId,
+      desiredX: spawn.x,
+      desiredY: spawn.y,
+      desiredZ: spawn.z,
+      rotationY: 0,
+      players: this.matchState.players
+    });
 
     const player: MatchPlayerState = {
       sessionId: client.sessionId,
       userId,
       nickname,
       heroId,
-      x: spawn.x,
+      x: resolvedSpawn.x,
       y: spawn.y,
-      z: spawn.z,
+      z: resolvedSpawn.z,
       rotationY: 0,
       joinedAt: Date.now()
     };
@@ -220,22 +293,27 @@ export class GlobalMatchRoom extends Room {
       return;
     }
 
-    player.x = normalizedMove.x;
+    const resolvedMove = resolveHorizontalPlayerCollision({
+      sessionId: player.sessionId,
+      desiredX: normalizedMove.x,
+      desiredY: normalizedMove.y,
+      desiredZ: normalizedMove.z,
+      rotationY: normalizedMove.rotationY,
+      players: this.matchState.players
+    });
+
+    player.x = resolvedMove.x;
     player.y = normalizedMove.y;
-    player.z = normalizedMove.z;
+    player.z = resolvedMove.z;
     player.rotationY = normalizedMove.rotationY;
     this.stateDirty = true;
 
-    this.broadcast(
-      MATCH_PLAYER_MOVED_EVENT,
-      {
-        sessionId: player.sessionId,
-        x: player.x,
-        y: player.y,
-        z: player.z,
-        rotationY: player.rotationY
-      },
-      { except: client }
-    );
+    this.broadcast(MATCH_PLAYER_MOVED_EVENT, {
+      sessionId: player.sessionId,
+      x: player.x,
+      y: player.y,
+      z: player.z,
+      rotationY: player.rotationY
+    });
   }
 }

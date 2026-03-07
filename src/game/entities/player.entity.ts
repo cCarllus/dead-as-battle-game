@@ -14,6 +14,10 @@ import {
   Vector3
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
+import {
+  getHeroRuntimeCalibration,
+  setHeroRuntimeCalibration
+} from "../config/hero-calibration.store";
 import { resolveHeroConfig, type HeroConfig } from "../config/hero-config";
 import type { MatchPlayerState } from "../../models/match-player.model";
 
@@ -21,6 +25,7 @@ const PLAYER_COLLISION_HEIGHT = 2.4;
 const PLAYER_COLLISION_RADIUS = 0.44;
 const CAMERA_TARGET_OFFSET_Y = 1.28;
 const NAMEPLATE_OFFSET_Y = PLAYER_COLLISION_HEIGHT + 0.52;
+const TARGET_VISUAL_HEIGHT = PLAYER_COLLISION_HEIGHT;
 const heroModelContainerCache = new WeakMap<Scene, Map<string, Promise<AssetContainer>>>();
 
 export type PlayerVisualStyle = {
@@ -145,19 +150,35 @@ function createPlayerLabel(scene: Scene, sessionId: string): PlayerLabelHandle {
   };
 }
 
-function applyHeroVisualConfig(visualRoot: TransformNode, heroConfig: HeroConfig): void {
+function applyHeroVisualConfig(
+  visualRoot: TransformNode,
+  heroConfig: HeroConfig,
+  calibration?: {
+    normalizedScale: number;
+    normalizedOffsetY: number;
+  } | null
+): void {
   const safeScale =
     Number.isFinite(heroConfig.visualScale) && heroConfig.visualScale > 0
       ? heroConfig.visualScale
       : 1;
+  const normalizedScale =
+    calibration && Number.isFinite(calibration.normalizedScale) && calibration.normalizedScale > 0
+      ? calibration.normalizedScale
+      : 1;
+  const normalizedOffsetY =
+    calibration && Number.isFinite(calibration.normalizedOffsetY)
+      ? calibration.normalizedOffsetY
+      : 0;
+  const finalScale = safeScale * normalizedScale;
 
   visualRoot.position.set(
     heroConfig.visualOffset.x,
-    heroConfig.visualOffset.y,
+    heroConfig.visualOffset.y + normalizedOffsetY,
     heroConfig.visualOffset.z
   );
   visualRoot.rotation.set(0, heroConfig.visualYaw, 0);
-  visualRoot.scaling.set(safeScale, safeScale, safeScale);
+  visualRoot.scaling.set(finalScale, finalScale, finalScale);
 }
 
 function resetSkinRootTransform(rootNode: TransformNode): void {
@@ -167,6 +188,42 @@ function resetSkinRootTransform(rootNode: TransformNode): void {
     rootNode.rotationQuaternion = Quaternion.Identity();
   }
   rootNode.scaling.setAll(1);
+}
+
+function calculateNormalizedCalibration(
+  skinRootNodes: TransformNode[]
+): { normalizedScale: number; normalizedOffsetY: number } | null {
+  if (skinRootNodes.length === 0) {
+    return null;
+  }
+
+  const min = new Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+  const max = new Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY);
+
+  skinRootNodes.forEach((rootNode) => {
+    const bounds = rootNode.getHierarchyBoundingVectors(true);
+    min.x = Math.min(min.x, bounds.min.x);
+    min.y = Math.min(min.y, bounds.min.y);
+    min.z = Math.min(min.z, bounds.min.z);
+    max.x = Math.max(max.x, bounds.max.x);
+    max.y = Math.max(max.y, bounds.max.y);
+    max.z = Math.max(max.z, bounds.max.z);
+  });
+
+  const height = max.y - min.y;
+  if (!Number.isFinite(height) || height <= 0.000001) {
+    return null;
+  }
+
+  const normalizedScale = TARGET_VISUAL_HEIGHT / height;
+  if (!Number.isFinite(normalizedScale) || normalizedScale <= 0) {
+    return null;
+  }
+
+  return {
+    normalizedScale,
+    normalizedOffsetY: -min.y * normalizedScale
+  };
 }
 
 export type MatchPlayerEntity = {
@@ -257,7 +314,8 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   };
 
   const applyHeroSkin = (heroConfig: HeroConfig): void => {
-    applyHeroVisualConfig(visualRoot, heroConfig);
+    const cachedCalibration = getHeroRuntimeCalibration(heroConfig.id);
+    applyHeroVisualConfig(visualRoot, heroConfig, cachedCalibration);
     skinLoadVersion += 1;
     const currentLoadVersion = skinLoadVersion;
     disposeSkinHandle();
@@ -303,6 +361,13 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
             mesh.isPickable = false;
           });
         });
+
+        const runtimeCalibration =
+          cachedCalibration ?? calculateNormalizedCalibration(skinRootNodes);
+        if (runtimeCalibration && !cachedCalibration) {
+          setHeroRuntimeCalibration(heroConfig.id, runtimeCalibration);
+        }
+        applyHeroVisualConfig(visualRoot, heroConfig, runtimeCalibration ?? cachedCalibration);
 
         if (isDisposed || currentLoadVersion !== skinLoadVersion) {
           instantiated.dispose();

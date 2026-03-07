@@ -167,6 +167,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const pauseMenuExitButton = qs<HTMLButtonElement>(screen, 'button[data-action="leave-match"]');
   const pauseMenuSettingsButton = qs<HTMLButtonElement>(screen, 'button[data-action="open-settings"]');
   const pauseMenuOverlayButton = qs<HTMLButtonElement>(screen, 'button[data-action="match-menu-close"]');
+  const flyToggleButton = qs<HTMLButtonElement>(screen, 'button[data-action="toggle-fly"]');
 
   loadingTitle.textContent = t(locale, "match.loading.title");
   matchTitle.textContent = t(locale, "match.hud.title");
@@ -194,6 +195,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   let elapsedSeconds = 0;
   let matchTimerIntervalId: number | null = null;
   let hudRefreshIntervalId: number | null = null;
+  let isFlyModeEnabled = false;
 
   const isSettingsModalOpen = (): boolean => {
     return screen.classList.contains("is-settings-open");
@@ -229,6 +231,20 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     pauseMenu.hidden = !visible;
     pauseMenu.setAttribute("aria-hidden", String(!visible));
     pauseMenu.classList.toggle("is-open", visible);
+  };
+
+  const setFlyUiState = (enabled: boolean): void => {
+    isFlyModeEnabled = enabled;
+    flyToggleButton.setAttribute("aria-pressed", String(enabled));
+  };
+
+  const toggleFlyMode = (): void => {
+    if (!sceneHandle || !isMatchReady || hasFatalError || isSettingsModalOpen() || isPauseMenuOpen) {
+      return;
+    }
+
+    const nextEnabled = sceneHandle.toggleFlyMode();
+    setFlyUiState(nextEnabled);
   };
 
   const updateInputState = (): void => {
@@ -330,7 +346,22 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     closePauseMenu();
   });
 
+  const disposeFlyToggleClick = bind(flyToggleButton, "click", () => {
+    toggleFlyMode();
+  });
+
   const onWindowKeyDown = (event: KeyboardEvent): void => {
+    if (event.code === "KeyF") {
+      if (event.repeat) {
+        event.preventDefault();
+        return;
+      }
+
+      event.preventDefault();
+      toggleFlyMode();
+      return;
+    }
+
     if (event.key !== "Escape") {
       return;
     }
@@ -379,6 +410,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   refreshHudFromUserProfile();
   refreshPingHud();
   updateInputState();
+  setFlyUiState(false);
 
   void (async () => {
     showLoading(t(locale, "match.loading.connecting"));
@@ -403,6 +435,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       const connectedPlayers = actions.matchService.getPlayers();
       sceneHandle.setTeamMemberUserIds(Array.from(teamMemberUserIds));
       sceneHandle.setPlayers(connectedPlayers);
+      setFlyUiState(sceneHandle.isFlyModeEnabled());
       renderMatchPresence(connectedPlayers);
 
       isMatchReady = true;
@@ -434,6 +467,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     disposePauseMenuExitClick();
     disposePauseMenuSettingsClick();
     disposePauseMenuOverlayClick();
+    disposeFlyToggleClick();
     disposePlayersChanged();
     disposePlayerAdded();
     disposePlayerUpdated();
@@ -445,6 +479,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
     sceneHandle?.dispose();
     sceneHandle = null;
+    setFlyUiState(false);
 
     if (matchTimerIntervalId !== null) {
       window.clearInterval(matchTimerIntervalId);

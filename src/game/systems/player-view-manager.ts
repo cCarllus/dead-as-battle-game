@@ -5,8 +5,8 @@ import type { LocalPlayerView } from "../entities/local-player.view";
 import type { PlayerViewRole, RemotePlayerView } from "../entities/remote-player.view";
 import { createPlayerFactory } from "./player-factory";
 
-const LOCAL_SERVER_RECONCILE_DISTANCE_SQUARED = 2.25;
-const LOCAL_SERVER_RECONCILE_ROTATION_DELTA = 1.1;
+const LOCAL_SERVER_RECONCILE_DISTANCE_SQUARED = 0.0025;
+const LOCAL_SERVER_RECONCILE_ROTATION_DELTA = 0.08;
 const ENABLE_MATCH_VIEW_DEBUG_LOGS = false;
 
 function logMatchView(event: string, payload: Record<string, unknown>): void {

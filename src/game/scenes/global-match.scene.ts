@@ -13,12 +13,15 @@ import { createPlayerViewManager } from "../systems/player-view-manager";
 import { createMovementInputSystem } from "../systems/movement-input.system";
 import { GLOBAL_MATCH_MAP_URL, loadGlobalMatchMap } from "../systems/map-loader.system";
 
-const CAMERA_RADIUS = 6.8;
-const CAMERA_MIN_BETA = 0.62;
-const CAMERA_MAX_BETA = 1.46;
+const CAMERA_RADIUS = 6.9;
+const CAMERA_MIN_BETA = 0.72;
+const CAMERA_MAX_BETA = 1.42;
 const CAMERA_MOUSE_SENSITIVITY = 0.0022;
+const CAMERA_TARGET_VERTICAL_OFFSET = 1.72;
+const CAMERA_TARGET_LATERAL_OFFSET = 0.92;
 const LOCAL_MOVE_SPEED = 5.4;
 const LOCAL_JUMP_VELOCITY = 7.6;
+const LOCAL_FLY_VERTICAL_SPEED = 5.8;
 const LOCAL_GRAVITY = 22;
 const MAX_FRAME_DELTA_SECONDS = 0.05;
 const GROUND_EPSILON = 0.0001;
@@ -38,6 +41,9 @@ export type GlobalMatchSceneHandle = {
   updatePlayer: (player: MatchPlayerState) => void;
   removePlayer: (sessionId: string) => void;
   setTeamMemberUserIds: (userIds: string[]) => void;
+  setFlyModeEnabled: (enabled: boolean) => void;
+  toggleFlyMode: () => boolean;
+  isFlyModeEnabled: () => boolean;
   setInputEnabled: (enabled: boolean) => void;
   requestPointerLock: () => void;
   exitPointerLock: () => void;
@@ -69,6 +75,43 @@ function positionDistanceSquared(
   return dx * dx + dy * dy + dz * dz;
 }
 
+function resolveOverShoulderTargetPosition(
+  transform: { x: number; y: number; z: number },
+  cameraAlpha: number
+): { x: number; y: number; z: number } {
+  const forwardX = -Math.cos(cameraAlpha);
+  const forwardZ = -Math.sin(cameraAlpha);
+  const rightX = forwardZ;
+  const rightZ = -forwardX;
+
+  return {
+    x: transform.x + rightX * CAMERA_TARGET_LATERAL_OFFSET,
+    y: transform.y + CAMERA_TARGET_VERTICAL_OFFSET,
+    z: transform.z + rightZ * CAMERA_TARGET_LATERAL_OFFSET
+  };
+}
+
+function shouldHideLocalVisualForCamera(
+  visualRoot: TransformNode,
+  cameraPosition: Vector3
+): boolean {
+  const meshes = visualRoot.getChildMeshes(false);
+  if (meshes.length === 0) {
+    return false;
+  }
+
+  const bounds = visualRoot.getHierarchyBoundingVectors(true);
+  const size = bounds.max.subtract(bounds.min);
+  const radius = Math.max(size.length() * 0.5, 0.001);
+  const center = bounds.min.add(bounds.max).scale(0.5);
+  const dx = center.x - cameraPosition.x;
+  const dy = center.y - cameraPosition.y;
+  const dz = center.z - cameraPosition.z;
+  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+  return distance <= radius * 1.05;
+}
+
 export async function createGlobalMatchScene(
   options: GlobalMatchSceneOptions
 ): Promise<GlobalMatchSceneHandle> {
@@ -84,7 +127,7 @@ export async function createGlobalMatchScene(
   const camera = new ArcRotateCamera(
     "globalMatchCamera",
     -Math.PI / 2,
-    1.08,
+    1.02,
     CAMERA_RADIUS,
     new Vector3(0, 1.2, 0),
     scene
@@ -113,6 +156,7 @@ export async function createGlobalMatchScene(
   const movementInput = createMovementInputSystem();
 
   let inputEnabled = true;
+  let flyModeEnabled = false;
   let pointerLocked = false;
   let localVerticalVelocity = 0;
   let localGroundY = 0;
@@ -122,6 +166,7 @@ export async function createGlobalMatchScene(
   let accumulatedMouseDeltaY = 0;
   let lastMovementSyncAtMs = 0;
   let lastSyncedLocalPosition: { x: number; y: number; z: number; rotationY: number } | null = null;
+  let isLocalVisualHiddenForCamera = false;
 
   const setPlayers = (players: MatchPlayerState[]): void => {
     playerViewManager.syncPlayers(players);
@@ -165,6 +210,21 @@ export async function createGlobalMatchScene(
 
   const setTeamMemberUserIds = (userIds: string[]): void => {
     playerViewManager.setTeamMemberUserIds(userIds);
+  };
+
+  const setFlyModeEnabled = (enabled: boolean): void => {
+    if (flyModeEnabled === enabled) {
+      return;
+    }
+
+    flyModeEnabled = enabled;
+    localVerticalVelocity = 0;
+    wasJumpPressed = movementInput.getState().jump;
+  };
+
+  const toggleFlyMode = (): boolean => {
+    setFlyModeEnabled(!flyModeEnabled);
+    return flyModeEnabled;
   };
 
   const requestPointerLock = (): void => {
@@ -262,6 +322,7 @@ export async function createGlobalMatchScene(
 
     const forward = resolveGroundForward(camera);
     const right = new Vector3(forward.z, 0, -forward.x);
+    const aimYaw = Math.atan2(forward.x, forward.z);
 
     const forwardAxis = (inputState.forward ? 1 : 0) - (inputState.backward ? 1 : 0);
     const sideAxis = (inputState.right ? 1 : 0) - (inputState.left ? 1 : 0);
@@ -276,7 +337,22 @@ export async function createGlobalMatchScene(
       movementDirection = movementDirection.normalize();
       transform.x += movementDirection.x * LOCAL_MOVE_SPEED * deltaSeconds;
       transform.z += movementDirection.z * LOCAL_MOVE_SPEED * deltaSeconds;
-      transform.rotationY = Math.atan2(movementDirection.x, movementDirection.z);
+    }
+
+    // A frente do personagem acompanha sempre a direção da câmera/crosshair (TPS over-the-shoulder).
+    transform.rotationY = aimYaw;
+
+    if (flyModeEnabled) {
+      const verticalAxis = (inputState.jump ? 1 : 0) - (inputState.descend ? 1 : 0);
+      if (verticalAxis !== 0) {
+        transform.y += verticalAxis * LOCAL_FLY_VERTICAL_SPEED * deltaSeconds;
+      }
+
+      localVerticalVelocity = 0;
+      wasJumpPressed = inputState.jump;
+      playerViewManager.updateLocalPlayerTransform(transform);
+      maybeEmitLocalMovement(transform);
+      return;
     }
 
     const isGrounded = transform.y <= localGroundY + GROUND_EPSILON;
@@ -340,8 +416,18 @@ export async function createGlobalMatchScene(
 
     const localView = playerViewManager.getLocalPlayerView();
     if (localView) {
-      const target = localView.getCameraTarget();
-      cameraTargetNode.position.set(target.x, target.y, target.z);
+      const cameraTarget = resolveOverShoulderTargetPosition(localView.getTransform(), camera.alpha);
+      cameraTargetNode.position.set(cameraTarget.x, cameraTarget.y, cameraTarget.z);
+
+      const shouldHideVisual = shouldHideLocalVisualForCamera(localView.visualRoot, camera.globalPosition);
+      if (shouldHideVisual !== isLocalVisualHiddenForCamera) {
+        localView.visualRoot.getChildMeshes(false).forEach((mesh) => {
+          mesh.isVisible = !shouldHideVisual;
+        });
+        isLocalVisualHiddenForCamera = shouldHideVisual;
+      }
+    } else if (isLocalVisualHiddenForCamera) {
+      isLocalVisualHiddenForCamera = false;
     }
 
     scene.render();
@@ -359,6 +445,9 @@ export async function createGlobalMatchScene(
     updatePlayer,
     removePlayer,
     setTeamMemberUserIds,
+    setFlyModeEnabled,
+    toggleFlyMode,
+    isFlyModeEnabled: () => flyModeEnabled,
     setInputEnabled,
     requestPointerLock,
     exitPointerLock,
