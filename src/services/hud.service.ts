@@ -4,11 +4,10 @@ import {
   getBaseChampionById,
   isChampionId
 } from "../data/champions.catalog";
+import { resolveHeroCombatClientConfig, type HeroSkillSlotConfig } from "../game/config/hero-combat.config";
 import type { MatchPlayerState } from "../models/match-player.model";
 
 const DEFAULT_HERO_LABEL = "HERO";
-const DEFAULT_MAX_HEALTH = 1000;
-const DEFAULT_ULTIMATE_MAX = 100;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -39,6 +38,12 @@ function resolveHeroCardImage(heroId: string | null): string {
 export type CombatHudState = {
   heroLabel: string;
   heroCardImageUrl: string;
+  skillThemeColor: `#${string}`;
+  skills: {
+    primary: HeroSkillSlotConfig;
+    secondary: HeroSkillSlotConfig;
+    ultimate: HeroSkillSlotConfig;
+  };
   healthCurrent: number;
   healthMax: number;
   healthPercent: number;
@@ -49,15 +54,19 @@ export type CombatHudState = {
 };
 
 export function resolveCombatHudState(player: MatchPlayerState | null): CombatHudState {
+  const heroCombatConfig = resolveHeroCombatClientConfig(player?.heroId ?? DEFAULT_CHAMPION_ID);
+
   if (!player) {
     return {
       heroLabel: DEFAULT_HERO_LABEL,
       heroCardImageUrl: resolveHeroCardImage(null),
-      healthCurrent: DEFAULT_MAX_HEALTH,
-      healthMax: DEFAULT_MAX_HEALTH,
+      skillThemeColor: heroCombatConfig.skillThemeColor,
+      skills: heroCombatConfig.skills,
+      healthCurrent: heroCombatConfig.maxHealth,
+      healthMax: heroCombatConfig.maxHealth,
       healthPercent: 100,
       ultimateCharge: 0,
-      ultimateMax: DEFAULT_ULTIMATE_MAX,
+      ultimateMax: heroCombatConfig.ultimateMax,
       ultimatePercent: 0,
       isUltimateReady: false
     };
@@ -73,6 +82,8 @@ export function resolveCombatHudState(player: MatchPlayerState | null): CombatHu
   return {
     heroLabel: normalizeHeroLabel(player.heroId),
     heroCardImageUrl: resolveHeroCardImage(player.heroId),
+    skillThemeColor: heroCombatConfig.skillThemeColor,
+    skills: heroCombatConfig.skills,
     healthCurrent,
     healthMax,
     healthPercent,

@@ -13,8 +13,9 @@ export function syncUltimateReady(player: MatchPlayerState): void {
   player.isUltimateReady = player.ultimateCharge >= player.ultimateMax;
 }
 
-export function resetUltimate(player: MatchPlayerState): void {
-  player.ultimateMax = DEFAULT_ULTIMATE_MAX;
+export function resetUltimate(player: MatchPlayerState, ultimateMax: number = DEFAULT_ULTIMATE_MAX): void {
+  const safeUltimateMax = Math.max(1, Math.floor(ultimateMax));
+  player.ultimateMax = safeUltimateMax;
   player.ultimateCharge = 0;
   player.isUltimateReady = false;
 }

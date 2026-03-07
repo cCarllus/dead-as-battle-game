@@ -4045,6 +4045,7 @@ body {
 }
 
 .dab-match {
+  --dab-hero-skill-theme: #facc15;
   position: absolute;
   inset: 0;
   overflow: hidden;
@@ -4464,8 +4465,10 @@ body {
 }
 
 .dab-match__vitals-bars-wrap {
-  margin-left: -26px;
-  transform: translate(-14px, -9px);
+  margin-left: -10px;
+  transform: translate(8px, -9px);
+  position: relative;
+  z-index: 4;
 }
 
 .dab-match__vitals-bars {
@@ -4493,13 +4496,14 @@ body {
 }
 
 .dab-match__ultimate-key {
+  --dab-skill-theme: var(--dab-hero-skill-theme, #22d3ee);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 1px solid rgba(125, 211, 252, 0.48);
-  background: rgba(8, 47, 73, 0.46);
-  color: rgba(186, 230, 253, 0.95);
+  border: 1px solid color-mix(in oklab, var(--dab-skill-theme) 58%, rgba(125, 211, 252, 0.48));
+  background: color-mix(in oklab, var(--dab-skill-theme) 26%, rgba(8, 47, 73, 0.46));
+  color: color-mix(in oklab, var(--dab-skill-theme) 58%, rgba(186, 230, 253, 0.95));
   font-size: 0.64rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -4509,12 +4513,12 @@ body {
 }
 
 .dab-match__ultimate-key.is-ready {
-  border-color: rgba(254, 240, 138, 0.96);
-  background: rgba(202, 138, 4, 0.32);
-  color: rgba(254, 240, 138, 0.98);
+  border-color: color-mix(in oklab, var(--dab-skill-theme) 90%, white 10%);
+  background: color-mix(in oklab, var(--dab-skill-theme) 44%, rgba(202, 138, 4, 0.3));
+  color: color-mix(in oklab, var(--dab-skill-theme) 82%, white 16%);
   box-shadow:
-    0 0 14px rgba(250, 204, 21, 0.52),
-    inset 0 0 8px rgba(250, 204, 21, 0.26);
+    0 0 14px color-mix(in oklab, var(--dab-skill-theme) 62%, transparent),
+    inset 0 0 8px color-mix(in oklab, var(--dab-skill-theme) 40%, transparent);
 }
 
 .dab-match__bar {
@@ -4590,7 +4594,11 @@ body {
 }
 
 .dab-match__ultimate-ready {
+  display: inline-block;
   margin-top: -2px;
+  margin-left: 6px;
+  position: relative;
+  z-index: 5;
   color: rgba(254, 240, 138, 0.98);
   font-size: 0.66rem;
   font-weight: 800;
@@ -4624,6 +4632,7 @@ body {
 }
 
 .dab-match__skills {
+  --dab-skill-theme: var(--dab-hero-skill-theme, #facc15);
   display: flex;
   align-items: flex-end;
   gap: 12px;
@@ -4634,12 +4643,18 @@ body {
   width: 56px;
   height: 56px;
   border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.34);
-  background: rgba(8, 14, 28, 0.72);
+  border: 1px solid color-mix(in oklab, var(--dab-skill-theme) 36%, rgba(148, 163, 184, 0.34));
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--dab-skill-theme) 22%, rgba(8, 14, 28, 0.78)),
+    rgba(8, 14, 28, 0.72)
+  );
   backdrop-filter: blur(8px);
   display: grid;
   place-items: center;
-  box-shadow: 0 12px 22px rgba(2, 6, 23, 0.34);
+  box-shadow:
+    0 12px 22px rgba(2, 6, 23, 0.34),
+    0 0 12px color-mix(in oklab, var(--dab-skill-theme) 24%, transparent);
   position: relative;
 }
 
@@ -4657,9 +4672,13 @@ button.dab-match__skill {
 .dab-match__skill.is-ultimate {
   width: 64px;
   height: 64px;
-  border-color: rgba(250, 204, 21, 0.84);
-  background: linear-gradient(160deg, rgba(234, 179, 8, 0.18), rgba(120, 53, 15, 0.3));
-  box-shadow: 0 0 22px rgba(250, 204, 21, 0.24);
+  border-color: color-mix(in oklab, var(--dab-skill-theme) 76%, white 12%);
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--dab-skill-theme) 34%, rgba(2, 6, 23, 0.2)),
+    color-mix(in oklab, var(--dab-skill-theme) 18%, rgba(120, 53, 15, 0.36))
+  );
+  box-shadow: 0 0 22px color-mix(in oklab, var(--dab-skill-theme) 30%, transparent);
   position: relative;
   overflow: hidden;
 }
@@ -4675,7 +4694,7 @@ button.dab-match__skill {
 }
 
 .dab-match__skill-icon {
-  color: #f8fafc;
+  color: color-mix(in oklab, var(--dab-skill-theme) 14%, #f8fafc);
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -4696,23 +4715,31 @@ button.dab-match__skill {
 }
 
 .dab-match__skill.is-fly {
-  border-color: rgba(250, 204, 21, 0.7);
-  background: linear-gradient(160deg, rgba(234, 179, 8, 0.2), rgba(120, 53, 15, 0.34));
+  border-color: color-mix(in oklab, var(--dab-skill-theme) 74%, rgba(148, 163, 184, 0.34));
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--dab-skill-theme) 32%, rgba(234, 179, 8, 0.2)),
+    color-mix(in oklab, var(--dab-skill-theme) 22%, rgba(120, 53, 15, 0.36))
+  );
 }
 
 .dab-match__skill.is-fly .dab-match__skill-icon {
-  color: #fde68a;
+  color: color-mix(in oklab, var(--dab-skill-theme) 46%, white 26%);
 }
 
 .dab-match__skill.is-fly:hover {
-  border-color: rgba(254, 240, 138, 0.9);
-  box-shadow: 0 0 20px rgba(250, 204, 21, 0.3);
+  border-color: color-mix(in oklab, var(--dab-skill-theme) 82%, white 12%);
+  box-shadow: 0 0 20px color-mix(in oklab, var(--dab-skill-theme) 42%, transparent);
 }
 
 .dab-match__skill.is-fly[aria-pressed="true"] {
-  border-color: rgba(254, 240, 138, 1);
-  background: linear-gradient(160deg, rgba(250, 204, 21, 0.42), rgba(202, 138, 4, 0.42));
-  box-shadow: 0 0 24px rgba(250, 204, 21, 0.44);
+  border-color: color-mix(in oklab, var(--dab-skill-theme) 92%, white 8%);
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--dab-skill-theme) 54%, rgba(250, 204, 21, 0.38)),
+    color-mix(in oklab, var(--dab-skill-theme) 42%, rgba(202, 138, 4, 0.38))
+  );
+  box-shadow: 0 0 24px color-mix(in oklab, var(--dab-skill-theme) 52%, transparent);
 }
 
 .dab-match__player-list {
@@ -4914,7 +4941,7 @@ button.dab-match__skill {
   }
 
   .dab-match__vitals {
-    margin-left: 6px;
+    margin-left: 0;
     transform: translateY(-6px);
   }
 
@@ -4934,8 +4961,8 @@ button.dab-match__skill {
   }
 
   .dab-match__vitals-bars-wrap {
-    margin-left: -20px;
-    transform: translate(-10px, -6px);
+    margin-left: -8px;
+    transform: translate(4px, -6px);
   }
 
   .dab-match__bar.is-health {
@@ -4951,6 +4978,10 @@ button.dab-match__skill {
   .dab-match__bar-percent {
     margin-right: 8px;
     font-size: 0.68rem;
+  }
+
+  .dab-match__ultimate-ready {
+    margin-left: 4px;
   }
 
   .dab-match__status-header {

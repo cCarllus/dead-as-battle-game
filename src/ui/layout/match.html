@@ -33,17 +33,6 @@
           </div>
         </section>
 
-        <aside class="dab-match__meta-card">
-          <div class="dab-match__meta-row">
-            <span class="dab-match__meta-label is-coins">Coins</span>
-            <strong class="dab-match__meta-value" data-slot="match-hud-coins">0</strong>
-          </div>
-          <div class="dab-match__meta-separator"></div>
-          <div class="dab-match__meta-row">
-            <span class="dab-match__meta-label">Ping</span>
-            <strong class="dab-match__meta-value is-ping" data-slot="match-hud-ping">--ms</strong>
-          </div>
-        </aside>
       </header>
 
       <div class="dab-match__hud-center">
@@ -98,15 +87,18 @@
           </div>
         </section>
 
-        <section class="dab-match__skills">
-          <div class="dab-match__skill">
-            <span class="dab-match__skill-icon">1</span>
+        <section class="dab-match__skills" data-slot="match-skills">
+          <div class="dab-match__skill" data-slot="match-skill-slot-primary" title="Primary skill">
+            <span class="dab-match__skill-icon" data-slot="match-skill-slot-primary-icon">ST</span>
+            <small class="dab-match__skill-key" data-slot="match-skill-slot-primary-key">1</small>
           </div>
-          <div class="dab-match__skill is-disabled">
-            <span class="dab-match__skill-icon">2</span>
+          <div class="dab-match__skill" data-slot="match-skill-slot-secondary" title="Secondary skill">
+            <span class="dab-match__skill-icon" data-slot="match-skill-slot-secondary-icon">DS</span>
+            <small class="dab-match__skill-key" data-slot="match-skill-slot-secondary-key">2</small>
           </div>
-          <div class="dab-match__skill is-ultimate">
-            <span class="dab-match__skill-icon">Q</span>
+          <div class="dab-match__skill is-ultimate" data-slot="match-skill-slot-ultimate" title="Ultimate skill">
+            <span class="dab-match__skill-icon" data-slot="match-skill-slot-ultimate-icon">OV</span>
+            <small class="dab-match__skill-key" data-slot="match-skill-slot-ultimate-key">G</small>
           </div>
           <button
             type="button"

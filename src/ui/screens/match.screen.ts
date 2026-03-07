@@ -27,14 +27,6 @@ export type MatchScreenActions = {
   onLeaveMatch: () => void;
 };
 
-type NavigatorConnectionLike = {
-  rtt?: number;
-};
-
-type NavigatorWithConnection = Navigator & {
-  connection?: NavigatorConnectionLike;
-};
-
 const FULLSCREEN_NOTICE_TIMEOUT_MS = 3000;
 const MIN_EMPTY_BAR_VISUAL_PERCENT = 0;
 
@@ -143,16 +135,6 @@ function formatMatchElapsedTime(elapsedSeconds: number): string {
   return `${minutes}:${seconds}`;
 }
 
-function resolvePingLabel(): string {
-  const navigatorWithConnection = navigator as NavigatorWithConnection;
-  const pingValue = navigatorWithConnection.connection?.rtt;
-  if (typeof pingValue === "number" && Number.isFinite(pingValue) && pingValue > 0) {
-    return `${Math.round(pingValue)}ms`;
-  }
-
-  return "24ms";
-}
-
 export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions): () => void {
   const locale = resolveScreenLocale(actions.locale);
   const screen = renderScreenTemplate(root, template, '[data-screen="match"]', locale);
@@ -167,8 +149,6 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const hudTimer = qs<HTMLElement>(screen, '[data-slot="match-hud-timer"]');
   const hudKills = qs<HTMLElement>(screen, '[data-slot="match-hud-kills"]');
   const hudDeaths = qs<HTMLElement>(screen, '[data-slot="match-hud-deaths"]');
-  const hudCoins = qs<HTMLElement>(screen, '[data-slot="match-hud-coins"]');
-  const hudPing = qs<HTMLElement>(screen, '[data-slot="match-hud-ping"]');
   const hudHealthFill = qs<HTMLElement>(screen, '[data-slot="match-hud-health-fill"]');
   const hudResourceFill = qs<HTMLElement>(screen, '[data-slot="match-hud-resource-fill"]');
   const hudHealthValue = qs<HTMLElement>(screen, '[data-slot="match-hud-health-value"]');
@@ -178,6 +158,16 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const hudUltimateKey = qs<HTMLElement>(screen, '[data-slot="match-hud-ultimate-key"]');
   const hudUltimateReady = qs<HTMLElement>(screen, '[data-slot="match-hud-ultimate-ready"]');
   const hudVitals = qs<HTMLElement>(screen, ".dab-match__vitals");
+  const hudSkills = qs<HTMLElement>(screen, '[data-slot="match-skills"]');
+  const hudSkillPrimary = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-primary"]');
+  const hudSkillSecondary = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-secondary"]');
+  const hudSkillUltimate = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-ultimate"]');
+  const hudSkillPrimaryIcon = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-primary-icon"]');
+  const hudSkillSecondaryIcon = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-secondary-icon"]');
+  const hudSkillUltimateIcon = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-ultimate-icon"]');
+  const hudSkillPrimaryKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-primary-key"]');
+  const hudSkillSecondaryKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-secondary-key"]');
+  const hudSkillUltimateKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-ultimate-key"]');
   const pointerLockHint = qs<HTMLElement>(screen, '[data-slot="match-pointer-lock-hint"]');
   const fullscreenNotice = qs<HTMLElement>(screen, '[data-slot="match-fullscreen-notice"]');
 
@@ -271,20 +261,14 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const refreshHudFromUserProfile = (): void => {
     const user = actions.userService.getCurrentUser();
     if (!user) {
-      hudCoins.textContent = "0";
       hudKills.textContent = "0";
       hudDeaths.textContent = "0";
       return;
     }
 
     const selectedChampionProgress = user.champions[user.selectedChampionId];
-    hudCoins.textContent = String(user.coins);
     hudKills.textContent = String(selectedChampionProgress?.kills ?? 0);
     hudDeaths.textContent = String(selectedChampionProgress?.deaths ?? 0);
-  };
-
-  const refreshPingHud = (): void => {
-    hudPing.textContent = resolvePingLabel();
   };
 
   const setHudBarFill = (fillElement: HTMLElement, percent: number): number => {
@@ -300,10 +284,25 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     const healthPercent = setHudBarFill(hudHealthFill, combatHudState.healthPercent);
     const ultimatePercent = setHudBarFill(hudResourceFill, combatHudState.ultimatePercent);
 
+    screen.style.setProperty("--dab-hero-skill-theme", combatHudState.skillThemeColor);
+    hudSkills.style.setProperty("--dab-hero-skill-theme", combatHudState.skillThemeColor);
+    hudUltimateKey.style.setProperty("--dab-hero-skill-theme", combatHudState.skillThemeColor);
+
     hudHeroName.textContent = combatHudState.heroLabel;
     if (hudHeroCard.src !== combatHudState.heroCardImageUrl) {
       hudHeroCard.src = combatHudState.heroCardImageUrl;
     }
+    hudSkillPrimaryIcon.textContent = combatHudState.skills.primary.icon;
+    hudSkillSecondaryIcon.textContent = combatHudState.skills.secondary.icon;
+    hudSkillUltimateIcon.textContent = combatHudState.skills.ultimate.icon;
+    hudSkillPrimaryKey.textContent = combatHudState.skills.primary.key;
+    hudSkillSecondaryKey.textContent = combatHudState.skills.secondary.key;
+    hudSkillUltimateKey.textContent = combatHudState.skills.ultimate.key;
+    hudSkillPrimary.title = combatHudState.skills.primary.name;
+    hudSkillSecondary.title = combatHudState.skills.secondary.name;
+    hudSkillUltimate.title = combatHudState.skills.ultimate.name;
+    hudUltimateKey.textContent = `[${combatHudState.skills.ultimate.key}] ULTIMATE`;
+
     hudHealthValue.textContent = `${combatHudState.healthCurrent} / ${combatHudState.healthMax}`;
     hudResourceValue.textContent = `${ultimatePercent}%`;
 
@@ -570,7 +569,6 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   hudTimer.textContent = formatMatchElapsedTime(elapsedSeconds);
   setLocalCombatHud(null);
   refreshHudFromUserProfile();
-  refreshPingHud();
   inputModeSystem.setSettingsOpen(isSettingsModalOpen());
   applyInputState();
   setFlyUiState(false);
@@ -617,7 +615,6 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
       hudRefreshIntervalId = window.setInterval(() => {
         refreshHudFromUserProfile();
-        refreshPingHud();
       }, 2000);
     } catch (error) {
       const message = error instanceof Error ? error.message : t(locale, "match.error.startFailed");

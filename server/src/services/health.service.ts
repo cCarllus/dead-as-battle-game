@@ -9,9 +9,10 @@ function clampHealth(value: number, maxHealth: number): number {
   return Math.max(0, Math.min(safeMaxHealth, safeValue));
 }
 
-export function resetHealth(player: MatchPlayerState): void {
-  player.maxHealth = DEFAULT_MAX_HEALTH;
-  player.currentHealth = DEFAULT_MAX_HEALTH;
+export function resetHealth(player: MatchPlayerState, maxHealth: number = DEFAULT_MAX_HEALTH): void {
+  const safeMaxHealth = Math.max(1, Math.floor(maxHealth));
+  player.maxHealth = safeMaxHealth;
+  player.currentHealth = safeMaxHealth;
   player.isAlive = true;
 }
 

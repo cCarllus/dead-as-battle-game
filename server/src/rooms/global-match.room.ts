@@ -7,6 +7,7 @@ import type {
   MatchPlayerState,
   MatchUltimateActivatePayload
 } from "../models/match-player.model.js";
+import { resolveHeroCombatServerConfig, VALID_HERO_IDS } from "../config/hero-combat.config.js";
 import { resetHealth } from "../services/health.service.js";
 import { SpawnService } from "../services/spawn.service.js";
 import {
@@ -34,8 +35,6 @@ const PLAYER_COLLISION_MIN_DISTANCE = PLAYER_COLLISION_RADIUS * 2;
 const PLAYER_COLLISION_MIN_DISTANCE_SQUARED = PLAYER_COLLISION_MIN_DISTANCE * PLAYER_COLLISION_MIN_DISTANCE;
 const PLAYER_COLLISION_EPSILON = 0.000001;
 const PLAYER_COLLISION_RESOLVE_PASSES = 5;
-
-const VALID_HERO_IDS = new Set<string>(["user", "sukuna", "kaiju_no_8"]);
 
 function normalizeText(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -252,6 +251,7 @@ export class GlobalMatchRoom extends Room {
     }
 
     const heroId = normalizeHeroId(options?.heroId);
+    const heroCombatConfig = resolveHeroCombatServerConfig(heroId);
     const spawn = this.spawnService.getNextSpawnPoint();
     const resolvedSpawn = resolveHorizontalPlayerCollision({
       sessionId: client.sessionId,
@@ -279,8 +279,8 @@ export class GlobalMatchRoom extends Room {
       isUltimateReady: false,
       joinedAt: Date.now()
     };
-    resetHealth(player);
-    resetUltimate(player);
+    resetHealth(player, heroCombatConfig.maxHealth);
+    resetUltimate(player, heroCombatConfig.ultimateMax);
 
     this.matchState.players[client.sessionId] = player;
     this.stateDirty = true;
