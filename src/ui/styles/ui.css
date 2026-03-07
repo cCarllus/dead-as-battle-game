@@ -25,10 +25,11 @@ body {
 
 .dab-version-watermark {
   position: fixed;
-  top: 10px;
+  bottom: 10px;
   left: 12px;
   z-index: 120;
   pointer-events: none;
+  opacity: 0.3;
   padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid rgba(250, 204, 21, 0.5);
@@ -3336,7 +3337,7 @@ body {
   }
 
   .dab-version-watermark {
-    top: 8px;
+    bottom: 8px;
     left: 8px;
     font-size: 0.6rem;
     letter-spacing: 0.14em;
@@ -4155,6 +4156,12 @@ body {
   top: var(--dab-hud-safe-zone);
   left: 50%;
   transform: translateX(-50%);
+  z-index: 34;
+}
+
+.dab-match__hud-zone--top-left {
+  left: calc(var(--dab-hud-safe-zone) + 36px);
+  top: calc(var(--dab-hud-safe-zone) + 14px);
   z-index: 34;
 }
 
@@ -5098,6 +5105,11 @@ button.dab-match__skill {
 @media (max-width: 760px) {
   .dab-match__hud-layer {
     --dab-hud-safe-zone: 14px;
+  }
+
+  .dab-match__hud-zone--top-left {
+    left: calc(var(--dab-hud-safe-zone) + 16px);
+    top: calc(var(--dab-hud-safe-zone) + 8px);
   }
 
   .dab-match__stats-pill {
