@@ -306,6 +306,7 @@ function createScreenRegistry(
 
       return renderMatchScreen(uiRoot, {
         locale: state.get().locale,
+        userService,
         settingsService,
         matchService,
         teamService,

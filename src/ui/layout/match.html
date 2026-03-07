@@ -1,4 +1,4 @@
-<!-- Responsável por estruturar a tela de partida global em viewport full-game com HUD mínimo e menu de pausa. -->
+<!-- Responsável por estruturar a tela de partida global em viewport full-game com HUD completo e menu de pausa. -->
 <section class="dab-match" data-screen="match">
   <div class="dab-match__viewport">
     <canvas class="dab-match__canvas" data-slot="match-canvas" aria-label="Cena 3D da partida global"></canvas>
@@ -8,14 +8,98 @@
       <p class="dab-match__loading-text" data-slot="match-loading-text">Conectando com o servidor...</p>
     </section>
 
-    <aside class="dab-match__hud">
-      <h2 data-slot="match-title">Global Match</h2>
-      <p data-slot="match-player-count">Jogadores conectados: 0</p>
-      <ul class="dab-match__player-list" data-slot="match-player-list"></ul>
+    <section class="dab-match__hud-layer" aria-hidden="true">
+      <header class="dab-match__hud-top">
+        <aside class="dab-match__presence-card">
+          <h2 data-slot="match-title">Global Match</h2>
+          <p data-slot="match-player-count">Jogadores conectados: 0</p>
+          <ul class="dab-match__player-list" data-slot="match-player-list"></ul>
+        </aside>
+
+        <section class="dab-match__stats-pill">
+          <div class="dab-match__stat-item">
+            <span class="dab-match__stat-label">Tempo</span>
+            <strong class="dab-match__stat-value" data-slot="match-hud-timer">00:00</strong>
+          </div>
+          <span class="dab-match__stat-divider" aria-hidden="true"></span>
+          <div class="dab-match__stat-item">
+            <span class="dab-match__stat-label">Kills</span>
+            <strong class="dab-match__stat-value is-kills" data-slot="match-hud-kills">0</strong>
+          </div>
+          <span class="dab-match__stat-divider" aria-hidden="true"></span>
+          <div class="dab-match__stat-item">
+            <span class="dab-match__stat-label">Deaths</span>
+            <strong class="dab-match__stat-value is-deaths" data-slot="match-hud-deaths">0</strong>
+          </div>
+        </section>
+
+        <aside class="dab-match__meta-card">
+          <div class="dab-match__meta-row">
+            <span class="dab-match__meta-label is-coins">Coins</span>
+            <strong class="dab-match__meta-value" data-slot="match-hud-coins">0</strong>
+          </div>
+          <div class="dab-match__meta-separator"></div>
+          <div class="dab-match__meta-row">
+            <span class="dab-match__meta-label">Ping</span>
+            <strong class="dab-match__meta-value is-ping" data-slot="match-hud-ping">--ms</strong>
+          </div>
+        </aside>
+      </header>
+
+      <div class="dab-match__hud-center">
+        <div class="dab-match__crosshair" data-slot="match-crosshair" aria-hidden="true">
+          <span class="dab-match__crosshair-line is-horizontal"></span>
+          <span class="dab-match__crosshair-line is-vertical"></span>
+        </div>
+      </div>
+
+      <footer class="dab-match__hud-bottom">
+        <section class="dab-match__vitals">
+          <div class="dab-match__vitals-cluster" aria-hidden="true">
+            <div class="dab-match__vitals-core">
+              <span class="dab-match__vitals-core-icon">X</span>
+            </div>
+            <div class="dab-match__vitals-gem is-left">
+              <span class="dab-match__vitals-gem-icon">W</span>
+            </div>
+            <div class="dab-match__vitals-gem is-top">
+              <span class="dab-match__vitals-gem-icon">S</span>
+            </div>
+            <div class="dab-match__vitals-gem is-bottom">
+              <span class="dab-match__vitals-gem-icon">Z</span>
+            </div>
+            <div class="dab-match__vitals-connector"></div>
+          </div>
+
+          <div class="dab-match__vitals-bars-wrap">
+            <div class="dab-match__vitals-bars">
+              <div class="dab-match__bar is-health">
+                <span class="dab-match__bar-fill" data-slot="match-hud-health-fill"></span>
+              </div>
+              <div class="dab-match__bar is-resource">
+                <span class="dab-match__bar-fill" data-slot="match-hud-resource-fill"></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dab-match__skills">
+          <div class="dab-match__skill">
+            <span class="dab-match__skill-icon">1</span>
+          </div>
+          <div class="dab-match__skill is-disabled">
+            <span class="dab-match__skill-icon">2</span>
+          </div>
+          <div class="dab-match__skill is-ultimate">
+            <span class="dab-match__skill-icon">Q</span>
+          </div>
+        </section>
+      </footer>
+
       <small class="dab-match__pointer-hint" data-slot="match-pointer-lock-hint">
         Clique no jogo para capturar o mouse
       </small>
-    </aside>
+    </section>
 
     <div class="dab-match-menu" data-slot="match-menu" aria-hidden="true" hidden>
       <button type="button" class="dab-match-menu__overlay" data-action="match-menu-close" aria-label="Fechar menu"></button>

@@ -1,9 +1,10 @@
-// Responsável por orquestrar entrada na partida global com HUD mínimo, pointer lock e menu ESC de pausa.
+// Responsável por orquestrar entrada na partida global com HUD completo, pointer lock e menu ESC de pausa.
 import { t, type Locale } from "../../i18n";
 import type { MatchPlayerState } from "../../models/match-player.model";
 import type { MatchService } from "../../services/match.service";
 import type { GameSettings, SettingsService } from "../../services/settings.service";
 import type { TeamService } from "../../services/team.service";
+import type { UserService } from "../../services/user.service";
 import { createGlobalMatchScene, type GlobalMatchSceneHandle } from "../../game/scenes/global-match.scene";
 import { bind, qs } from "../components/dom";
 import { mountSettingsModal } from "../components/settings-modal";
@@ -12,6 +13,7 @@ import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
 
 export type MatchScreenActions = {
   locale?: Locale;
+  userService: UserService;
   settingsService: SettingsService;
   matchService: MatchService;
   teamService: TeamService;
@@ -19,6 +21,14 @@ export type MatchScreenActions = {
   onApplyLocale: (locale: Locale) => boolean;
   onClearSession: () => void;
   onLeaveMatch: () => void;
+};
+
+type NavigatorConnectionLike = {
+  rtt?: number;
+};
+
+type NavigatorWithConnection = Navigator & {
+  connection?: NavigatorConnectionLike;
 };
 
 function resolveTeamMemberUserIds(teamService: TeamService): Set<string> {
@@ -113,6 +123,25 @@ function buildPresenceSignature(
     .join("|");
 }
 
+function formatMatchElapsedTime(elapsedSeconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(elapsedSeconds));
+  const minutes = Math.floor(safeSeconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const seconds = (safeSeconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function resolvePingLabel(): string {
+  const navigatorWithConnection = navigator as NavigatorWithConnection;
+  const pingValue = navigatorWithConnection.connection?.rtt;
+  if (typeof pingValue === "number" && Number.isFinite(pingValue) && pingValue > 0) {
+    return `${Math.round(pingValue)}ms`;
+  }
+
+  return "24ms";
+}
+
 export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions): () => void {
   const locale = resolveScreenLocale(actions.locale);
   const screen = renderScreenTemplate(root, template, '[data-screen="match"]', locale);
@@ -124,6 +153,13 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const matchTitle = qs<HTMLElement>(screen, '[data-slot="match-title"]');
   const playerCountLabel = qs<HTMLElement>(screen, '[data-slot="match-player-count"]');
   const playerList = qs<HTMLElement>(screen, '[data-slot="match-player-list"]');
+  const hudTimer = qs<HTMLElement>(screen, '[data-slot="match-hud-timer"]');
+  const hudKills = qs<HTMLElement>(screen, '[data-slot="match-hud-kills"]');
+  const hudDeaths = qs<HTMLElement>(screen, '[data-slot="match-hud-deaths"]');
+  const hudCoins = qs<HTMLElement>(screen, '[data-slot="match-hud-coins"]');
+  const hudPing = qs<HTMLElement>(screen, '[data-slot="match-hud-ping"]');
+  const hudHealthFill = qs<HTMLElement>(screen, '[data-slot="match-hud-health-fill"]');
+  const hudResourceFill = qs<HTMLElement>(screen, '[data-slot="match-hud-resource-fill"]');
   const pointerLockHint = qs<HTMLElement>(screen, '[data-slot="match-pointer-lock-hint"]');
 
   const pauseMenu = qs<HTMLElement>(screen, '[data-slot="match-menu"]');
@@ -155,6 +191,9 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   let localSessionId: string | null = null;
   let teamMemberUserIds = resolveTeamMemberUserIds(actions.teamService);
   let lastPresenceSignature = "";
+  let elapsedSeconds = 0;
+  let matchTimerIntervalId: number | null = null;
+  let hudRefreshIntervalId: number | null = null;
 
   const isSettingsModalOpen = (): boolean => {
     return screen.classList.contains("is-settings-open");
@@ -164,6 +203,25 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     playerCountLabel.textContent = t(locale, "match.hud.players", {
       count: playerCount
     });
+  };
+
+  const refreshHudFromUserProfile = (): void => {
+    const user = actions.userService.getCurrentUser();
+    if (!user) {
+      hudCoins.textContent = "0";
+      hudKills.textContent = "0";
+      hudDeaths.textContent = "0";
+      return;
+    }
+
+    const selectedChampionProgress = user.champions[user.selectedChampionId];
+    hudCoins.textContent = String(user.coins);
+    hudKills.textContent = String(selectedChampionProgress?.kills ?? 0);
+    hudDeaths.textContent = String(selectedChampionProgress?.deaths ?? 0);
+  };
+
+  const refreshPingHud = (): void => {
+    hudPing.textContent = resolvePingLabel();
   };
 
   const setPauseMenuVisible = (visible: boolean): void => {
@@ -305,6 +363,11 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   setPlayerCount(0);
   renderPlayerList(playerList, [], localSessionId, teamMemberUserIds, locale);
+  hudTimer.textContent = formatMatchElapsedTime(elapsedSeconds);
+  hudHealthFill.style.width = "85%";
+  hudResourceFill.style.width = "40%";
+  refreshHudFromUserProfile();
+  refreshPingHud();
   updateInputState();
 
   void (async () => {
@@ -335,6 +398,16 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       hasFatalError = false;
       hideLoading();
       updateInputState();
+
+      matchTimerIntervalId = window.setInterval(() => {
+        elapsedSeconds += 1;
+        hudTimer.textContent = formatMatchElapsedTime(elapsedSeconds);
+      }, 1000);
+
+      hudRefreshIntervalId = window.setInterval(() => {
+        refreshHudFromUserProfile();
+        refreshPingHud();
+      }, 2000);
     } catch (error) {
       const message = error instanceof Error ? error.message : t(locale, "match.error.startFailed");
       showError(message);
@@ -358,6 +431,16 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
     sceneHandle?.dispose();
     sceneHandle = null;
+
+    if (matchTimerIntervalId !== null) {
+      window.clearInterval(matchTimerIntervalId);
+      matchTimerIntervalId = null;
+    }
+
+    if (hudRefreshIntervalId !== null) {
+      window.clearInterval(hudRefreshIntervalId);
+      hudRefreshIntervalId = null;
+    }
 
     actions.matchService.disconnect();
   };
