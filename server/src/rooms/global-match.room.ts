@@ -5,11 +5,22 @@ import type {
   MatchJoinOptions,
   MatchMovePayload,
   MatchPlayerState,
+  MatchSprintIntentPayload,
   MatchUltimateActivatePayload
 } from "../models/match-player.model.js";
 import { resolveHeroCombatServerConfig, VALID_HERO_IDS } from "../config/hero-combat.config.js";
 import { resetHealth } from "../services/health.service.js";
+import {
+  applyAuthoritativeMovementValidation,
+  initializePlayerMovementState,
+  type PlayerMovementState
+} from "../services/movement-state.service.js";
 import { SpawnService } from "../services/spawn.service.js";
+import {
+  initializeStamina,
+  updateSprintState,
+  type SprintInputState
+} from "../services/stamina.service.js";
 import {
   addUltimateCharge,
   consumeUltimate,
@@ -25,8 +36,11 @@ const MATCH_PLAYER_JOINED_EVENT = "match:player:joined";
 const MATCH_PLAYER_LEFT_EVENT = "match:player:left";
 const MATCH_PLAYER_MOVE_EVENT = "player_move";
 const MATCH_PLAYER_MOVED_EVENT = "match:player:moved";
+const MATCH_PLAYER_SPRINT_INTENT_EVENT = "player:sprint:intent";
 const MATCH_ULTIMATE_ACTIVATE_EVENT = "ultimate:activate";
 const MATCH_STATE_SYNC_INTERVAL_MS = 120;
+const MATCH_SPRINT_TICK_INTERVAL_MS = 50;
+const MATCH_MAX_SPRINT_DELTA_SECONDS = 0.2;
 const MATCH_ULTIMATE_AUTO_CHARGE_INTERVAL_MS = 2000;
 const MATCH_ULTIMATE_AUTO_CHARGE_AMOUNT = 5;
 const PLAYER_COLLISION_RADIUS = 0.44;
@@ -71,6 +85,14 @@ function normalizePositionValue(value: unknown): number | null {
   return value;
 }
 
+function normalizeBooleanValue(value: unknown): boolean | null {
+  if (typeof value !== "boolean") {
+    return null;
+  }
+
+  return value;
+}
+
 function normalizeRotationValue(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return null;
@@ -95,6 +117,11 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     ultimateCharge: player.ultimateCharge,
     ultimateMax: player.ultimateMax,
     isUltimateReady: player.isUltimateReady,
+    maxStamina: player.maxStamina,
+    currentStamina: player.currentStamina,
+    isSprinting: player.isSprinting,
+    sprintBlocked: player.sprintBlocked,
+    lastSprintEndedAt: player.lastSprintEndedAt,
     joinedAt: player.joinedAt
   };
 }
@@ -124,6 +151,22 @@ function normalizeMovePayload(payload: MatchMovePayload | undefined): {
   }
 
   return { x, y, z, rotationY };
+}
+
+function normalizeSprintInputPayload(
+  payload: MatchSprintIntentPayload | undefined
+): SprintInputState | null {
+  const isShiftPressed = normalizeBooleanValue(payload?.isShiftPressed);
+  const isForwardPressed = normalizeBooleanValue(payload?.isForwardPressed);
+
+  if (isShiftPressed === null || isForwardPressed === null) {
+    return null;
+  }
+
+  return {
+    isShiftPressed,
+    isForwardPressed
+  };
 }
 
 function resolveHorizontalPlayerCollision(options: {
@@ -187,6 +230,9 @@ function resolveHorizontalPlayerCollision(options: {
 
 export class GlobalMatchRoom extends Room {
   private readonly spawnService = new SpawnService();
+  private readonly sprintInputsBySessionId = new Map<string, SprintInputState>();
+  private readonly movementStateBySessionId = new Map<string, PlayerMovementState>();
+  private lastSprintTickAt = Date.now();
   private stateDirty = false;
 
   private get matchState(): GlobalMatchState {
@@ -214,6 +260,7 @@ export class GlobalMatchRoom extends Room {
     this.autoDispose = false;
     this.setState({ players: {} });
     this.stateDirty = true;
+    this.lastSprintTickAt = Date.now();
     void this.syncLobbyMetadata();
 
     this.onMessage(MATCH_SNAPSHOT_REQUEST_EVENT, (client) => {
@@ -222,6 +269,10 @@ export class GlobalMatchRoom extends Room {
 
     this.onMessage(MATCH_PLAYER_MOVE_EVENT, (client, payload: MatchMovePayload) => {
       this.handlePlayerMove(client, payload);
+    });
+
+    this.onMessage(MATCH_PLAYER_SPRINT_INTENT_EVENT, (client, payload: MatchSprintIntentPayload) => {
+      this.handleSprintIntent(client, payload);
     });
 
     this.onMessage(MATCH_ULTIMATE_ACTIVATE_EVENT, (client, _payload: MatchUltimateActivatePayload) => {
@@ -236,6 +287,10 @@ export class GlobalMatchRoom extends Room {
       this.broadcast(MATCH_SNAPSHOT_EVENT, cloneState(this.matchState));
       this.stateDirty = false;
     }, MATCH_STATE_SYNC_INTERVAL_MS);
+
+    this.clock.setInterval(() => {
+      this.tickSprintStamina();
+    }, MATCH_SPRINT_TICK_INTERVAL_MS);
 
     this.clock.setInterval(() => {
       this.tickUltimateChargeForTesting();
@@ -277,12 +332,23 @@ export class GlobalMatchRoom extends Room {
       ultimateCharge: 0,
       ultimateMax: 0,
       isUltimateReady: false,
+      maxStamina: 0,
+      currentStamina: 0,
+      isSprinting: false,
+      sprintBlocked: false,
+      lastSprintEndedAt: Date.now(),
       joinedAt: Date.now()
     };
     resetHealth(player, heroCombatConfig.maxHealth);
     resetUltimate(player, heroCombatConfig.ultimateMax);
+    initializeStamina(player, Date.now());
 
     this.matchState.players[client.sessionId] = player;
+    this.sprintInputsBySessionId.set(client.sessionId, {
+      isShiftPressed: false,
+      isForwardPressed: false
+    });
+    this.movementStateBySessionId.set(client.sessionId, initializePlayerMovementState(Date.now()));
     this.stateDirty = true;
     await this.syncLobbyMetadata();
 
@@ -304,6 +370,8 @@ export class GlobalMatchRoom extends Room {
     }
 
     delete this.matchState.players[client.sessionId];
+    this.sprintInputsBySessionId.delete(client.sessionId);
+    this.movementStateBySessionId.delete(client.sessionId);
     this.stateDirty = true;
     await this.syncLobbyMetadata();
 
@@ -359,6 +427,57 @@ export class GlobalMatchRoom extends Room {
     }
   }
 
+  private handleSprintIntent(client: Client, payload: MatchSprintIntentPayload): void {
+    const player = this.matchState.players[client.sessionId];
+    if (!player) {
+      return;
+    }
+
+    const normalizedInput = normalizeSprintInputPayload(payload);
+    if (!normalizedInput) {
+      return;
+    }
+
+    this.sprintInputsBySessionId.set(client.sessionId, normalizedInput);
+  }
+
+  private tickSprintStamina(): void {
+    const now = Date.now();
+    const deltaTime = Math.min(
+      MATCH_MAX_SPRINT_DELTA_SECONDS,
+      Math.max(0, (now - this.lastSprintTickAt) / 1000)
+    );
+    this.lastSprintTickAt = now;
+
+    let didChangeSprintOrStamina = false;
+
+    Object.values(this.matchState.players).forEach((player) => {
+      const sprintInput = this.sprintInputsBySessionId.get(player.sessionId) ?? {
+        isShiftPressed: false,
+        isForwardPressed: false
+      };
+      const previousCurrentStamina = player.currentStamina;
+      const previousIsSprinting = player.isSprinting;
+      const previousSprintBlocked = player.sprintBlocked;
+      const previousLastSprintEndedAt = player.lastSprintEndedAt;
+
+      updateSprintState(player, sprintInput, deltaTime, now);
+
+      if (
+        player.currentStamina !== previousCurrentStamina ||
+        player.isSprinting !== previousIsSprinting ||
+        player.sprintBlocked !== previousSprintBlocked ||
+        player.lastSprintEndedAt !== previousLastSprintEndedAt
+      ) {
+        didChangeSprintOrStamina = true;
+      }
+    });
+
+    if (didChangeSprintOrStamina) {
+      this.stateDirty = true;
+    }
+  }
+
   private handlePlayerMove(client: Client, payload: MatchMovePayload): void {
     const player = this.matchState.players[client.sessionId];
     if (!player) {
@@ -370,19 +489,33 @@ export class GlobalMatchRoom extends Room {
       return;
     }
 
-    const resolvedMove = resolveHorizontalPlayerCollision({
-      sessionId: player.sessionId,
+    const movementState =
+      this.movementStateBySessionId.get(client.sessionId) ?? initializePlayerMovementState(Date.now());
+    this.movementStateBySessionId.set(client.sessionId, movementState);
+
+    const validatedMove = applyAuthoritativeMovementValidation({
+      player,
       desiredX: normalizedMove.x,
       desiredY: normalizedMove.y,
       desiredZ: normalizedMove.z,
       rotationY: normalizedMove.rotationY,
+      movementState,
+      now: Date.now()
+    });
+
+    const resolvedMove = resolveHorizontalPlayerCollision({
+      sessionId: player.sessionId,
+      desiredX: validatedMove.x,
+      desiredY: validatedMove.y,
+      desiredZ: validatedMove.z,
+      rotationY: validatedMove.rotationY,
       players: this.matchState.players
     });
 
     player.x = resolvedMove.x;
-    player.y = normalizedMove.y;
+    player.y = validatedMove.y;
     player.z = resolvedMove.z;
-    player.rotationY = normalizedMove.rotationY;
+    player.rotationY = validatedMove.rotationY;
     this.stateDirty = true;
 
     this.broadcast(MATCH_PLAYER_MOVED_EVENT, {

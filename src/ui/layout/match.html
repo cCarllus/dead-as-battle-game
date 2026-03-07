@@ -75,7 +75,11 @@
                   <strong class="dab-match__bar-percent" data-slot="match-hud-resource-value">0%</strong>
                 </span>
               </div>
-              <small class="dab-match__ultimate-ready" data-slot="match-hud-ultimate-ready" hidden>ULTIMATE READY</small>
+              <section class="dab-match__stamina" data-slot="match-hud-stamina" aria-hidden="true">
+                <div class="dab-match__stamina-track">
+                  <span class="dab-match__stamina-fill" data-slot="match-hud-stamina-fill"></span>
+                </div>
+              </section>
             </div>
           </div>
         </section>
@@ -124,11 +128,11 @@
           <p data-slot="match-player-count">Connected players: 0</p>
         </header>
         <div class="dab-match__scoreboard-columns" aria-hidden="true">
-          <span>Player</span>
-          <span>Hero</span>
-          <span>Kills</span>
-          <span>Deaths</span>
-          <span>Ping</span>
+          <span data-slot="match-scoreboard-col-player">Player</span>
+          <span data-slot="match-scoreboard-col-hero">Hero</span>
+          <span data-slot="match-scoreboard-col-kills">Kills</span>
+          <span data-slot="match-scoreboard-col-deaths">Deaths</span>
+          <span data-slot="match-scoreboard-col-ping">Ping</span>
         </div>
         <ul class="dab-match__player-list" data-slot="match-player-list"></ul>
       </aside>

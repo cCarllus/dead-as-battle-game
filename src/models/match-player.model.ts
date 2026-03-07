@@ -16,6 +16,11 @@ export type MatchPlayerState = {
   ultimateCharge: number;
   ultimateMax: number;
   isUltimateReady: boolean;
+  maxStamina: number;
+  currentStamina: number;
+  isSprinting: boolean;
+  sprintBlocked: boolean;
+  lastSprintEndedAt: number;
   joinedAt: number;
 };
 

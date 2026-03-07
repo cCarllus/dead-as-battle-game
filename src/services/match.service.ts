@@ -16,9 +16,11 @@ const MATCH_PLAYER_JOINED_EVENT = "match:player:joined";
 const MATCH_PLAYER_LEFT_EVENT = "match:player:left";
 const MATCH_PLAYER_MOVED_EVENT = "match:player:moved";
 const MATCH_PLAYER_MOVE_EVENT = "player_move";
+const MATCH_PLAYER_SPRINT_INTENT_EVENT = "player:sprint:intent";
 const MATCH_ULTIMATE_ACTIVATE_EVENT = "ultimate:activate";
 const DEFAULT_MAX_HEALTH = 1000;
 const DEFAULT_ULTIMATE_MAX = 100;
+const DEFAULT_MAX_STAMINA = 100;
 const DEFAULT_SCORE_VALUE = 0;
 
 export type MatchIdentity = {
@@ -44,6 +46,7 @@ export type MatchService = {
   onPlayerRemoved: (callback: (sessionId: string) => void) => () => void;
   onError: (callback: (error: Error) => void) => () => void;
   sendLocalMovement: (movement: { x: number; y: number; z: number; rotationY: number }) => void;
+  sendSprintIntent: (intent: { isShiftPressed: boolean; isForwardPressed: boolean }) => void;
   sendUltimateActivate: () => void;
 };
 
@@ -70,6 +73,10 @@ function normalizeBoolean(value: unknown): boolean | null {
   }
 
   return value;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function normalizeIdentity(identity: MatchIdentity | null): MatchIdentity | null {
@@ -114,7 +121,12 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const ultimateMax = normalizeNumber(candidate.ultimateMax) ?? DEFAULT_ULTIMATE_MAX;
   const ultimateCharge = normalizeNumber(candidate.ultimateCharge) ?? 0;
   const isUltimateReady = normalizeBoolean(candidate.isUltimateReady) ?? ultimateCharge >= ultimateMax;
+  const maxStamina = normalizeNumber(candidate.maxStamina) ?? DEFAULT_MAX_STAMINA;
+  const currentStamina = normalizeNumber(candidate.currentStamina) ?? maxStamina;
+  const isSprinting = normalizeBoolean(candidate.isSprinting) ?? false;
+  const sprintBlocked = normalizeBoolean(candidate.sprintBlocked) ?? currentStamina <= 0;
   const joinedAt = typeof candidate.joinedAt === "number" ? candidate.joinedAt : Date.now();
+  const lastSprintEndedAt = normalizeNumber(candidate.lastSprintEndedAt) ?? joinedAt;
 
   if (!sessionId || !userId || !nickname || !heroId || x === null || y === null || z === null || rotationY === null) {
     return null;
@@ -126,6 +138,12 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const safeUltimateCharge = Math.max(0, Math.min(Math.floor(ultimateCharge), safeUltimateMax));
   const safeKills = Math.max(0, Math.floor(kills));
   const safeDeaths = Math.max(0, Math.floor(deaths));
+  const safeMaxStamina = Math.max(1, maxStamina);
+  const safeCurrentStamina = clamp(currentStamina, 0, safeMaxStamina);
+  const safeIsAlive = safeCurrentHealth > 0 ? isAlive : false;
+  const safeSprintBlocked = sprintBlocked || safeCurrentStamina <= 0;
+  const safeIsSprinting =
+    safeIsAlive && !safeSprintBlocked && safeCurrentStamina > 0 ? isSprinting : false;
 
   return {
     sessionId,
@@ -140,10 +158,15 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
     deaths: safeDeaths,
     maxHealth: safeMaxHealth,
     currentHealth: safeCurrentHealth,
-    isAlive: safeCurrentHealth > 0 ? isAlive : false,
+    isAlive: safeIsAlive,
     ultimateCharge: safeUltimateCharge,
     ultimateMax: safeUltimateMax,
     isUltimateReady: safeUltimateCharge >= safeUltimateMax ? true : isUltimateReady,
+    maxStamina: safeMaxStamina,
+    currentStamina: safeCurrentStamina,
+    isSprinting: safeIsSprinting,
+    sprintBlocked: safeSprintBlocked,
+    lastSprintEndedAt,
     joinedAt
   };
 }
@@ -218,6 +241,11 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     ultimateCharge: player.ultimateCharge,
     ultimateMax: player.ultimateMax,
     isUltimateReady: player.isUltimateReady,
+    maxStamina: player.maxStamina,
+    currentStamina: player.currentStamina,
+    isSprinting: player.isSprinting,
+    sprintBlocked: player.sprintBlocked,
+    lastSprintEndedAt: player.lastSprintEndedAt,
     joinedAt: player.joinedAt
   };
 }
@@ -310,7 +338,12 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         existingPlayer.isAlive !== incomingPlayer.isAlive ||
         existingPlayer.ultimateCharge !== incomingPlayer.ultimateCharge ||
         existingPlayer.ultimateMax !== incomingPlayer.ultimateMax ||
-        existingPlayer.isUltimateReady !== incomingPlayer.isUltimateReady;
+        existingPlayer.isUltimateReady !== incomingPlayer.isUltimateReady ||
+        existingPlayer.maxStamina !== incomingPlayer.maxStamina ||
+        existingPlayer.currentStamina !== incomingPlayer.currentStamina ||
+        existingPlayer.isSprinting !== incomingPlayer.isSprinting ||
+        existingPlayer.sprintBlocked !== incomingPlayer.sprintBlocked ||
+        existingPlayer.lastSprintEndedAt !== incomingPlayer.lastSprintEndedAt;
 
       if (changed) {
         playersBySessionId.set(sessionId, incomingPlayer);
@@ -510,6 +543,16 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         y: movement.y,
         z: movement.z,
         rotationY: movement.rotationY
+      });
+    },
+    sendSprintIntent: (intent) => {
+      if (!room) {
+        return;
+      }
+
+      room.send(MATCH_PLAYER_SPRINT_INTENT_EVENT, {
+        isShiftPressed: intent.isShiftPressed,
+        isForwardPressed: intent.isForwardPressed
       });
     },
     sendUltimateActivate: () => {

@@ -20,7 +20,8 @@ const CAMERA_MAX_BETA = 1.42;
 const CAMERA_MOUSE_SENSITIVITY = 0.0022;
 const CAMERA_TARGET_VERTICAL_OFFSET = 1.72;
 const CAMERA_TARGET_LATERAL_OFFSET = 0.92;
-const LOCAL_MOVE_SPEED = 5.4;
+const LOCAL_WALK_SPEED = 5.4;
+const LOCAL_RUN_SPEED_MULTIPLIER = 2.3;
 const LOCAL_JUMP_VELOCITY = 7.6;
 const LOCAL_FLY_VERTICAL_SPEED = 5.8;
 const LOCAL_GRAVITY = 22;
@@ -28,12 +29,14 @@ const MAX_FRAME_DELTA_SECONDS = 0.05;
 const GROUND_EPSILON = 0.0001;
 const LOCAL_MOVEMENT_SYNC_INTERVAL_MS = 50;
 const LOCAL_MOVEMENT_SYNC_THRESHOLD = 0.015;
+const LOCAL_SPRINT_INPUT_SYNC_INTERVAL_MS = 100;
 
 export type GlobalMatchSceneOptions = {
   canvas: HTMLCanvasElement;
   localSessionId: string;
   initialPlayers?: MatchPlayerState[];
   onLocalPlayerMoved?: (position: { x: number; y: number; z: number; rotationY: number }) => void;
+  onLocalSprintIntentChanged?: (intent: { isShiftPressed: boolean; isForwardPressed: boolean }) => void;
 };
 
 export type GlobalMatchSceneHandle = {
@@ -173,6 +176,8 @@ export async function createGlobalMatchScene(
   let accumulatedMouseDeltaY = 0;
   let lastMovementSyncAtMs = 0;
   let lastSyncedLocalPosition: { x: number; y: number; z: number; rotationY: number } | null = null;
+  let lastSprintInputSyncAtMs = 0;
+  let lastSentSprintIntent: { isShiftPressed: boolean; isForwardPressed: boolean } | null = null;
   let isLocalVisualHiddenForCamera = false;
 
   const setPlayers = (players: MatchPlayerState[]): void => {
@@ -290,7 +295,45 @@ export async function createGlobalMatchScene(
     lastMovementSyncAtMs = nowMs;
   };
 
+  const maybeEmitLocalSprintIntent = (intent: {
+    isShiftPressed: boolean;
+    isForwardPressed: boolean;
+  }): void => {
+    if (!options.onLocalSprintIntentChanged) {
+      return;
+    }
+
+    const nowMs = Date.now();
+    const changed =
+      !lastSentSprintIntent ||
+      lastSentSprintIntent.isShiftPressed !== intent.isShiftPressed ||
+      lastSentSprintIntent.isForwardPressed !== intent.isForwardPressed;
+
+    if (!changed && nowMs - lastSprintInputSyncAtMs < LOCAL_SPRINT_INPUT_SYNC_INTERVAL_MS) {
+      return;
+    }
+
+    options.onLocalSprintIntentChanged(intent);
+    lastSentSprintIntent = {
+      isShiftPressed: intent.isShiftPressed,
+      isForwardPressed: intent.isForwardPressed
+    };
+    lastSprintInputSyncAtMs = nowMs;
+  };
+
   const applyLocalMovement = (deltaSeconds: number): void => {
+    const inputState = movementInput.getState();
+    const localPlayerState = playerViewManager.getLocalPlayerState();
+    const canRequestSprintIntent =
+      inputEnabled &&
+      !flyModeEnabled &&
+      (localPlayerState?.isAlive ?? true);
+
+    maybeEmitLocalSprintIntent({
+      isShiftPressed: canRequestSprintIntent ? inputState.descend : false,
+      isForwardPressed: canRequestSprintIntent ? inputState.forward : false
+    });
+
     if (!inputEnabled || deltaSeconds <= 0) {
       return;
     }
@@ -300,7 +343,6 @@ export async function createGlobalMatchScene(
       return;
     }
 
-    const inputState = movementInput.getState();
     const transform = localView.getTransform();
 
     if (!hasLocalGroundReference) {
@@ -320,11 +362,15 @@ export async function createGlobalMatchScene(
       0,
       forward.z * forwardAxis + right.z * sideAxis
     );
+    const localMoveSpeed =
+      !flyModeEnabled && (localPlayerState?.isSprinting ?? false)
+        ? LOCAL_WALK_SPEED * LOCAL_RUN_SPEED_MULTIPLIER
+        : LOCAL_WALK_SPEED;
 
     if (movementDirection.lengthSquared() > 0.0001) {
       movementDirection = movementDirection.normalize();
-      transform.x += movementDirection.x * LOCAL_MOVE_SPEED * deltaSeconds;
-      transform.z += movementDirection.z * LOCAL_MOVE_SPEED * deltaSeconds;
+      transform.x += movementDirection.x * localMoveSpeed * deltaSeconds;
+      transform.z += movementDirection.z * localMoveSpeed * deltaSeconds;
     }
 
     // A frente do personagem acompanha sempre a direção da câmera/crosshair (TPS over-the-shoulder).

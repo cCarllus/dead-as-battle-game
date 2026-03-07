@@ -29,6 +29,7 @@ export type MatchScreenActions = {
 
 const FULLSCREEN_NOTICE_TIMEOUT_MS = 3000;
 const MIN_EMPTY_BAR_VISUAL_PERCENT = 0;
+const STAMINA_PULSE_DURATION_MS = 450;
 
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -228,7 +229,6 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const hudHeroName = qs<HTMLElement>(screen, '[data-slot="match-hud-hero-name"]');
   const hudHeroCard = qs<HTMLImageElement>(screen, '[data-slot="match-hud-hero-card"]');
   const hudUltimateKey = qs<HTMLElement>(screen, '[data-slot="match-hud-ultimate-key"]');
-  const hudUltimateReady = qs<HTMLElement>(screen, '[data-slot="match-hud-ultimate-ready"]');
   const hudVitals = qs<HTMLElement>(screen, ".dab-match__vitals");
   const hudSkills = qs<HTMLElement>(screen, '[data-slot="match-skills"]');
   const hudSkillPrimary = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-primary"]');
@@ -240,8 +240,15 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const hudSkillPrimaryKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-primary-key"]');
   const hudSkillSecondaryKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-secondary-key"]');
   const hudSkillUltimateKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-ultimate-key"]');
+  const hudStaminaRoot = qs<HTMLElement>(screen, '[data-slot="match-hud-stamina"]');
+  const hudStaminaFill = qs<HTMLElement>(screen, '[data-slot="match-hud-stamina-fill"]');
   const pointerLockHint = qs<HTMLElement>(screen, '[data-slot="match-pointer-lock-hint"]');
   const fullscreenNotice = qs<HTMLElement>(screen, '[data-slot="match-fullscreen-notice"]');
+  const scoreboardColPlayer = qs<HTMLElement>(screen, '[data-slot="match-scoreboard-col-player"]');
+  const scoreboardColHero = qs<HTMLElement>(screen, '[data-slot="match-scoreboard-col-hero"]');
+  const scoreboardColKills = qs<HTMLElement>(screen, '[data-slot="match-scoreboard-col-kills"]');
+  const scoreboardColDeaths = qs<HTMLElement>(screen, '[data-slot="match-scoreboard-col-deaths"]');
+  const scoreboardColPing = qs<HTMLElement>(screen, '[data-slot="match-scoreboard-col-ping"]');
 
   const pauseMenu = qs<HTMLElement>(screen, '[data-slot="match-menu"]');
   const pauseMenuTitle = qs<HTMLElement>(screen, '[data-slot="match-menu-title"]');
@@ -254,6 +261,11 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   loadingTitle.textContent = t(locale, "match.loading.title");
   matchTitle.textContent = t(locale, "match.scoreboard.title");
+  scoreboardColPlayer.textContent = t(locale, "match.scoreboard.col.player");
+  scoreboardColHero.textContent = t(locale, "match.scoreboard.col.hero");
+  scoreboardColKills.textContent = t(locale, "match.scoreboard.col.kills");
+  scoreboardColDeaths.textContent = t(locale, "match.scoreboard.col.deaths");
+  scoreboardColPing.textContent = t(locale, "match.scoreboard.col.ping");
   pointerLockHint.textContent = t(locale, "match.hud.pointerLockHint");
   fullscreenNotice.textContent = t(locale, "match.hud.fullscreenExited");
   pauseMenuTitle.textContent = t(locale, "match.menu.title");
@@ -293,6 +305,9 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     deaths: 0
   };
   let localPingLabel = "--ms";
+  let previousLocalStaminaPercent = 100;
+  let previousSprintBlocked = false;
+  let staminaPulseTimeoutId: number | null = null;
 
   const isSettingsModalOpen = (): boolean => {
     return screen.classList.contains("is-settings-open");
@@ -385,10 +400,59 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     return clampedPercent;
   };
 
+  const queueStaminaPulse = (pulseClassName: "is-depleted-pulse" | "is-recovered-pulse"): void => {
+    if (staminaPulseTimeoutId !== null) {
+      window.clearTimeout(staminaPulseTimeoutId);
+      staminaPulseTimeoutId = null;
+    }
+
+    hudStaminaRoot.classList.remove("is-depleted-pulse", "is-recovered-pulse");
+    void hudStaminaRoot.offsetWidth;
+    hudStaminaRoot.classList.add(pulseClassName);
+
+    staminaPulseTimeoutId = window.setTimeout(() => {
+      hudStaminaRoot.classList.remove("is-depleted-pulse", "is-recovered-pulse");
+      staminaPulseTimeoutId = null;
+    }, STAMINA_PULSE_DURATION_MS);
+  };
+
+  const setLocalStaminaHud = (player: MatchPlayerState | null): void => {
+    if (!player) {
+      hudStaminaRoot.classList.remove("is-visible", "is-depleted-pulse", "is-recovered-pulse");
+      hudStaminaFill.style.width = "100%";
+      hudStaminaFill.classList.remove("is-mid", "is-low");
+      previousLocalStaminaPercent = 100;
+      previousSprintBlocked = false;
+      return;
+    }
+
+    const maxStamina = Math.max(1, player.maxStamina);
+    const currentStamina = Math.max(0, Math.min(player.currentStamina, maxStamina));
+    const staminaPercent = clampPercent((currentStamina / maxStamina) * 100);
+    hudStaminaFill.style.width = `${staminaPercent}%`;
+    hudStaminaFill.classList.toggle("is-mid", staminaPercent <= 50 && staminaPercent > 25);
+    hudStaminaFill.classList.toggle("is-low", staminaPercent <= 25);
+
+    const shouldShowStaminaHud = player.isSprinting || staminaPercent < 100;
+    hudStaminaRoot.classList.toggle("is-visible", shouldShowStaminaHud);
+
+    if (previousLocalStaminaPercent > 0 && staminaPercent <= 0) {
+      queueStaminaPulse("is-depleted-pulse");
+    }
+
+    if (previousSprintBlocked && !player.sprintBlocked) {
+      queueStaminaPulse("is-recovered-pulse");
+    }
+
+    previousLocalStaminaPercent = staminaPercent;
+    previousSprintBlocked = player.sprintBlocked;
+  };
+
   const setLocalCombatHud = (player: MatchPlayerState | null): void => {
     const combatHudState = resolveCombatHudState(player);
     const healthPercent = setHudBarFill(hudHealthFill, combatHudState.healthPercent);
     const ultimatePercent = setHudBarFill(hudResourceFill, combatHudState.ultimatePercent);
+    const isUltimateReady = ultimatePercent >= 100;
 
     screen.style.setProperty("--dab-hero-skill-theme", combatHudState.skillThemeColor);
     hudSkills.style.setProperty("--dab-hero-skill-theme", combatHudState.skillThemeColor);
@@ -412,12 +476,12 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     hudHealthValue.textContent = `${combatHudState.healthCurrent} / ${combatHudState.healthMax}`;
     hudResourceValue.textContent = `${ultimatePercent}%`;
 
-    hudUltimateReady.hidden = !combatHudState.isUltimateReady;
-    hudUltimateKey.hidden = !combatHudState.isUltimateReady;
-    hudUltimateKey.classList.toggle("is-ready", combatHudState.isUltimateReady);
-    hudVitals.classList.toggle("is-ultimate-ready", combatHudState.isUltimateReady);
+    hudUltimateKey.hidden = !isUltimateReady;
+    hudUltimateKey.classList.toggle("is-ready", isUltimateReady);
+    hudVitals.classList.toggle("is-ultimate-ready", isUltimateReady);
+    setLocalStaminaHud(player);
 
-    if (combatHudState.isUltimateReady) {
+    if (isUltimateReady) {
       hudResourceValue.textContent = "100%";
       return;
     }
@@ -730,6 +794,9 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
         initialPlayers: actions.matchService.getPlayers(),
         onLocalPlayerMoved: (position) => {
           actions.matchService.sendLocalMovement(position);
+        },
+        onLocalSprintIntentChanged: (intent) => {
+          actions.matchService.sendSprintIntent(intent);
         }
       });
 
@@ -801,6 +868,11 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     if (hudRefreshIntervalId !== null) {
       window.clearInterval(hudRefreshIntervalId);
       hudRefreshIntervalId = null;
+    }
+
+    if (staminaPulseTimeoutId !== null) {
+      window.clearTimeout(staminaPulseTimeoutId);
+      staminaPulseTimeoutId = null;
     }
 
     actions.matchService.disconnect();

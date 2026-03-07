@@ -52,6 +52,11 @@ function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     ultimateCharge: player.ultimateCharge,
     ultimateMax: player.ultimateMax,
     isUltimateReady: player.isUltimateReady,
+    maxStamina: player.maxStamina,
+    currentStamina: player.currentStamina,
+    isSprinting: player.isSprinting,
+    sprintBlocked: player.sprintBlocked,
+    lastSprintEndedAt: player.lastSprintEndedAt,
     joinedAt: player.joinedAt
   };
 }

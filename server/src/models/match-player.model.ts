@@ -14,6 +14,11 @@ export type MatchPlayerState = {
   ultimateCharge: number;
   ultimateMax: number;
   isUltimateReady: boolean;
+  maxStamina: number;
+  currentStamina: number;
+  isSprinting: boolean;
+  sprintBlocked: boolean;
+  lastSprintEndedAt: number;
   joinedAt: number;
 };
 
@@ -32,6 +37,11 @@ export type MatchMovePayload = {
   y?: unknown;
   z?: unknown;
   rotationY?: unknown;
+};
+
+export type MatchSprintIntentPayload = {
+  isShiftPressed?: unknown;
+  isForwardPressed?: unknown;
 };
 
 export type MatchUltimateActivatePayload = Record<string, never>;
