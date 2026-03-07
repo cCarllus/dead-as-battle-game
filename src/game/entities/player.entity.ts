@@ -220,6 +220,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   collisionBody.parent = gameplayRoot;
   collisionBody.material = collisionMaterial;
   collisionBody.isPickable = false;
+  collisionBody.isVisible = true;
 
   const label = createPlayerLabel(options.scene, options.player.sessionId);
   label.mesh.parent = gameplayRoot;
@@ -260,6 +261,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     skinLoadVersion += 1;
     const currentLoadVersion = skinLoadVersion;
     disposeSkinHandle();
+    collisionBody.isVisible = true;
 
     if (!heroConfig.modelUrl) {
       return;
@@ -307,6 +309,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
           return;
         }
 
+        collisionBody.isVisible = false;
         skinHandle = {
           animationGroups: instantiated.animationGroups,
           dispose: () => {
