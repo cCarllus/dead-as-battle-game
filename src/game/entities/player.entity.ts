@@ -1,14 +1,19 @@
 // Responsável por construir um player desacoplado em duas camadas: gameplay autoritativo e visual.
 import {
   AbstractMesh,
+  AssetContainer,
   Color3,
   DynamicTexture,
   MeshBuilder,
+  Node,
+  Quaternion,
   Scene,
+  SceneLoader,
   StandardMaterial,
   TransformNode,
   Vector3
 } from "@babylonjs/core";
+import "@babylonjs/loaders/glTF";
 import { resolveHeroConfig, type HeroConfig } from "../config/hero-config";
 import type { MatchPlayerState } from "../../models/match-player.model";
 
@@ -16,6 +21,7 @@ const PLAYER_COLLISION_HEIGHT = 2.4;
 const PLAYER_COLLISION_RADIUS = 0.44;
 const CAMERA_TARGET_OFFSET_Y = 1.28;
 const NAMEPLATE_OFFSET_Y = PLAYER_COLLISION_HEIGHT + 0.52;
+const heroModelContainerCache = new WeakMap<Scene, Map<string, Promise<AssetContainer>>>();
 
 export type PlayerVisualStyle = {
   accentColorHex: string;
@@ -28,6 +34,67 @@ type PlayerLabelHandle = {
   setText: (text: string, textColor: string) => void;
   dispose: () => void;
 };
+
+type HeroSkinHandle = {
+  animationGroups: {
+    stop: () => void;
+  }[];
+  dispose: () => void;
+};
+
+function splitModelPath(modelUrl: string): { rootUrl: string; fileName: string } {
+  const lastSlash = modelUrl.lastIndexOf("/");
+  if (lastSlash < 0) {
+    return { rootUrl: "/", fileName: modelUrl };
+  }
+
+  return {
+    rootUrl: modelUrl.slice(0, lastSlash + 1),
+    fileName: modelUrl.slice(lastSlash + 1)
+  };
+}
+
+function resolveSceneContainerCache(scene: Scene): Map<string, Promise<AssetContainer>> {
+  const existingCache = heroModelContainerCache.get(scene);
+  if (existingCache) {
+    return existingCache;
+  }
+
+  const nextCache = new Map<string, Promise<AssetContainer>>();
+  heroModelContainerCache.set(scene, nextCache);
+  return nextCache;
+}
+
+async function loadHeroModelContainer(scene: Scene, modelUrl: string): Promise<AssetContainer> {
+  const sceneCache = resolveSceneContainerCache(scene);
+  const cachedContainerPromise = sceneCache.get(modelUrl);
+  if (cachedContainerPromise) {
+    return cachedContainerPromise;
+  }
+
+  const { rootUrl, fileName } = splitModelPath(modelUrl);
+  const nextContainerPromise = SceneLoader.LoadAssetContainerAsync(rootUrl, fileName, scene).catch((error) => {
+    sceneCache.delete(modelUrl);
+    throw error;
+  });
+
+  sceneCache.set(modelUrl, nextContainerPromise);
+  return nextContainerPromise;
+}
+
+function collectInstantiatedRootNodes(rootNodes: readonly Node[]): TransformNode[] {
+  const transformNodes = rootNodes.filter((node): node is TransformNode => node instanceof TransformNode);
+  const rootIds = new Set<number>(transformNodes.map((node) => node.uniqueId));
+
+  return transformNodes.filter((node) => {
+    const parentNode = node.parent as TransformNode | null;
+    if (!parentNode) {
+      return true;
+    }
+
+    return !rootIds.has(parentNode.uniqueId);
+  });
+}
 
 function createPlayerLabel(scene: Scene, sessionId: string): PlayerLabelHandle {
   const texture = new DynamicTexture(
@@ -93,6 +160,15 @@ function applyHeroVisualConfig(visualRoot: TransformNode, heroConfig: HeroConfig
   visualRoot.scaling.set(safeScale, safeScale, safeScale);
 }
 
+function resetSkinRootTransform(rootNode: TransformNode): void {
+  rootNode.position.setAll(0);
+  rootNode.rotation.setAll(0);
+  if (rootNode.rotationQuaternion) {
+    rootNode.rotationQuaternion = Quaternion.Identity();
+  }
+  rootNode.scaling.setAll(1);
+}
+
 export type MatchPlayerEntity = {
   sessionId: string;
   gameplayRoot: TransformNode;
@@ -149,12 +225,26 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   label.mesh.parent = gameplayRoot;
 
   let isDisposed = false;
+  let skinLoadVersion = 0;
+  let skinHandle: HeroSkinHandle | null = null;
   let style: PlayerVisualStyle = {
     accentColorHex: options.accentColorHex,
     labelColorHex: options.labelColorHex,
     labelPrefix: options.labelPrefix
   };
   let nickname = options.player.nickname;
+
+  const disposeSkinHandle = (): void => {
+    if (!skinHandle) {
+      return;
+    }
+
+    skinHandle.animationGroups.forEach((group) => {
+      group.stop();
+    });
+    skinHandle.dispose();
+    skinHandle = null;
+  };
 
   const applyDisplay = (): void => {
     const accentColor = Color3.FromHexString(style.accentColorHex);
@@ -165,8 +255,72 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     label.setText(`${style.labelPrefix ?? ""}${nickname}`, style.labelColorHex);
   };
 
+  const applyHeroSkin = (heroConfig: HeroConfig): void => {
+    applyHeroVisualConfig(visualRoot, heroConfig);
+    skinLoadVersion += 1;
+    const currentLoadVersion = skinLoadVersion;
+    disposeSkinHandle();
+
+    if (!heroConfig.modelUrl) {
+      return;
+    }
+
+    void loadHeroModelContainer(options.scene, heroConfig.modelUrl)
+      .then((container) => {
+        if (isDisposed || currentLoadVersion !== skinLoadVersion) {
+          return;
+        }
+
+        const instantiated = container.instantiateModelsToScene(
+          (sourceName) => `${sourceName}_${options.player.sessionId}_${currentLoadVersion}`,
+          true,
+          { doNotInstantiate: true }
+        );
+
+        instantiated.animationGroups.forEach((group) => {
+          group.stop();
+          group.reset();
+        });
+
+        const skinRootNodes = collectInstantiatedRootNodes(instantiated.rootNodes);
+        if (skinRootNodes.length === 0) {
+          instantiated.dispose();
+          return;
+        }
+
+        skinRootNodes.forEach((rootNode) => {
+          rootNode.setParent(visualRoot);
+          resetSkinRootTransform(rootNode);
+
+          options.scene.stopAnimation(rootNode);
+          rootNode.getDescendants(false).forEach((descendant) => {
+            options.scene.stopAnimation(descendant);
+          });
+
+          rootNode.getChildMeshes(false).forEach((mesh) => {
+            mesh.isPickable = false;
+          });
+        });
+
+        if (isDisposed || currentLoadVersion !== skinLoadVersion) {
+          instantiated.dispose();
+          return;
+        }
+
+        skinHandle = {
+          animationGroups: instantiated.animationGroups,
+          dispose: () => {
+            instantiated.dispose();
+          }
+        };
+      })
+      .catch(() => {
+        // Em caso de falha do asset, mantém apenas collisionBody e nameplate.
+      });
+  };
+
   applyDisplay();
-  applyHeroVisualConfig(visualRoot, resolveHeroConfig(options.player.heroId));
+  applyHeroSkin(resolveHeroConfig(options.player.heroId));
 
   gameplayRoot.position.set(options.player.x, options.player.y, options.player.z);
   gameplayRoot.rotation.y = options.player.rotationY;
@@ -209,7 +363,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       applyDisplay();
     },
     applyHeroConfig: (heroId) => {
-      applyHeroVisualConfig(visualRoot, resolveHeroConfig(heroId));
+      applyHeroSkin(resolveHeroConfig(heroId));
     },
     dispose: () => {
       if (isDisposed) {
@@ -217,6 +371,8 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       }
 
       isDisposed = true;
+      skinLoadVersion += 1;
+      disposeSkinHandle();
       gameplayRoot.dispose(false, true);
     }
   };
