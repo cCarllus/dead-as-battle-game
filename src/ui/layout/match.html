@@ -9,13 +9,7 @@
     </section>
 
     <section class="dab-match__hud-layer" aria-hidden="true">
-      <header class="dab-match__hud-top">
-        <aside class="dab-match__presence-card">
-          <h2 data-slot="match-title">Global Match</h2>
-          <p data-slot="match-player-count">Jogadores conectados: 0</p>
-          <ul class="dab-match__player-list" data-slot="match-player-list"></ul>
-        </aside>
-
+      <div class="dab-match__hud-zone dab-match__hud-zone--top-center">
         <section class="dab-match__stats-pill">
           <div class="dab-match__stat-item">
             <span class="dab-match__stat-label">Tempo</span>
@@ -32,17 +26,16 @@
             <strong class="dab-match__stat-value is-deaths" data-slot="match-hud-deaths">0</strong>
           </div>
         </section>
+      </div>
 
-      </header>
-
-      <div class="dab-match__hud-center">
+      <div class="dab-match__hud-zone dab-match__hud-zone--center">
         <div class="dab-match__crosshair" data-slot="match-crosshair" aria-hidden="true">
           <span class="dab-match__crosshair-line is-horizontal"></span>
           <span class="dab-match__crosshair-line is-vertical"></span>
         </div>
       </div>
 
-      <footer class="dab-match__hud-bottom">
+      <div class="dab-match__hud-zone dab-match__hud-zone--bottom-left">
         <section class="dab-match__vitals">
           <div class="dab-match__vitals-cluster" aria-hidden="true">
             <div class="dab-match__vitals-core">
@@ -86,7 +79,9 @@
             </div>
           </div>
         </section>
+      </div>
 
+      <div class="dab-match__hud-zone dab-match__hud-zone--bottom-right">
         <section class="dab-match__skills" data-slot="match-skills">
           <div class="dab-match__skill" data-slot="match-skill-slot-primary" title="Primary skill">
             <span class="dab-match__skill-icon" data-slot="match-skill-slot-primary-icon">ST</span>
@@ -112,14 +107,31 @@
             <small class="dab-match__skill-key">F</small>
           </button>
         </section>
-      </footer>
+      </div>
 
-      <small class="dab-match__pointer-hint" data-slot="match-pointer-lock-hint">
-        Clique no jogo para capturar o mouse
-      </small>
-      <small class="dab-match__fullscreen-notice" data-slot="match-fullscreen-notice" hidden>
-        Fullscreen exited. Press the fullscreen button again if desired.
-      </small>
+      <div class="dab-match__hud-zone dab-match__hud-zone--bottom-center">
+        <small class="dab-match__pointer-hint" data-slot="match-pointer-lock-hint">
+          Clique no jogo para capturar o mouse
+        </small>
+        <small class="dab-match__fullscreen-notice" data-slot="match-fullscreen-notice" hidden>
+          Fullscreen exited. Press the fullscreen button again if desired.
+        </small>
+      </div>
+
+      <aside class="dab-match__scoreboard-modal" data-slot="match-scoreboard" aria-hidden="true">
+        <header class="dab-match__scoreboard-header">
+          <h2 data-slot="match-title">Match Scoreboard</h2>
+          <p data-slot="match-player-count">Connected players: 0</p>
+        </header>
+        <div class="dab-match__scoreboard-columns" aria-hidden="true">
+          <span>Player</span>
+          <span>Hero</span>
+          <span>Kills</span>
+          <span>Deaths</span>
+          <span>Ping</span>
+        </div>
+        <ul class="dab-match__player-list" data-slot="match-player-list"></ul>
+      </aside>
     </section>
 
     <div class="dab-match-menu" data-slot="match-menu" aria-hidden="true" hidden>

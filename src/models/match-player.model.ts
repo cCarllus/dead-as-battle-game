@@ -8,6 +8,8 @@ export type MatchPlayerState = {
   y: number;
   z: number;
   rotationY: number;
+  kills: number;
+  deaths: number;
   maxHealth: number;
   currentHealth: number;
   isAlive: boolean;

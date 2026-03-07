@@ -44,6 +44,8 @@ function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     y: player.y,
     z: player.z,
     rotationY: player.rotationY,
+    kills: player.kills,
+    deaths: player.deaths,
     maxHealth: player.maxHealth,
     currentHealth: player.currentHealth,
     isAlive: player.isAlive,

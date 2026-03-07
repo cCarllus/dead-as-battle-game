@@ -43,23 +43,88 @@ function resolveTeamMemberUserIds(teamService: TeamService): Set<string> {
   return new Set(currentTeam.members.map((member) => member.userId));
 }
 
+type ScoreboardKda = {
+  kills: number;
+  deaths: number;
+};
+
+function normalizeCounter(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor(value));
+}
+
+function normalizeHeroLabel(heroId: string): string {
+  const normalized = heroId.trim();
+  if (!normalized) {
+    return "DEFAULT";
+  }
+
+  return normalized.replace(/_/g, " ").toUpperCase();
+}
+
+function resolvePingLabel(): string {
+  const navigatorWithConnection = navigator as Navigator & {
+    connection?: {
+      rtt?: number;
+    };
+  };
+  const pingValue = navigatorWithConnection.connection?.rtt;
+  if (typeof pingValue === "number" && Number.isFinite(pingValue) && pingValue > 0) {
+    return `${Math.round(pingValue)}ms`;
+  }
+
+  return "--ms";
+}
+
+function resolvePlayerKda(player: MatchPlayerState, isLocalPlayer: boolean, localKda: ScoreboardKda): ScoreboardKda {
+  if (isLocalPlayer) {
+    return localKda;
+  }
+
+  return {
+    kills: normalizeCounter(player.kills),
+    deaths: normalizeCounter(player.deaths)
+  };
+}
+
 function renderPlayerList(
   listNode: HTMLElement,
   players: MatchPlayerState[],
   localSessionId: string | null,
-  teamMemberUserIds: ReadonlySet<string>,
+  localKda: ScoreboardKda,
+  localPingLabel: string,
   locale: Locale
 ): void {
   listNode.replaceChildren();
 
   if (players.length === 0) {
     const emptyItem = document.createElement("li");
-    emptyItem.textContent = "-";
+    emptyItem.className = "dab-match__scoreboard-empty";
+    emptyItem.textContent = t(locale, "match.scoreboard.empty");
     listNode.appendChild(emptyItem);
     return;
   }
 
   const sortedPlayers = [...players].sort((left, right) => {
+    const leftIsLocal = localSessionId !== null && left.sessionId === localSessionId;
+    const rightIsLocal = localSessionId !== null && right.sessionId === localSessionId;
+    if (leftIsLocal !== rightIsLocal) {
+      return leftIsLocal ? -1 : 1;
+    }
+
+    const leftKda = resolvePlayerKda(left, leftIsLocal, localKda);
+    const rightKda = resolvePlayerKda(right, rightIsLocal, localKda);
+    if (leftKda.kills !== rightKda.kills) {
+      return rightKda.kills - leftKda.kills;
+    }
+
+    if (leftKda.deaths !== rightKda.deaths) {
+      return leftKda.deaths - rightKda.deaths;
+    }
+
     if (left.joinedAt !== right.joinedAt) {
       return left.joinedAt - right.joinedAt;
     }
@@ -69,45 +134,51 @@ function renderPlayerList(
 
   sortedPlayers.forEach((player) => {
     const isLocalPlayer = localSessionId !== null && player.sessionId === localSessionId;
-    const isTeammate = !isLocalPlayer && teamMemberUserIds.has(player.userId);
+    const kda = resolvePlayerKda(player, isLocalPlayer, localKda);
+    const pingLabel = isLocalPlayer ? localPingLabel : "--ms";
 
-    const item = document.createElement("li");
-    item.className = "dab-match__player-item";
-
+    const row = document.createElement("li");
+    row.className = "dab-match__scoreboard-row";
     if (isLocalPlayer) {
-      item.classList.add("is-local");
+      row.classList.add("is-local");
     }
 
-    if (isTeammate) {
-      item.classList.add("is-teammate");
+    const playerCell = document.createElement("span");
+    playerCell.className = "dab-match__scoreboard-cell is-player";
+    playerCell.textContent = player.nickname;
+    if (isLocalPlayer) {
+      const localBadge = document.createElement("small");
+      localBadge.className = "dab-match__score-badge is-local";
+      localBadge.textContent = t(locale, "match.hud.you");
+      playerCell.appendChild(localBadge);
     }
 
-    const playerName = document.createElement("span");
-    playerName.className = "dab-match__player-name";
-    playerName.textContent = player.nickname;
-    item.appendChild(playerName);
+    const heroCell = document.createElement("span");
+    heroCell.className = "dab-match__scoreboard-cell is-hero";
+    heroCell.textContent = normalizeHeroLabel(player.heroId);
 
-    if (isTeammate) {
-      const teammateIcon = document.createElement("span");
-      teammateIcon.className = "dab-match__player-icon";
-      teammateIcon.setAttribute("aria-hidden", "true");
-      teammateIcon.textContent = "●";
-      item.insertBefore(teammateIcon, playerName);
+    const killsCell = document.createElement("span");
+    killsCell.className = "dab-match__scoreboard-cell is-kills";
+    killsCell.textContent = String(kda.kills);
 
-      const teammateBadge = document.createElement("small");
-      teammateBadge.className = "dab-match__player-badge";
-      teammateBadge.textContent = t(locale, "match.hud.ally");
-      item.appendChild(teammateBadge);
-    }
+    const deathsCell = document.createElement("span");
+    deathsCell.className = "dab-match__scoreboard-cell is-deaths";
+    deathsCell.textContent = String(kda.deaths);
 
-    listNode.appendChild(item);
+    const pingCell = document.createElement("span");
+    pingCell.className = "dab-match__scoreboard-cell is-ping";
+    pingCell.textContent = pingLabel;
+
+    row.append(playerCell, heroCell, killsCell, deathsCell, pingCell);
+    listNode.appendChild(row);
   });
 }
 
 function buildPresenceSignature(
   players: MatchPlayerState[],
   localSessionId: string | null,
-  teamMemberUserIds: ReadonlySet<string>
+  localKda: ScoreboardKda,
+  localPingLabel: string
 ): string {
   const sortedPlayers = [...players].sort((left, right) => {
     if (left.joinedAt !== right.joinedAt) {
@@ -120,8 +191,9 @@ function buildPresenceSignature(
   return sortedPlayers
     .map((player) => {
       const isLocalPlayer = localSessionId !== null && player.sessionId === localSessionId;
-      const isTeammate = !isLocalPlayer && teamMemberUserIds.has(player.userId);
-      return `${player.sessionId}:${player.nickname}:${player.joinedAt}:${isLocalPlayer ? "1" : "0"}:${isTeammate ? "1" : "0"}`;
+      const kda = resolvePlayerKda(player, isLocalPlayer, localKda);
+      const ping = isLocalPlayer ? localPingLabel : "--ms";
+      return `${player.sessionId}:${player.nickname}:${player.heroId}:${player.joinedAt}:${kda.kills}:${kda.deaths}:${ping}:${isLocalPlayer ? "1" : "0"}`;
     })
     .join("|");
 }
@@ -178,9 +250,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const pauseMenuSettingsButton = qs<HTMLButtonElement>(screen, 'button[data-action="open-settings"]');
   const pauseMenuOverlayButton = qs<HTMLButtonElement>(screen, 'button[data-action="match-menu-close"]');
   const flyToggleButton = qs<HTMLButtonElement>(screen, 'button[data-action="toggle-fly"]');
+  const scoreboardCard = qs<HTMLElement>(screen, '[data-slot="match-scoreboard"]');
 
   loadingTitle.textContent = t(locale, "match.loading.title");
-  matchTitle.textContent = t(locale, "match.hud.title");
+  matchTitle.textContent = t(locale, "match.scoreboard.title");
   pointerLockHint.textContent = t(locale, "match.hud.pointerLockHint");
   fullscreenNotice.textContent = t(locale, "match.hud.fullscreenExited");
   pauseMenuTitle.textContent = t(locale, "match.menu.title");
@@ -214,6 +287,12 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   let fullscreenNoticeTimeoutId: number | null = null;
   let disposeScenePointerLockChanged: (() => void) | null = null;
   let isFlyModeEnabled = false;
+  let isScoreboardRequested = false;
+  let localKda: ScoreboardKda = {
+    kills: 0,
+    deaths: 0
+  };
+  let localPingLabel = "--ms";
 
   const isSettingsModalOpen = (): boolean => {
     return screen.classList.contains("is-settings-open");
@@ -246,6 +325,21 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     return inputState.gameplayEnabled && isMatchReady && !hasFatalError;
   };
 
+  const renderScoreboardVisibility = (): void => {
+    const isVisible =
+      isScoreboardRequested &&
+      hasGameplayInputPermission() &&
+      !isSettingsModalOpen() &&
+      !(pauseMenuSystem?.isOpen() ?? false);
+    screen.classList.toggle("is-scoreboard-visible", isVisible);
+    scoreboardCard.setAttribute("aria-hidden", String(!isVisible));
+  };
+
+  const setScoreboardRequested = (nextRequested: boolean): void => {
+    isScoreboardRequested = nextRequested;
+    renderScoreboardVisibility();
+  };
+
   const renderPointerLockHint = (): void => {
     const canReceiveInput = hasGameplayInputPermission();
     const isPointerLocked = sceneHandle?.isPointerLocked() ?? false;
@@ -261,14 +355,26 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const refreshHudFromUserProfile = (): void => {
     const user = actions.userService.getCurrentUser();
     if (!user) {
+      localKda = {
+        kills: 0,
+        deaths: 0
+      };
       hudKills.textContent = "0";
       hudDeaths.textContent = "0";
       return;
     }
 
     const selectedChampionProgress = user.champions[user.selectedChampionId];
-    hudKills.textContent = String(selectedChampionProgress?.kills ?? 0);
-    hudDeaths.textContent = String(selectedChampionProgress?.deaths ?? 0);
+    localKda = {
+      kills: normalizeCounter(selectedChampionProgress?.kills ?? 0),
+      deaths: normalizeCounter(selectedChampionProgress?.deaths ?? 0)
+    };
+    hudKills.textContent = String(localKda.kills);
+    hudDeaths.textContent = String(localKda.deaths);
+  };
+
+  const refreshLocalPingLabel = (): void => {
+    localPingLabel = resolvePingLabel();
   };
 
   const setHudBarFill = (fillElement: HTMLElement, percent: number): number => {
@@ -307,6 +413,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     hudResourceValue.textContent = `${ultimatePercent}%`;
 
     hudUltimateReady.hidden = !combatHudState.isUltimateReady;
+    hudUltimateKey.hidden = !combatHudState.isUltimateReady;
     hudUltimateKey.classList.toggle("is-ready", combatHudState.isUltimateReady);
     hudVitals.classList.toggle("is-ultimate-ready", combatHudState.isUltimateReady);
 
@@ -353,6 +460,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     }
 
     renderPointerLockHint();
+    renderScoreboardVisibility();
   };
 
   const closePauseMenu = (resumePointerLock: boolean): void => {
@@ -366,6 +474,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     if (resumePointerLock && hasGameplayInputPermission()) {
       sceneHandle?.requestPointerLock();
     }
+
+    renderScoreboardVisibility();
   };
 
   const openPauseMenu = (): void => {
@@ -375,6 +485,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
     pauseMenuSystem?.open();
     inputModeSystem.setPauseMenuOpen(true);
+    renderScoreboardVisibility();
   };
 
   const showLoading = (message: string): void => {
@@ -390,6 +501,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   const showError = (message: string): void => {
     hasFatalError = true;
+    setScoreboardRequested(false);
     inputModeSystem.setGameplayAvailable(false);
     loadingCard.hidden = false;
     loadingCard.classList.add("is-error");
@@ -400,10 +512,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const renderMatchPresence = (players: MatchPlayerState[]): void => {
     updateLocalCombatHud(players);
 
-    const nextPresenceSignature = buildPresenceSignature(players, localSessionId, teamMemberUserIds);
+    const nextPresenceSignature = buildPresenceSignature(players, localSessionId, localKda, localPingLabel);
     if (nextPresenceSignature !== lastPresenceSignature) {
       setPlayerCount(players.length);
-      renderPlayerList(playerList, players, localSessionId, teamMemberUserIds, locale);
+      renderPlayerList(playerList, players, localSessionId, localKda, localPingLabel, locale);
       lastPresenceSignature = nextPresenceSignature;
     }
   };
@@ -487,6 +599,16 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   };
 
   const onWindowKeyDown = (event: KeyboardEvent): void => {
+    if (event.code === "Tab") {
+      if (isTypingOnInputField() || isSettingsModalOpen() || (pauseMenuSystem?.isOpen() ?? false)) {
+        return;
+      }
+
+      event.preventDefault();
+      setScoreboardRequested(true);
+      return;
+    }
+
     if (event.code === "KeyF") {
       if (event.repeat) {
         event.preventDefault();
@@ -538,6 +660,19 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     openPauseMenu();
   };
 
+  const onWindowKeyUp = (event: KeyboardEvent): void => {
+    if (event.code !== "Tab") {
+      return;
+    }
+
+    event.preventDefault();
+    setScoreboardRequested(false);
+  };
+
+  const onWindowBlur = (): void => {
+    setScoreboardRequested(false);
+  };
+
   const settingsStateObserver = new MutationObserver(() => {
     inputModeSystem.setSettingsOpen(isSettingsModalOpen());
   });
@@ -559,19 +694,23 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   });
 
   window.addEventListener("keydown", onWindowKeyDown);
+  window.addEventListener("keyup", onWindowKeyUp);
+  window.addEventListener("blur", onWindowBlur);
   settingsStateObserver.observe(screen, {
     attributes: true,
     attributeFilter: ["class"]
   });
 
   setPlayerCount(0);
-  renderPlayerList(playerList, [], localSessionId, teamMemberUserIds, locale);
+  renderPlayerList(playerList, [], localSessionId, localKda, localPingLabel, locale);
   hudTimer.textContent = formatMatchElapsedTime(elapsedSeconds);
   setLocalCombatHud(null);
   refreshHudFromUserProfile();
+  refreshLocalPingLabel();
   inputModeSystem.setSettingsOpen(isSettingsModalOpen());
   applyInputState();
   setFlyUiState(false);
+  setScoreboardRequested(false);
   hideFullscreenNotice();
 
   void (async () => {
@@ -615,6 +754,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
       hudRefreshIntervalId = window.setInterval(() => {
         refreshHudFromUserProfile();
+        refreshLocalPingLabel();
+        renderMatchPresence(actions.matchService.getPlayers());
       }, 2000);
     } catch (error) {
       const message = error instanceof Error ? error.message : t(locale, "match.error.startFailed");
@@ -625,6 +766,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   return () => {
     window.removeEventListener("keydown", onWindowKeyDown);
+    window.removeEventListener("keyup", onWindowKeyUp);
+    window.removeEventListener("blur", onWindowBlur);
     settingsStateObserver.disconnect();
     disposeInputModeChanged();
     disposeFullscreenChanged();

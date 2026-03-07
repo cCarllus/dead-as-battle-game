@@ -19,6 +19,7 @@ const MATCH_PLAYER_MOVE_EVENT = "player_move";
 const MATCH_ULTIMATE_ACTIVATE_EVENT = "ultimate:activate";
 const DEFAULT_MAX_HEALTH = 1000;
 const DEFAULT_ULTIMATE_MAX = 100;
+const DEFAULT_SCORE_VALUE = 0;
 
 export type MatchIdentity = {
   userId: string;
@@ -105,6 +106,8 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const y = normalizeNumber(candidate.y);
   const z = normalizeNumber(candidate.z);
   const rotationY = normalizeNumber(candidate.rotationY);
+  const kills = normalizeNumber(candidate.kills) ?? DEFAULT_SCORE_VALUE;
+  const deaths = normalizeNumber(candidate.deaths) ?? DEFAULT_SCORE_VALUE;
   const maxHealth = normalizeNumber(candidate.maxHealth) ?? DEFAULT_MAX_HEALTH;
   const currentHealth = normalizeNumber(candidate.currentHealth) ?? maxHealth;
   const isAlive = normalizeBoolean(candidate.isAlive) ?? currentHealth > 0;
@@ -121,6 +124,8 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const safeCurrentHealth = Math.max(0, Math.min(Math.floor(currentHealth), safeMaxHealth));
   const safeUltimateMax = Math.max(1, Math.floor(ultimateMax));
   const safeUltimateCharge = Math.max(0, Math.min(Math.floor(ultimateCharge), safeUltimateMax));
+  const safeKills = Math.max(0, Math.floor(kills));
+  const safeDeaths = Math.max(0, Math.floor(deaths));
 
   return {
     sessionId,
@@ -131,6 +136,8 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
     y,
     z,
     rotationY,
+    kills: safeKills,
+    deaths: safeDeaths,
     maxHealth: safeMaxHealth,
     currentHealth: safeCurrentHealth,
     isAlive: safeCurrentHealth > 0 ? isAlive : false,
@@ -203,6 +210,8 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     y: player.y,
     z: player.z,
     rotationY: player.rotationY,
+    kills: player.kills,
+    deaths: player.deaths,
     maxHealth: player.maxHealth,
     currentHealth: player.currentHealth,
     isAlive: player.isAlive,
@@ -292,6 +301,8 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         existingPlayer.y !== incomingPlayer.y ||
         existingPlayer.z !== incomingPlayer.z ||
         existingPlayer.rotationY !== incomingPlayer.rotationY ||
+        existingPlayer.kills !== incomingPlayer.kills ||
+        existingPlayer.deaths !== incomingPlayer.deaths ||
         existingPlayer.nickname !== incomingPlayer.nickname ||
         existingPlayer.heroId !== incomingPlayer.heroId ||
         existingPlayer.maxHealth !== incomingPlayer.maxHealth ||
