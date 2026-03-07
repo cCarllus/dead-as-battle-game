@@ -1,70 +1,17 @@
-// Responsável por criar PlayerViews com instâncias visuais totalmente independentes por sessionId.
+// Responsável por criar players com hierarquia fixa gameplayRoot/collisionBody/visualRoot/nameplate.
 import type { Scene } from "@babylonjs/core";
 import type { MatchPlayerState } from "../../models/match-player.model";
-import { createMatchPlayerEntity } from "../entities/player.entity";
+import type { PlayerVisualStyle } from "../entities/player.entity";
 import type { LocalPlayerView } from "../entities/local-player.view";
-import type { RemotePlayerView } from "../entities/remote-player.view";
+import {
+  createRemotePlayerView,
+  type PlayerViewRole,
+  type RemotePlayerView
+} from "../entities/remote-player.view";
 
-type PlayerRole = "local" | "teammate" | "enemy";
+type PlayerRole = PlayerViewRole;
 
-function createBaseView(player: MatchPlayerState, entity: ReturnType<typeof createMatchPlayerEntity>): RemotePlayerView {
-  entity.setTransform({
-    x: player.x,
-    y: player.y,
-    z: player.z,
-    rotationY: player.rotationY
-  });
-
-  const view: RemotePlayerView = {
-    sessionId: player.sessionId,
-    rootNode: entity.rootNode,
-    characterMesh: entity.characterNode,
-    nameplateMesh: entity.nameplateNode,
-    lastKnownPosition: {
-      x: player.x,
-      y: player.y,
-      z: player.z
-    },
-    lastKnownRotationY: player.rotationY,
-    updateFromState: (nextPlayer) => {
-      entity.setTransform({
-        x: nextPlayer.x,
-        y: nextPlayer.y,
-        z: nextPlayer.z,
-        rotationY: nextPlayer.rotationY
-      });
-
-      view.lastKnownPosition = {
-        x: nextPlayer.x,
-        y: nextPlayer.y,
-        z: nextPlayer.z
-      };
-      view.lastKnownRotationY = nextPlayer.rotationY;
-    },
-    getTransform: () => {
-      return entity.getTransform();
-    },
-    getCameraTarget: () => {
-      const target = entity.getCameraTarget();
-      return {
-        x: target.x,
-        y: target.y,
-        z: target.z
-      };
-    },
-    dispose: () => {
-      entity.dispose();
-    }
-  };
-
-  return view;
-}
-
-function resolveVisualStyle(role: PlayerRole): {
-  accentColorHex: string;
-  labelColorHex: string;
-  labelPrefix?: string;
-} {
+function resolveVisualStyle(role: PlayerRole): PlayerVisualStyle {
   if (role === "local") {
     return {
       accentColorHex: "#facc15",
@@ -87,32 +34,28 @@ function resolveVisualStyle(role: PlayerRole): {
 }
 
 export type PlayerFactory = {
+  createPlayer: (player: MatchPlayerState, role: PlayerRole) => RemotePlayerView;
   createLocalPlayerView: (player: MatchPlayerState) => LocalPlayerView;
   createRemotePlayerView: (player: MatchPlayerState, role: "teammate" | "enemy") => RemotePlayerView;
 };
 
 export function createPlayerFactory(scene: Scene): PlayerFactory {
-  const createView = (player: MatchPlayerState, role: PlayerRole): RemotePlayerView => {
-    const visualStyle = resolveVisualStyle(role);
-
-    const entity = createMatchPlayerEntity({
+  const createPlayer = (player: MatchPlayerState, role: PlayerRole): RemotePlayerView => {
+    return createRemotePlayerView({
       scene,
       player,
-      accentColorHex: visualStyle.accentColorHex,
-      labelColorHex: visualStyle.labelColorHex,
-      labelPrefix: visualStyle.labelPrefix,
-      forceFallbackOnly: true
+      role,
+      visualStyle: resolveVisualStyle(role)
     });
-
-    return createBaseView(player, entity);
   };
 
   return {
+    createPlayer,
     createLocalPlayerView: (player) => {
-      return createView(player, "local") as LocalPlayerView;
+      return createPlayer(player, "local") as LocalPlayerView;
     },
     createRemotePlayerView: (player, role) => {
-      return createView(player, role);
+      return createPlayer(player, role);
     }
   };
 }

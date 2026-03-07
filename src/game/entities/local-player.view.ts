@@ -1,4 +1,4 @@
-// Responsável por encapsular a visualização do jogador local com root transform único e consistente.
+// Responsável por expor a view local como especialização da view de player com root autoritativo de gameplay.
 import type { Scene } from "@babylonjs/core";
 import type { MatchPlayerState } from "../../models/match-player.model";
 import { createRemotePlayerView, type RemotePlayerView } from "./remote-player.view";
@@ -9,7 +9,10 @@ export function createLocalPlayerView(scene: Scene, player: MatchPlayerState): L
   return createRemotePlayerView({
     scene,
     player,
-    accentColorHex: "#facc15",
-    labelColorHex: "#fde68a"
+    role: "local",
+    visualStyle: {
+      accentColorHex: "#facc15",
+      labelColorHex: "#fde68a"
+    }
   });
 }

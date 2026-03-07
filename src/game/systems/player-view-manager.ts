@@ -1,11 +1,9 @@
-// Responsável por criar, atualizar e remover PlayerViews por sessionId com transform autoritativo único.
+// Responsável por manter PlayerViews em Map<sessionId, PlayerView> e aplicar sync de rede apenas no gameplayRoot.
 import type { Scene } from "@babylonjs/core";
 import type { MatchPlayerState } from "../../models/match-player.model";
 import type { LocalPlayerView } from "../entities/local-player.view";
-import type { RemotePlayerView } from "../entities/remote-player.view";
+import type { PlayerViewRole, RemotePlayerView } from "../entities/remote-player.view";
 import { createPlayerFactory } from "./player-factory";
-
-type RemotePlayerRole = "teammate" | "enemy";
 
 const LOCAL_SERVER_RECONCILE_DISTANCE_SQUARED = 2.25;
 const LOCAL_SERVER_RECONCILE_ROTATION_DELTA = 1.1;
@@ -21,9 +19,14 @@ function logMatchView(event: string, payload: Record<string, unknown>): void {
 
 function resolveRole(
   player: MatchPlayerState,
+  localSessionId: string,
   localUserId: string | null,
   teamMemberUserIds: ReadonlySet<string>
-): RemotePlayerRole {
+): PlayerViewRole {
+  if (player.sessionId === localSessionId) {
+    return "local";
+  }
+
   if (localUserId && teamMemberUserIds.has(player.userId)) {
     return "teammate";
   }
@@ -74,6 +77,9 @@ function squaredDistance(
 
 export type PlayerViewManager = {
   syncPlayers: (players: MatchPlayerState[]) => void;
+  addPlayer: (player: MatchPlayerState) => void;
+  updatePlayer: (player: MatchPlayerState) => void;
+  removePlayer: (sessionId: string) => void;
   setTeamMemberUserIds: (userIds: string[]) => void;
   updateLocalPlayerTransform: (transform: { x: number; y: number; z: number; rotationY: number }) => void;
   getLocalPlayerView: () => LocalPlayerView | null;
@@ -88,202 +94,235 @@ export type CreatePlayerViewManagerOptions = {
 
 export function createPlayerViewManager(options: CreatePlayerViewManagerOptions): PlayerViewManager {
   const playersBySessionId = new Map<string, MatchPlayerState>();
-  const remoteViewsBySessionId = new Map<string, RemotePlayerView>();
-  const remoteRoleBySessionId = new Map<string, RemotePlayerRole>();
+  const playerViewsBySessionId = new Map<string, RemotePlayerView>();
+  const rolesBySessionId = new Map<string, PlayerViewRole>();
   const playerFactory = createPlayerFactory(options.scene);
 
   let teamMemberUserIds = new Set<string>();
-  let localPlayerView: LocalPlayerView | null = null;
 
-  const getLocalPlayerState = (): MatchPlayerState | null => playersBySessionId.get(options.localSessionId) ?? null;
-
-  const createLocalView = (player: MatchPlayerState): void => {
-    localPlayerView?.dispose();
-    localPlayerView = playerFactory.createLocalPlayerView(player);
-
-    logMatchView("[match][view:create]", {
-      sessionId: player.sessionId,
-      role: "local",
-      nickname: player.nickname,
-      rootNodeId: localPlayerView.rootNode.uniqueId,
-      characterNodeId: localPlayerView.characterMesh.uniqueId,
-      x: player.x,
-      y: player.y,
-      z: player.z
-    });
+  const getLocalPlayerState = (): MatchPlayerState | null => {
+    return playersBySessionId.get(options.localSessionId) ?? null;
   };
 
-  const syncLocalView = (player: MatchPlayerState): void => {
-    if (!localPlayerView) {
-      createLocalView(player);
+  const getLocalPlayerView = (): LocalPlayerView | null => {
+    const localView = playerViewsBySessionId.get(options.localSessionId);
+    return (localView as LocalPlayerView | undefined) ?? null;
+  };
+
+  const removePlayerView = (sessionId: string): void => {
+    const view = playerViewsBySessionId.get(sessionId);
+    const role = rolesBySessionId.get(sessionId);
+
+    view?.dispose();
+    playerViewsBySessionId.delete(sessionId);
+    rolesBySessionId.delete(sessionId);
+
+    if (!view || !role) {
       return;
     }
 
-    const localTransform = localPlayerView.getTransform();
-    const shouldReconcileFromServer =
-      squaredDistance(localTransform, player) >= LOCAL_SERVER_RECONCILE_DISTANCE_SQUARED ||
-      Math.abs(localTransform.rotationY - player.rotationY) >= LOCAL_SERVER_RECONCILE_ROTATION_DELTA;
-
-    if (!shouldReconcileFromServer) {
-      return;
-    }
-
-    localPlayerView.updateFromState(player);
-
-    logMatchView("[match][view:update]", {
-      sessionId: player.sessionId,
-      role: "local",
-      rootNodeId: localPlayerView.rootNode.uniqueId,
-      characterNodeId: localPlayerView.characterMesh.uniqueId,
-      x: player.x,
-      y: player.y,
-      z: player.z
+    logMatchView("[match][view:remove]", {
+      sessionId,
+      role,
+      gameplayRootId: view.gameplayRoot.uniqueId,
+      collisionBodyId: view.collisionBody.uniqueId
     });
   };
 
-  const createRemoteView = (player: MatchPlayerState, role: RemotePlayerRole): void => {
-    remoteViewsBySessionId.get(player.sessionId)?.dispose();
+  const createPlayerView = (player: MatchPlayerState, localUserId: string | null): void => {
+    const role = resolveRole(
+      player,
+      options.localSessionId,
+      localUserId,
+      teamMemberUserIds
+    );
 
-    const nextView = playerFactory.createRemotePlayerView(player, role);
-    remoteViewsBySessionId.set(player.sessionId, nextView);
-    remoteRoleBySessionId.set(player.sessionId, role);
+    removePlayerView(player.sessionId);
+
+    const nextView =
+      role === "local"
+        ? playerFactory.createLocalPlayerView(player)
+        : playerFactory.createRemotePlayerView(player, role);
+
+    playerViewsBySessionId.set(player.sessionId, nextView);
+    rolesBySessionId.set(player.sessionId, role);
 
     logMatchView("[match][view:create]", {
       sessionId: player.sessionId,
       role,
       nickname: player.nickname,
-      rootNodeId: nextView.rootNode.uniqueId,
-      characterNodeId: nextView.characterMesh.uniqueId,
+      gameplayRootId: nextView.gameplayRoot.uniqueId,
+      collisionBodyId: nextView.collisionBody.uniqueId,
       x: player.x,
       y: player.y,
       z: player.z
     });
   };
 
-  const syncRemoteView = (player: MatchPlayerState, localUserId: string | null): void => {
-    const nextRole = resolveRole(player, localUserId, teamMemberUserIds);
-    const existingView = remoteViewsBySessionId.get(player.sessionId);
-    const currentRole = remoteRoleBySessionId.get(player.sessionId);
-    const shouldRecreate = !existingView || !currentRole || currentRole !== nextRole;
+  const syncPlayerViewFromServer = (player: MatchPlayerState, localUserId: string | null): void => {
+    const view = playerViewsBySessionId.get(player.sessionId);
+    const nextRole = resolveRole(
+      player,
+      options.localSessionId,
+      localUserId,
+      teamMemberUserIds
+    );
+    const currentRole = rolesBySessionId.get(player.sessionId);
 
-    if (shouldRecreate) {
-      createRemoteView(player, nextRole);
+    if (!view || !currentRole || currentRole !== nextRole) {
+      createPlayerView(player, localUserId);
       return;
     }
 
-    existingView.updateFromState(player);
+    if (player.sessionId === options.localSessionId) {
+      const localTransform = view.getTransform();
+      const shouldReconcileFromServer =
+        squaredDistance(localTransform, player) >= LOCAL_SERVER_RECONCILE_DISTANCE_SQUARED ||
+        Math.abs(localTransform.rotationY - player.rotationY) >= LOCAL_SERVER_RECONCILE_ROTATION_DELTA;
+
+      if (!shouldReconcileFromServer) {
+        return;
+      }
+    }
+
+    view.updateFromState(player);
 
     logMatchView("[match][view:update]", {
       sessionId: player.sessionId,
       role: nextRole,
-      rootNodeId: existingView.rootNode.uniqueId,
-      characterNodeId: existingView.characterMesh.uniqueId,
+      gameplayRootId: view.gameplayRoot.uniqueId,
+      collisionBodyId: view.collisionBody.uniqueId,
       x: player.x,
       y: player.y,
       z: player.z
     });
   };
 
-  const removeMissingPlayers = (activeSessionIds: Set<string>): void => {
-    Array.from(playersBySessionId.keys()).forEach((sessionId) => {
-      if (activeSessionIds.has(sessionId)) {
+  const upsertPlayerState = (player: MatchPlayerState): void => {
+    playersBySessionId.set(player.sessionId, clonePlayerState(player));
+  };
+
+  const addPlayer = (player: MatchPlayerState): void => {
+    upsertPlayerState(player);
+
+    const localUserId = getLocalPlayerState()?.userId ?? null;
+    createPlayerView(player, localUserId);
+
+    if (player.sessionId !== options.localSessionId) {
+      return;
+    }
+
+    Array.from(playersBySessionId.values()).forEach((otherPlayer) => {
+      if (otherPlayer.sessionId === options.localSessionId) {
         return;
       }
 
-      playersBySessionId.delete(sessionId);
+      syncPlayerViewFromServer(otherPlayer, player.userId);
     });
   };
 
-  const removeMissingViews = (activeSessionIds: Set<string>): void => {
-    if (localPlayerView && !activeSessionIds.has(options.localSessionId)) {
-      logMatchView("[match][view:remove]", {
-        sessionId: options.localSessionId,
-        role: "local",
-        rootNodeId: localPlayerView.rootNode.uniqueId,
-        characterNodeId: localPlayerView.characterMesh.uniqueId
-      });
+  const updatePlayer = (player: MatchPlayerState): void => {
+    const previous = playersBySessionId.get(player.sessionId);
+    upsertPlayerState(player);
 
-      localPlayerView.dispose();
-      localPlayerView = null;
+    const localUserId = getLocalPlayerState()?.userId ?? null;
+    if (!previous) {
+      createPlayerView(player, localUserId);
+      return;
     }
 
-    Array.from(remoteViewsBySessionId.keys()).forEach((sessionId) => {
-      if (activeSessionIds.has(sessionId)) {
-        return;
-      }
+    const role = resolveRole(
+      player,
+      options.localSessionId,
+      localUserId,
+      teamMemberUserIds
+    );
+    const currentRole = rolesBySessionId.get(player.sessionId);
+    const shouldSync =
+      didPlayerStateChange(previous, player) ||
+      !playerViewsBySessionId.has(player.sessionId) ||
+      currentRole !== role;
 
-      const removedRole = remoteRoleBySessionId.get(sessionId);
-      const removedView = remoteViewsBySessionId.get(sessionId);
-      removedView?.dispose();
-      remoteViewsBySessionId.delete(sessionId);
-      remoteRoleBySessionId.delete(sessionId);
+    if (!shouldSync) {
+      return;
+    }
 
-      if (!removedRole || !removedView) {
-        return;
-      }
+    syncPlayerViewFromServer(player, localUserId);
 
-      logMatchView("[match][view:remove]", {
-        sessionId,
-        role: removedRole,
-        rootNodeId: removedView.rootNode.uniqueId,
-        characterNodeId: removedView.characterMesh.uniqueId
+    if (
+      player.sessionId === options.localSessionId &&
+      previous.userId !== player.userId
+    ) {
+      Array.from(playersBySessionId.values()).forEach((otherPlayer) => {
+        if (otherPlayer.sessionId === options.localSessionId) {
+          return;
+        }
+
+        syncPlayerViewFromServer(otherPlayer, player.userId);
       });
+    }
+  };
+
+  const removePlayer = (sessionId: string): void => {
+    playersBySessionId.delete(sessionId);
+    removePlayerView(sessionId);
+  };
+
+  const syncPlayers = (players: MatchPlayerState[]): void => {
+    const activeSessionIds = new Set(players.map((player) => player.sessionId));
+    const previousStates = new Map(playersBySessionId);
+
+    Array.from(playersBySessionId.keys()).forEach((sessionId) => {
+      if (!activeSessionIds.has(sessionId)) {
+        removePlayer(sessionId);
+      }
+    });
+
+    players.forEach((player) => {
+      upsertPlayerState(player);
+    });
+
+    const localUserId = getLocalPlayerState()?.userId ?? null;
+
+    players.forEach((player) => {
+      const previous = previousStates.get(player.sessionId);
+      const hasView = playerViewsBySessionId.has(player.sessionId);
+      const role = resolveRole(
+        player,
+        options.localSessionId,
+        localUserId,
+        teamMemberUserIds
+      );
+      const roleChanged = rolesBySessionId.get(player.sessionId) !== role;
+
+      if (!previous || !hasView || roleChanged) {
+        createPlayerView(player, localUserId);
+        return;
+      }
+
+      if (didPlayerStateChange(previous, player)) {
+        syncPlayerViewFromServer(player, localUserId);
+      }
     });
   };
 
   return {
-    syncPlayers: (players) => {
-      const activeSessionIds = new Set<string>();
-      const dirtySessionIds = new Set<string>();
-
-      players.forEach((player) => {
-        activeSessionIds.add(player.sessionId);
-        const previousState = playersBySessionId.get(player.sessionId);
-        if (didPlayerStateChange(previousState, player)) {
-          dirtySessionIds.add(player.sessionId);
-        }
-
-        playersBySessionId.set(player.sessionId, clonePlayerState(player));
-      });
-
-      removeMissingPlayers(activeSessionIds);
-      removeMissingViews(activeSessionIds);
-
-      const localPlayerState = playersBySessionId.get(options.localSessionId) ?? null;
-      if (
-        localPlayerState &&
-        (!localPlayerView || dirtySessionIds.has(options.localSessionId))
-      ) {
-        syncLocalView(localPlayerState);
-      }
-
-      const localUserId = localPlayerState?.userId ?? null;
-
-      players.forEach((player) => {
-        if (player.sessionId === options.localSessionId) {
-          return;
-        }
-
-        if (!remoteViewsBySessionId.has(player.sessionId) || dirtySessionIds.has(player.sessionId)) {
-          syncRemoteView(player, localUserId);
-        }
-      });
-    },
+    syncPlayers,
+    addPlayer,
+    updatePlayer,
+    removePlayer,
     setTeamMemberUserIds: (userIds) => {
       teamMemberUserIds = new Set(userIds);
 
       const localUserId = getLocalPlayerState()?.userId ?? null;
       Array.from(playersBySessionId.values()).forEach((player) => {
-        if (player.sessionId === options.localSessionId) {
-          return;
-        }
-
-        syncRemoteView(player, localUserId);
+        syncPlayerViewFromServer(player, localUserId);
       });
     },
     updateLocalPlayerTransform: (transform) => {
       const localPlayer = playersBySessionId.get(options.localSessionId);
-      if (!localPlayerView || !localPlayer) {
+      const localPlayerView = getLocalPlayerView();
+      if (!localPlayer || !localPlayerView) {
         return;
       }
 
@@ -303,21 +342,16 @@ export function createPlayerViewManager(options: CreatePlayerViewManagerOptions)
         rotationY: transform.rotationY
       });
     },
-    getLocalPlayerView: () => {
-      return localPlayerView;
-    },
+    getLocalPlayerView,
     getLocalPlayerState,
     dispose: () => {
-      localPlayerView?.dispose();
-      localPlayerView = null;
-
-      remoteViewsBySessionId.forEach((view) => {
+      playerViewsBySessionId.forEach((view) => {
         view.dispose();
       });
 
-      remoteViewsBySessionId.clear();
+      playerViewsBySessionId.clear();
       playersBySessionId.clear();
-      remoteRoleBySessionId.clear();
+      rolesBySessionId.clear();
     }
   };
 }

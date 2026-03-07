@@ -1,14 +1,24 @@
-// Responsável por encapsular a visualização de um jogador remoto com root transform único.
+// Responsável por tipar a view de player desacoplada com gameplayRoot autoritativo e camada visual independente.
 import type { AbstractMesh, TransformNode } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { MatchPlayerState } from "../../models/match-player.model";
-import { createMatchPlayerEntity, type MatchPlayerEntity } from "./player.entity";
+import {
+  createMatchPlayerEntity,
+  type MatchPlayerEntity,
+  type PlayerVisualStyle
+} from "./player.entity";
+
+export type PlayerViewRole = "local" | "teammate" | "enemy";
 
 export type RemotePlayerView = {
   sessionId: string;
-  rootNode: TransformNode;
-  characterMesh: TransformNode;
-  nameplateMesh: AbstractMesh;
+  gameplayRoot: TransformNode;
+  collisionBody: AbstractMesh;
+  visualRoot: TransformNode;
+  nameplateNode: AbstractMesh;
+  role: PlayerViewRole;
+  nickname: string;
+  heroId: string;
   lastKnownPosition: { x: number; y: number; z: number };
   lastKnownRotationY: number;
   updateFromState: (player: MatchPlayerState) => void;
@@ -29,18 +39,17 @@ function toTransform(player: MatchPlayerState): { x: number; y: number; z: numbe
 export type CreateRemotePlayerViewOptions = {
   scene: Scene;
   player: MatchPlayerState;
-  accentColorHex: string;
-  labelColorHex: string;
-  labelPrefix?: string;
+  role: PlayerViewRole;
+  visualStyle: PlayerVisualStyle;
 };
 
 export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): RemotePlayerView {
   const entity: MatchPlayerEntity = createMatchPlayerEntity({
     scene: options.scene,
     player: options.player,
-    accentColorHex: options.accentColorHex,
-    labelColorHex: options.labelColorHex,
-    labelPrefix: options.labelPrefix
+    accentColorHex: options.visualStyle.accentColorHex,
+    labelColorHex: options.visualStyle.labelColorHex,
+    labelPrefix: options.visualStyle.labelPrefix
   });
 
   entity.setTransform(toTransform(options.player));
@@ -48,6 +57,16 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
   const updateFromState = (player: MatchPlayerState): void => {
     const transform = toTransform(player);
     entity.setTransform(transform);
+    if (view.nickname !== player.nickname) {
+      entity.setNickname(player.nickname);
+      view.nickname = player.nickname;
+    }
+
+    if (view.heroId !== player.heroId) {
+      entity.applyHeroConfig(player.heroId);
+      view.heroId = player.heroId;
+    }
+
     view.lastKnownPosition = {
       x: transform.x,
       y: transform.y,
@@ -58,9 +77,13 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
 
   const view: RemotePlayerView = {
     sessionId: options.player.sessionId,
-    rootNode: entity.rootNode,
-    characterMesh: entity.characterNode,
-    nameplateMesh: entity.nameplateNode,
+    gameplayRoot: entity.gameplayRoot,
+    collisionBody: entity.collisionBody,
+    visualRoot: entity.visualRoot,
+    nameplateNode: entity.nameplateNode,
+    role: options.role,
+    nickname: options.player.nickname,
+    heroId: options.player.heroId,
     lastKnownPosition: {
       x: options.player.x,
       y: options.player.y,

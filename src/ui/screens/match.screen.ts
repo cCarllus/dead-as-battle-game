@@ -289,12 +289,22 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       renderPlayerList(playerList, players, localSessionId, teamMemberUserIds, locale);
       lastPresenceSignature = nextPresenceSignature;
     }
-
-    sceneHandle?.setPlayers(players);
   };
 
   const disposePlayersChanged = actions.matchService.onPlayersChanged((players) => {
     renderMatchPresence(players);
+  });
+
+  const disposePlayerAdded = actions.matchService.onPlayerAdded((player) => {
+    sceneHandle?.addPlayer(player);
+  });
+
+  const disposePlayerUpdated = actions.matchService.onPlayerUpdated((player) => {
+    sceneHandle?.updatePlayer(player);
+  });
+
+  const disposePlayerRemoved = actions.matchService.onPlayerRemoved((sessionId) => {
+    sceneHandle?.removePlayer(sessionId);
   });
 
   const disposeTeamUpdated = actions.teamService.onTeamUpdated(() => {
@@ -392,6 +402,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
       const connectedPlayers = actions.matchService.getPlayers();
       sceneHandle.setTeamMemberUserIds(Array.from(teamMemberUserIds));
+      sceneHandle.setPlayers(connectedPlayers);
       renderMatchPresence(connectedPlayers);
 
       isMatchReady = true;
@@ -424,6 +435,9 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     disposePauseMenuSettingsClick();
     disposePauseMenuOverlayClick();
     disposePlayersChanged();
+    disposePlayerAdded();
+    disposePlayerUpdated();
+    disposePlayerRemoved();
     disposeTeamUpdated();
     disposeMatchError();
 

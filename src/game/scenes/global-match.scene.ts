@@ -34,6 +34,9 @@ export type GlobalMatchSceneOptions = {
 
 export type GlobalMatchSceneHandle = {
   setPlayers: (players: MatchPlayerState[]) => void;
+  addPlayer: (player: MatchPlayerState) => void;
+  updatePlayer: (player: MatchPlayerState) => void;
+  removePlayer: (sessionId: string) => void;
   setTeamMemberUserIds: (userIds: string[]) => void;
   setInputEnabled: (enabled: boolean) => void;
   requestPointerLock: () => void;
@@ -127,6 +130,36 @@ export async function createGlobalMatchScene(
     if (localState && !hasLocalGroundReference) {
       localGroundY = localState.y;
       hasLocalGroundReference = true;
+    }
+  };
+
+  const addPlayer = (player: MatchPlayerState): void => {
+    playerViewManager.addPlayer(player);
+
+    if (player.sessionId !== options.localSessionId || hasLocalGroundReference) {
+      return;
+    }
+
+    localGroundY = player.y;
+    hasLocalGroundReference = true;
+  };
+
+  const updatePlayer = (player: MatchPlayerState): void => {
+    playerViewManager.updatePlayer(player);
+
+    if (player.sessionId !== options.localSessionId || hasLocalGroundReference) {
+      return;
+    }
+
+    localGroundY = player.y;
+    hasLocalGroundReference = true;
+  };
+
+  const removePlayer = (sessionId: string): void => {
+    playerViewManager.removePlayer(sessionId);
+    if (sessionId === options.localSessionId) {
+      hasLocalGroundReference = false;
+      localVerticalVelocity = 0;
     }
   };
 
@@ -322,6 +355,9 @@ export async function createGlobalMatchScene(
 
   return {
     setPlayers,
+    addPlayer,
+    updatePlayer,
+    removePlayer,
     setTeamMemberUserIds,
     setInputEnabled,
     requestPointerLock,
