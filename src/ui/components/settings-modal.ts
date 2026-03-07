@@ -1,6 +1,7 @@
 // Responsável por controlar interação, persistência e acessibilidade do modal de configurações da Home.
 import type { Locale } from "../../i18n";
 import { resolveLocale, t } from "../../i18n";
+import { applyFullscreenPreference, isFullscreenSupported } from "../../game/systems/fullscreen.system";
 import type { GameSettings, SettingsService } from "../../services/settings.service";
 import { DEFAULT_GAME_SETTINGS } from "../../services/settings.service";
 import { bind, qs } from "./dom";
@@ -52,14 +53,6 @@ function updateSliderFill(input: HTMLInputElement): void {
   input.style.setProperty("--slider-fill", `${percentage}%`);
 }
 
-function isFullscreenSupported(): boolean {
-  return (
-    typeof document.fullscreenEnabled === "boolean" &&
-    document.fullscreenEnabled &&
-    typeof document.documentElement.requestFullscreen === "function"
-  );
-}
-
 function clearStorageByPrefixes(storage: Storage, prefixes: readonly string[]): void {
   for (let index = storage.length - 1; index >= 0; index -= 1) {
     const key = storage.key(index);
@@ -69,29 +62,6 @@ function clearStorageByPrefixes(storage: Storage, prefixes: readonly string[]): 
 
     if (prefixes.some((prefix) => key.startsWith(prefix))) {
       storage.removeItem(key);
-    }
-  }
-}
-
-async function applyFullscreenPreference(fullscreen: boolean): Promise<void> {
-  if (!isFullscreenSupported()) {
-    return;
-  }
-
-  if (fullscreen && !document.fullscreenElement) {
-    try {
-      await document.documentElement.requestFullscreen();
-    } catch {
-      // Alguns navegadores podem bloquear o fullscreen sem gesto válido do usuário.
-    }
-    return;
-  }
-
-  if (!fullscreen && document.fullscreenElement) {
-    try {
-      await document.exitFullscreen();
-    } catch {
-      // Ignora falhas de saída de fullscreen para não interromper o fluxo do modal.
     }
   }
 }

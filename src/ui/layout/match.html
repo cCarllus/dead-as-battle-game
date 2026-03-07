@@ -57,7 +57,13 @@
         <section class="dab-match__vitals">
           <div class="dab-match__vitals-cluster" aria-hidden="true">
             <div class="dab-match__vitals-core">
-              <span class="dab-match__vitals-core-icon">X</span>
+              <img
+                class="dab-match__vitals-core-portrait"
+                data-slot="match-hud-hero-card"
+                alt="Hero card portrait"
+                loading="eager"
+                decoding="async"
+              />
             </div>
             <div class="dab-match__vitals-gem is-left">
               <span class="dab-match__vitals-gem-icon">W</span>
@@ -73,12 +79,21 @@
 
           <div class="dab-match__vitals-bars-wrap">
             <div class="dab-match__vitals-bars">
+              <div class="dab-match__status-header">
+                <strong class="dab-match__hero-name" data-slot="match-hud-hero-name">HERO</strong>
+                <span class="dab-match__ultimate-key" data-slot="match-hud-ultimate-key">[G] ULTIMATE</span>
+              </div>
               <div class="dab-match__bar is-health">
-                <span class="dab-match__bar-fill" data-slot="match-hud-health-fill"></span>
+                <span class="dab-match__bar-fill" data-slot="match-hud-health-fill">
+                  <strong class="dab-match__bar-percent" data-slot="match-hud-health-value">1000 / 1000</strong>
+                </span>
               </div>
               <div class="dab-match__bar is-resource">
-                <span class="dab-match__bar-fill" data-slot="match-hud-resource-fill"></span>
+                <span class="dab-match__bar-fill" data-slot="match-hud-resource-fill">
+                  <strong class="dab-match__bar-percent" data-slot="match-hud-resource-value">0%</strong>
+                </span>
               </div>
+              <small class="dab-match__ultimate-ready" data-slot="match-hud-ultimate-ready" hidden>ULTIMATE READY</small>
             </div>
           </div>
         </section>
@@ -110,6 +125,9 @@
       <small class="dab-match__pointer-hint" data-slot="match-pointer-lock-hint">
         Clique no jogo para capturar o mouse
       </small>
+      <small class="dab-match__fullscreen-notice" data-slot="match-fullscreen-notice" hidden>
+        Fullscreen exited. Press the fullscreen button again if desired.
+      </small>
     </section>
 
     <div class="dab-match-menu" data-slot="match-menu" aria-hidden="true" hidden>
@@ -119,11 +137,14 @@
         <h2 id="dab-match-menu-title" data-slot="match-menu-title">Game Menu</h2>
 
         <div class="dab-match-menu__actions">
+          <button type="button" class="dab-settings-primary" data-action="resume-match" data-slot="match-menu-resume">
+            Resume Game
+          </button>
+          <button type="button" class="dab-settings-secondary" data-action="open-settings" data-slot="match-menu-settings">
+            Settings
+          </button>
           <button type="button" class="dab-settings-danger__button" data-action="leave-match" data-slot="match-menu-exit">
             Exit Match
-          </button>
-          <button type="button" class="dab-settings-primary" data-action="open-settings" data-slot="match-menu-settings">
-            Settings
           </button>
         </div>
       </section>

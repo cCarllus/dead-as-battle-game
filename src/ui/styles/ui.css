@@ -1,5 +1,6 @@
 /* Responsável por centralizar o estilo visual de todas as telas e componentes de UI. */
 @import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&display=swap");
 
 html,
 body {
@@ -4309,11 +4310,13 @@ body {
   display: flex;
   align-items: center;
   gap: 0;
+  margin-left: clamp(24px, 3.4vw, 62px);
+  transform: translateY(-10px);
 }
 
 .dab-match__vitals-cluster {
-  width: 96px;
-  height: 96px;
+  width: 112px;
+  height: 112px;
   position: relative;
   display: flex;
   align-items: center;
@@ -4322,8 +4325,8 @@ body {
 }
 
 .dab-match__vitals-core {
-  width: 58px;
-  height: 58px;
+  width: 68px;
+  height: 68px;
   border-radius: 999px;
   border: 2px solid rgba(148, 163, 184, 0.7);
   background:
@@ -4334,10 +4337,23 @@ body {
   place-items: center;
   position: relative;
   z-index: 3;
+  overflow: hidden;
   box-shadow:
     0 10px 24px rgba(0, 0, 0, 0.64),
     0 0 20px rgba(56, 189, 248, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.dab-match__vitals-core-portrait {
+  position: absolute;
+  inset: 8px;
+  width: calc(100% - 16px);
+  height: calc(100% - 16px);
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.46);
+  object-fit: cover;
+  object-position: center top;
+  filter: saturate(1.04) contrast(1.06);
 }
 
 .dab-match__vitals-core::after {
@@ -4359,14 +4375,14 @@ body {
 
 .dab-match__vitals-core-icon {
   color: #e2e8f0;
-  font-size: 1rem;
+  font-size: 1.12rem;
   font-weight: 700;
   letter-spacing: 0.08em;
 }
 
 .dab-match__vitals-gem {
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   border: 1.5px solid rgba(125, 211, 252, 0.88);
   background:
     linear-gradient(145deg, rgba(59, 130, 246, 0.3), transparent 52%),
@@ -4425,7 +4441,7 @@ body {
 .dab-match__vitals-gem-icon {
   transform: rotate(-45deg);
   color: #cffafe;
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   position: relative;
@@ -4434,11 +4450,11 @@ body {
 
 .dab-match__vitals-connector {
   position: absolute;
-  right: 9px;
+  right: 11px;
   top: 50%;
   transform: translateY(-50%);
-  width: 12px;
-  height: 58px;
+  width: 14px;
+  height: 66px;
   border-right: 2px solid rgba(100, 116, 139, 0.54);
   border-top: 2px solid rgba(100, 116, 139, 0.54);
   border-bottom: 2px solid rgba(100, 116, 139, 0.54);
@@ -4448,13 +4464,57 @@ body {
 }
 
 .dab-match__vitals-bars-wrap {
-  margin-left: -22px;
-  transform: translateX(-10px);
+  margin-left: -26px;
+  transform: translate(-14px, -9px);
 }
 
 .dab-match__vitals-bars {
   display: grid;
-  gap: 4px;
+  gap: 6px;
+}
+
+.dab-match__status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.dab-match__hero-name {
+  color: rgba(248, 250, 252, 0.96);
+  font-family: "Orbitron", "Rajdhani", "Segoe UI", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-left: 18px;
+  text-shadow: 0 1px 10px rgba(2, 6, 23, 0.62);
+}
+
+.dab-match__ultimate-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.48);
+  background: rgba(8, 47, 73, 0.46);
+  color: rgba(186, 230, 253, 0.95);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 10px 3px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, color 160ms ease, background-color 160ms ease;
+}
+
+.dab-match__ultimate-key.is-ready {
+  border-color: rgba(254, 240, 138, 0.96);
+  background: rgba(202, 138, 4, 0.32);
+  color: rgba(254, 240, 138, 0.98);
+  box-shadow:
+    0 0 14px rgba(250, 204, 21, 0.52),
+    inset 0 0 8px rgba(250, 204, 21, 0.26);
 }
 
 .dab-match__bar {
@@ -4470,35 +4530,73 @@ body {
 }
 
 .dab-match__bar.is-health {
-  width: min(390px, 50vw);
-  height: 26px;
+  width: min(460px, 56vw);
+  height: 32px;
   clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%);
 }
 
 .dab-match__bar.is-resource {
-  width: min(260px, 38vw);
-  height: 16px;
+  width: min(320px, 44vw);
+  height: 20px;
   clip-path: polygon(0 0, 100% 0, 100% 100%, 8px 100%);
 }
 
 .dab-match__bar-fill {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
   height: 100%;
   position: relative;
+  transition: width 180ms ease;
+  min-width: 0;
 }
 
 .dab-match__bar.is-health .dab-match__bar-fill {
-  width: 85%;
+  width: 0;
   background:
     linear-gradient(90deg, rgba(16, 185, 129, 0.98), rgba(74, 222, 128, 0.98), rgba(167, 243, 208, 0.95));
   box-shadow: 0 0 18px rgba(74, 222, 128, 0.42);
 }
 
 .dab-match__bar.is-resource .dab-match__bar-fill {
-  width: 40%;
+  width: 0;
   background:
     linear-gradient(90deg, rgba(234, 88, 12, 0.98), rgba(251, 146, 60, 0.98), rgba(253, 186, 116, 0.94));
   box-shadow: 0 0 14px rgba(251, 146, 60, 0.36);
+}
+
+.dab-match__vitals.is-ultimate-ready .dab-match__bar.is-resource {
+  border-color: rgba(250, 204, 21, 0.84);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 18px rgba(250, 204, 21, 0.42);
+}
+
+.dab-match__bar-fill.is-empty {
+  min-width: 52px;
+  opacity: 0.86;
+}
+
+.dab-match__bar-percent {
+  position: relative;
+  z-index: 2;
+  margin-right: 10px;
+  color: rgba(248, 250, 252, 0.96);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 2px rgba(2, 6, 23, 0.72);
+  white-space: nowrap;
+}
+
+.dab-match__ultimate-ready {
+  margin-top: -2px;
+  color: rgba(254, 240, 138, 0.98);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(250, 204, 21, 0.58);
 }
 
 .dab-match__bar-fill::before {
@@ -4708,6 +4806,20 @@ button.dab-match__skill {
   text-transform: uppercase;
 }
 
+.dab-match__fullscreen-notice {
+  align-self: center;
+  margin-top: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(8px);
+  padding: 6px 12px;
+  color: rgba(226, 232, 240, 0.94);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
 .dab-match-menu {
   position: absolute;
   inset: 0;
@@ -4801,32 +4913,58 @@ button.dab-match__skill {
     align-items: flex-end;
   }
 
+  .dab-match__vitals {
+    margin-left: 6px;
+    transform: translateY(-6px);
+  }
+
   .dab-match__vitals-cluster {
-    width: 84px;
-    height: 84px;
+    width: 92px;
+    height: 92px;
   }
 
   .dab-match__vitals-core {
-    width: 50px;
-    height: 50px;
+    width: 56px;
+    height: 56px;
   }
 
   .dab-match__vitals-gem {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
   }
 
   .dab-match__vitals-bars-wrap {
-    margin-left: -18px;
-    transform: translateX(-6px);
+    margin-left: -20px;
+    transform: translate(-10px, -6px);
   }
 
   .dab-match__bar.is-health {
-    width: min(260px, 62vw);
+    width: min(300px, 65vw);
+    height: 28px;
   }
 
   .dab-match__bar.is-resource {
-    width: min(176px, 48vw);
+    width: min(208px, 52vw);
+    height: 18px;
+  }
+
+  .dab-match__bar-percent {
+    margin-right: 8px;
+    font-size: 0.68rem;
+  }
+
+  .dab-match__status-header {
+    margin-bottom: 0;
+  }
+
+  .dab-match__hero-name {
+    font-size: 0.74rem;
+    margin-left: 10px;
+  }
+
+  .dab-match__ultimate-key {
+    font-size: 0.56rem;
+    padding: 3px 8px 2px;
   }
 
   .dab-match__skill {

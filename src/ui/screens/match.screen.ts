@@ -5,6 +5,10 @@ import type { MatchService } from "../../services/match.service";
 import type { GameSettings, SettingsService } from "../../services/settings.service";
 import type { TeamService } from "../../services/team.service";
 import type { UserService } from "../../services/user.service";
+import { resolveCombatHudState } from "../../services/hud.service";
+import { createFullscreenSystem } from "../../game/systems/fullscreen.system";
+import { createInputModeSystem } from "../../game/systems/input-mode.system";
+import { createPauseMenuSystem } from "../../game/systems/pause-menu.system";
 import { createGlobalMatchScene, type GlobalMatchSceneHandle } from "../../game/scenes/global-match.scene";
 import { bind, qs } from "../components/dom";
 import { mountSettingsModal } from "../components/settings-modal";
@@ -30,6 +34,13 @@ type NavigatorConnectionLike = {
 type NavigatorWithConnection = Navigator & {
   connection?: NavigatorConnectionLike;
 };
+
+const FULLSCREEN_NOTICE_TIMEOUT_MS = 3000;
+const MIN_EMPTY_BAR_VISUAL_PERCENT = 0;
+
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
 
 function resolveTeamMemberUserIds(teamService: TeamService): Set<string> {
   const currentTeam = teamService.getCurrentTeam();
@@ -160,10 +171,19 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const hudPing = qs<HTMLElement>(screen, '[data-slot="match-hud-ping"]');
   const hudHealthFill = qs<HTMLElement>(screen, '[data-slot="match-hud-health-fill"]');
   const hudResourceFill = qs<HTMLElement>(screen, '[data-slot="match-hud-resource-fill"]');
+  const hudHealthValue = qs<HTMLElement>(screen, '[data-slot="match-hud-health-value"]');
+  const hudResourceValue = qs<HTMLElement>(screen, '[data-slot="match-hud-resource-value"]');
+  const hudHeroName = qs<HTMLElement>(screen, '[data-slot="match-hud-hero-name"]');
+  const hudHeroCard = qs<HTMLImageElement>(screen, '[data-slot="match-hud-hero-card"]');
+  const hudUltimateKey = qs<HTMLElement>(screen, '[data-slot="match-hud-ultimate-key"]');
+  const hudUltimateReady = qs<HTMLElement>(screen, '[data-slot="match-hud-ultimate-ready"]');
+  const hudVitals = qs<HTMLElement>(screen, ".dab-match__vitals");
   const pointerLockHint = qs<HTMLElement>(screen, '[data-slot="match-pointer-lock-hint"]');
+  const fullscreenNotice = qs<HTMLElement>(screen, '[data-slot="match-fullscreen-notice"]');
 
   const pauseMenu = qs<HTMLElement>(screen, '[data-slot="match-menu"]');
   const pauseMenuTitle = qs<HTMLElement>(screen, '[data-slot="match-menu-title"]');
+  const pauseMenuResumeButton = qs<HTMLButtonElement>(screen, 'button[data-action="resume-match"]');
   const pauseMenuExitButton = qs<HTMLButtonElement>(screen, 'button[data-action="leave-match"]');
   const pauseMenuSettingsButton = qs<HTMLButtonElement>(screen, 'button[data-action="open-settings"]');
   const pauseMenuOverlayButton = qs<HTMLButtonElement>(screen, 'button[data-action="match-menu-close"]');
@@ -171,7 +191,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   loadingTitle.textContent = t(locale, "match.loading.title");
   matchTitle.textContent = t(locale, "match.hud.title");
+  pointerLockHint.textContent = t(locale, "match.hud.pointerLockHint");
+  fullscreenNotice.textContent = t(locale, "match.hud.fullscreenExited");
   pauseMenuTitle.textContent = t(locale, "match.menu.title");
+  pauseMenuResumeButton.textContent = t(locale, "match.menu.resume");
   pauseMenuExitButton.textContent = t(locale, "match.menu.exit");
   pauseMenuSettingsButton.textContent = t(locale, "match.menu.settings");
 
@@ -183,22 +206,60 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     onApplyLocale: actions.onApplyLocale,
     onClearSession: actions.onClearSession
   });
+  const fullscreenSystem = createFullscreenSystem();
+  const inputModeSystem = createInputModeSystem();
 
   let sceneHandle: GlobalMatchSceneHandle | null = null;
-  let isPauseMenuOpen = false;
+  let pauseMenuSystem: ReturnType<typeof createPauseMenuSystem> | null = null;
   let isMatchReady = false;
   let hasFatalError = false;
   let wasPointerLocked = false;
+  let wasFullscreen = fullscreenSystem.isFullscreen();
   let localSessionId: string | null = null;
   let teamMemberUserIds = resolveTeamMemberUserIds(actions.teamService);
   let lastPresenceSignature = "";
   let elapsedSeconds = 0;
   let matchTimerIntervalId: number | null = null;
   let hudRefreshIntervalId: number | null = null;
+  let fullscreenNoticeTimeoutId: number | null = null;
+  let disposeScenePointerLockChanged: (() => void) | null = null;
   let isFlyModeEnabled = false;
 
   const isSettingsModalOpen = (): boolean => {
     return screen.classList.contains("is-settings-open");
+  };
+
+  const hideFullscreenNotice = (): void => {
+    fullscreenNotice.hidden = true;
+
+    if (fullscreenNoticeTimeoutId !== null) {
+      window.clearTimeout(fullscreenNoticeTimeoutId);
+      fullscreenNoticeTimeoutId = null;
+    }
+  };
+
+  const showFullscreenNotice = (): void => {
+    fullscreenNotice.hidden = false;
+
+    if (fullscreenNoticeTimeoutId !== null) {
+      window.clearTimeout(fullscreenNoticeTimeoutId);
+    }
+
+    fullscreenNoticeTimeoutId = window.setTimeout(() => {
+      fullscreenNotice.hidden = true;
+      fullscreenNoticeTimeoutId = null;
+    }, FULLSCREEN_NOTICE_TIMEOUT_MS);
+  };
+
+  const hasGameplayInputPermission = (): boolean => {
+    const inputState = inputModeSystem.getState();
+    return inputState.gameplayEnabled && isMatchReady && !hasFatalError;
+  };
+
+  const renderPointerLockHint = (): void => {
+    const canReceiveInput = hasGameplayInputPermission();
+    const isPointerLocked = sceneHandle?.isPointerLocked() ?? false;
+    pointerLockHint.hidden = isPointerLocked || !canReceiveInput;
   };
 
   const setPlayerCount = (playerCount: number): void => {
@@ -226,11 +287,48 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     hudPing.textContent = resolvePingLabel();
   };
 
-  const setPauseMenuVisible = (visible: boolean): void => {
-    isPauseMenuOpen = visible;
-    pauseMenu.hidden = !visible;
-    pauseMenu.setAttribute("aria-hidden", String(!visible));
-    pauseMenu.classList.toggle("is-open", visible);
+  const setHudBarFill = (fillElement: HTMLElement, percent: number): number => {
+    const clampedPercent = clampPercent(percent);
+    const visualPercent = clampedPercent <= 0 ? MIN_EMPTY_BAR_VISUAL_PERCENT : clampedPercent;
+    fillElement.style.width = `${visualPercent}%`;
+    fillElement.classList.toggle("is-empty", clampedPercent <= 0);
+    return clampedPercent;
+  };
+
+  const setLocalCombatHud = (player: MatchPlayerState | null): void => {
+    const combatHudState = resolveCombatHudState(player);
+    const healthPercent = setHudBarFill(hudHealthFill, combatHudState.healthPercent);
+    const ultimatePercent = setHudBarFill(hudResourceFill, combatHudState.ultimatePercent);
+
+    hudHeroName.textContent = combatHudState.heroLabel;
+    if (hudHeroCard.src !== combatHudState.heroCardImageUrl) {
+      hudHeroCard.src = combatHudState.heroCardImageUrl;
+    }
+    hudHealthValue.textContent = `${combatHudState.healthCurrent} / ${combatHudState.healthMax}`;
+    hudResourceValue.textContent = `${ultimatePercent}%`;
+
+    hudUltimateReady.hidden = !combatHudState.isUltimateReady;
+    hudUltimateKey.classList.toggle("is-ready", combatHudState.isUltimateReady);
+    hudVitals.classList.toggle("is-ultimate-ready", combatHudState.isUltimateReady);
+
+    if (combatHudState.isUltimateReady) {
+      hudResourceValue.textContent = "100%";
+      return;
+    }
+
+    if (healthPercent <= 0) {
+      hudHealthValue.textContent = `0 / ${combatHudState.healthMax}`;
+    }
+  };
+
+  const updateLocalCombatHud = (players: MatchPlayerState[]): void => {
+    if (!localSessionId) {
+      setLocalCombatHud(null);
+      return;
+    }
+
+    const localPlayer = players.find((player) => player.sessionId === localSessionId) ?? null;
+    setLocalCombatHud(localPlayer);
   };
 
   const setFlyUiState = (enabled: boolean): void => {
@@ -239,7 +337,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   };
 
   const toggleFlyMode = (): void => {
-    if (!sceneHandle || !isMatchReady || hasFatalError || isSettingsModalOpen() || isPauseMenuOpen) {
+    if (!sceneHandle || !isMatchReady || hasFatalError || isSettingsModalOpen() || (pauseMenuSystem?.isOpen() ?? false)) {
       return;
     }
 
@@ -247,35 +345,37 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     setFlyUiState(nextEnabled);
   };
 
-  const updateInputState = (): void => {
-    const canReceiveInput = isMatchReady && !hasFatalError && !isPauseMenuOpen && !isSettingsModalOpen();
+  const applyInputState = (): void => {
+    const canReceiveInput = hasGameplayInputPermission();
     sceneHandle?.setInputEnabled(canReceiveInput);
 
     if (!canReceiveInput) {
       sceneHandle?.exitPointerLock();
     }
 
-    const isPointerLocked = sceneHandle?.isPointerLocked() ?? false;
-    pointerLockHint.hidden = isPointerLocked || !canReceiveInput;
-    pointerLockHint.textContent = t(locale, "match.hud.pointerLockHint");
+    renderPointerLockHint();
   };
 
-  const closePauseMenu = (): void => {
-    if (!isPauseMenuOpen) {
+  const closePauseMenu = (resumePointerLock: boolean): void => {
+    if (!pauseMenuSystem?.isOpen()) {
       return;
     }
 
-    setPauseMenuVisible(false);
-    updateInputState();
+    pauseMenuSystem.close();
+    inputModeSystem.setPauseMenuOpen(false);
+
+    if (resumePointerLock && hasGameplayInputPermission()) {
+      sceneHandle?.requestPointerLock();
+    }
   };
 
   const openPauseMenu = (): void => {
-    if ((!isMatchReady && !hasFatalError) || isPauseMenuOpen || isSettingsModalOpen()) {
+    if ((!isMatchReady && !hasFatalError) || isSettingsModalOpen() || pauseMenuSystem?.isOpen()) {
       return;
     }
 
-    setPauseMenuVisible(true);
-    updateInputState();
+    pauseMenuSystem?.open();
+    inputModeSystem.setPauseMenuOpen(true);
   };
 
   const showLoading = (message: string): void => {
@@ -291,14 +391,16 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   const showError = (message: string): void => {
     hasFatalError = true;
+    inputModeSystem.setGameplayAvailable(false);
     loadingCard.hidden = false;
     loadingCard.classList.add("is-error");
     loadingText.textContent = message;
-    setPauseMenuVisible(true);
-    updateInputState();
+    openPauseMenu();
   };
 
   const renderMatchPresence = (players: MatchPlayerState[]): void => {
+    updateLocalCombatHud(players);
+
     const nextPresenceSignature = buildPresenceSignature(players, localSessionId, teamMemberUserIds);
     if (nextPresenceSignature !== lastPresenceSignature) {
       setPlayerCount(players.length);
@@ -333,22 +435,57 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     showError(error.message);
   });
 
-  const disposePauseMenuExitClick = bind(pauseMenuExitButton, "click", () => {
-    actions.onLeaveMatch();
-  });
-
-  const disposePauseMenuSettingsClick = bind(pauseMenuSettingsButton, "click", () => {
-    settingsModal.open();
-    updateInputState();
-  });
-
-  const disposePauseMenuOverlayClick = bind(pauseMenuOverlayButton, "click", () => {
-    closePauseMenu();
-  });
-
   const disposeFlyToggleClick = bind(flyToggleButton, "click", () => {
     toggleFlyMode();
   });
+
+  pauseMenuSystem = createPauseMenuSystem({
+    menu: pauseMenu,
+    overlayButton: pauseMenuOverlayButton,
+    resumeButton: pauseMenuResumeButton,
+    settingsButton: pauseMenuSettingsButton,
+    exitButton: pauseMenuExitButton,
+    onResume: () => {
+      closePauseMenu(true);
+    },
+    onOpenSettings: () => {
+      closePauseMenu(false);
+      settingsModal.open();
+      inputModeSystem.setSettingsOpen(true);
+    },
+    onExitMatch: () => {
+      actions.onLeaveMatch();
+    }
+  });
+
+  const onScenePointerLockChanged = (isPointerLocked: boolean): void => {
+    if (
+      wasPointerLocked &&
+      !isPointerLocked &&
+      (isMatchReady || hasFatalError) &&
+      !isSettingsModalOpen() &&
+      !(pauseMenuSystem?.isOpen() ?? false)
+    ) {
+      openPauseMenu();
+    }
+
+    wasPointerLocked = isPointerLocked;
+    renderPointerLockHint();
+  };
+
+  const isTypingOnInputField = (): boolean => {
+    const activeElement = document.activeElement;
+    if (!(activeElement instanceof HTMLElement)) {
+      return false;
+    }
+
+    const tagName = activeElement.tagName;
+    return (
+      tagName === "INPUT" ||
+      tagName === "TEXTAREA" ||
+      activeElement.isContentEditable
+    );
+  };
 
   const onWindowKeyDown = (event: KeyboardEvent): void => {
     if (event.code === "KeyF") {
@@ -362,6 +499,21 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       return;
     }
 
+    if (event.code === "KeyG") {
+      if (event.repeat) {
+        event.preventDefault();
+        return;
+      }
+
+      if (!hasGameplayInputPermission() || isTypingOnInputField()) {
+        return;
+      }
+
+      event.preventDefault();
+      actions.matchService.sendUltimateActivate();
+      return;
+    }
+
     if (event.key !== "Escape") {
       return;
     }
@@ -372,31 +524,42 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
     event.preventDefault();
 
-    if (isPauseMenuOpen) {
-      closePauseMenu();
+    const isPointerLocked = sceneHandle?.isPointerLocked() ?? false;
+    if (isPointerLocked) {
+      sceneHandle?.exitPointerLock();
+      openPauseMenu();
+      return;
+    }
+
+    if (pauseMenuSystem?.isOpen()) {
+      closePauseMenu(true);
       return;
     }
 
     openPauseMenu();
   };
 
-  const onPointerLockChange = (): void => {
-    const isPointerLocked = sceneHandle?.isPointerLocked() ?? false;
+  const settingsStateObserver = new MutationObserver(() => {
+    inputModeSystem.setSettingsOpen(isSettingsModalOpen());
+  });
 
-    if (wasPointerLocked && !isPointerLocked && (isMatchReady || hasFatalError) && !isPauseMenuOpen && !isSettingsModalOpen()) {
-      openPauseMenu();
+  const disposeInputModeChanged = inputModeSystem.onStateChanged(() => {
+    applyInputState();
+  });
+
+  const disposeFullscreenChanged = fullscreenSystem.onChange((isFullscreen) => {
+    const prefersFullscreen = actions.settingsService.load().fullscreen;
+
+    if (wasFullscreen && !isFullscreen && prefersFullscreen) {
+      showFullscreenNotice();
+    } else if (isFullscreen) {
+      hideFullscreenNotice();
     }
 
-    wasPointerLocked = isPointerLocked;
-    updateInputState();
-  };
-
-  const settingsStateObserver = new MutationObserver(() => {
-    updateInputState();
+    wasFullscreen = isFullscreen;
   });
 
   window.addEventListener("keydown", onWindowKeyDown);
-  document.addEventListener("pointerlockchange", onPointerLockChange);
   settingsStateObserver.observe(screen, {
     attributes: true,
     attributeFilter: ["class"]
@@ -405,12 +568,13 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   setPlayerCount(0);
   renderPlayerList(playerList, [], localSessionId, teamMemberUserIds, locale);
   hudTimer.textContent = formatMatchElapsedTime(elapsedSeconds);
-  hudHealthFill.style.width = "85%";
-  hudResourceFill.style.width = "40%";
+  setLocalCombatHud(null);
   refreshHudFromUserProfile();
   refreshPingHud();
-  updateInputState();
+  inputModeSystem.setSettingsOpen(isSettingsModalOpen());
+  applyInputState();
   setFlyUiState(false);
+  hideFullscreenNotice();
 
   void (async () => {
     showLoading(t(locale, "match.loading.connecting"));
@@ -435,13 +599,16 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       const connectedPlayers = actions.matchService.getPlayers();
       sceneHandle.setTeamMemberUserIds(Array.from(teamMemberUserIds));
       sceneHandle.setPlayers(connectedPlayers);
+      disposeScenePointerLockChanged = sceneHandle.onPointerLockChanged(onScenePointerLockChanged);
+      wasPointerLocked = sceneHandle.isPointerLocked();
       setFlyUiState(sceneHandle.isFlyModeEnabled());
       renderMatchPresence(connectedPlayers);
 
       isMatchReady = true;
       hasFatalError = false;
+      inputModeSystem.setGameplayAvailable(true);
       hideLoading();
-      updateInputState();
+      applyInputState();
 
       matchTimerIntervalId = window.setInterval(() => {
         elapsedSeconds += 1;
@@ -461,12 +628,12 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   return () => {
     window.removeEventListener("keydown", onWindowKeyDown);
-    document.removeEventListener("pointerlockchange", onPointerLockChange);
     settingsStateObserver.disconnect();
+    disposeInputModeChanged();
+    disposeFullscreenChanged();
+    disposeScenePointerLockChanged?.();
+    disposeScenePointerLockChanged = null;
 
-    disposePauseMenuExitClick();
-    disposePauseMenuSettingsClick();
-    disposePauseMenuOverlayClick();
     disposeFlyToggleClick();
     disposePlayersChanged();
     disposePlayerAdded();
@@ -475,6 +642,11 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     disposeTeamUpdated();
     disposeMatchError();
 
+    pauseMenuSystem?.dispose();
+    pauseMenuSystem = null;
+    inputModeSystem.dispose();
+    fullscreenSystem.dispose();
+    hideFullscreenNotice();
     settingsModal.dispose();
 
     sceneHandle?.dispose();

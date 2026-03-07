@@ -8,6 +8,12 @@ export type MatchPlayerState = {
   y: number;
   z: number;
   rotationY: number;
+  maxHealth: number;
+  currentHealth: number;
+  isAlive: boolean;
+  ultimateCharge: number;
+  ultimateMax: number;
+  isUltimateReady: boolean;
   joinedAt: number;
 };
 

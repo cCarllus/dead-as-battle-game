@@ -11,6 +11,7 @@ import {
 import type { MatchPlayerState } from "../../models/match-player.model";
 import { createPlayerViewManager } from "../systems/player-view-manager";
 import { createMovementInputSystem } from "../systems/movement-input.system";
+import { createPointerLockSystem } from "../systems/pointer-lock.system";
 import { GLOBAL_MATCH_MAP_URL, loadGlobalMatchMap } from "../systems/map-loader.system";
 
 const CAMERA_RADIUS = 6.9;
@@ -48,6 +49,7 @@ export type GlobalMatchSceneHandle = {
   requestPointerLock: () => void;
   exitPointerLock: () => void;
   isPointerLocked: () => boolean;
+  onPointerLockChanged: (listener: (locked: boolean) => void) => () => void;
   dispose: () => void;
 };
 
@@ -154,10 +156,15 @@ export async function createGlobalMatchScene(
     localSessionId: options.localSessionId
   });
   const movementInput = createMovementInputSystem();
-
   let inputEnabled = true;
+  const pointerLockSystem = createPointerLockSystem({
+    canvas: options.canvas,
+    canRequestLock: () => inputEnabled
+  });
+  const pointerLockChangeListeners = new Set<(locked: boolean) => void>();
+
   let flyModeEnabled = false;
-  let pointerLocked = false;
+  let pointerLocked = pointerLockSystem.isLocked();
   let localVerticalVelocity = 0;
   let localGroundY = 0;
   let hasLocalGroundReference = false;
@@ -228,27 +235,11 @@ export async function createGlobalMatchScene(
   };
 
   const requestPointerLock = (): void => {
-    if (!inputEnabled || document.pointerLockElement === options.canvas) {
-      return;
-    }
-
-    if (typeof options.canvas.requestPointerLock === "function") {
-      void options.canvas.requestPointerLock();
-    }
+    pointerLockSystem.requestLock();
   };
 
   const exitPointerLock = (): void => {
-    if (document.pointerLockElement !== options.canvas) {
-      return;
-    }
-
-    if (typeof document.exitPointerLock === "function") {
-      void document.exitPointerLock();
-    }
-  };
-
-  const onPointerLockChange = (): void => {
-    pointerLocked = document.pointerLockElement === options.canvas;
+    pointerLockSystem.releaseLock();
   };
 
   const onMouseMove = (event: MouseEvent): void => {
@@ -260,13 +251,10 @@ export async function createGlobalMatchScene(
     accumulatedMouseDeltaY += event.movementY;
   };
 
-  const onCanvasClick = (): void => {
-    requestPointerLock();
-  };
-
   const setInputEnabled = (enabled: boolean): void => {
     inputEnabled = enabled;
     movementInput.setEnabled(enabled);
+    pointerLockSystem.setEnabled(enabled);
 
     if (!enabled) {
       wasJumpPressed = false;
@@ -403,9 +391,19 @@ export async function createGlobalMatchScene(
     accumulatedMouseDeltaY = 0;
   };
 
-  document.addEventListener("pointerlockchange", onPointerLockChange);
+  const disposePointerLockChange = pointerLockSystem.onLockChange((locked) => {
+    pointerLocked = locked;
+    if (!locked) {
+      accumulatedMouseDeltaX = 0;
+      accumulatedMouseDeltaY = 0;
+    }
+
+    pointerLockChangeListeners.forEach((listener) => {
+      listener(locked);
+    });
+  });
+
   document.addEventListener("mousemove", onMouseMove);
-  options.canvas.addEventListener("click", onCanvasClick);
 
   setPlayers(options.initialPlayers ?? []);
 
@@ -452,14 +450,21 @@ export async function createGlobalMatchScene(
     requestPointerLock,
     exitPointerLock,
     isPointerLocked: () => pointerLocked,
+    onPointerLockChanged: (listener) => {
+      pointerLockChangeListeners.add(listener);
+      return () => {
+        pointerLockChangeListeners.delete(listener);
+      };
+    },
     dispose: () => {
       window.removeEventListener("resize", onWindowResize);
-      document.removeEventListener("pointerlockchange", onPointerLockChange);
       document.removeEventListener("mousemove", onMouseMove);
-      options.canvas.removeEventListener("click", onCanvasClick);
+      setInputEnabled(false);
+      disposePointerLockChange();
+      pointerLockChangeListeners.clear();
+      pointerLockSystem.dispose();
 
       movementInput.dispose();
-      setInputEnabled(false);
       playerViewManager.dispose();
 
       mapHandle.dispose();

@@ -4,9 +4,17 @@ import type {
   GlobalMatchState,
   MatchJoinOptions,
   MatchMovePayload,
-  MatchPlayerState
+  MatchPlayerState,
+  MatchUltimateActivatePayload
 } from "../models/match-player.model.js";
+import { resetHealth } from "../services/health.service.js";
 import { SpawnService } from "../services/spawn.service.js";
+import {
+  addUltimateCharge,
+  consumeUltimate,
+  resetUltimate,
+  syncUltimateReady
+} from "../services/ultimate.service.js";
 
 const DEFAULT_HERO_ID = "user";
 const MAX_NICKNAME_LENGTH = 24;
@@ -16,7 +24,10 @@ const MATCH_PLAYER_JOINED_EVENT = "match:player:joined";
 const MATCH_PLAYER_LEFT_EVENT = "match:player:left";
 const MATCH_PLAYER_MOVE_EVENT = "player_move";
 const MATCH_PLAYER_MOVED_EVENT = "match:player:moved";
+const MATCH_ULTIMATE_ACTIVATE_EVENT = "ultimate:activate";
 const MATCH_STATE_SYNC_INTERVAL_MS = 120;
+const MATCH_ULTIMATE_AUTO_CHARGE_INTERVAL_MS = 2000;
+const MATCH_ULTIMATE_AUTO_CHARGE_AMOUNT = 5;
 const PLAYER_COLLISION_RADIUS = 0.44;
 const PLAYER_COLLISION_HEIGHT = 2.4;
 const PLAYER_COLLISION_MIN_DISTANCE = PLAYER_COLLISION_RADIUS * 2;
@@ -79,6 +90,12 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     y: player.y,
     z: player.z,
     rotationY: player.rotationY,
+    maxHealth: player.maxHealth,
+    currentHealth: player.currentHealth,
+    isAlive: player.isAlive,
+    ultimateCharge: player.ultimateCharge,
+    ultimateMax: player.ultimateMax,
+    isUltimateReady: player.isUltimateReady,
     joinedAt: player.joinedAt
   };
 }
@@ -208,6 +225,10 @@ export class GlobalMatchRoom extends Room {
       this.handlePlayerMove(client, payload);
     });
 
+    this.onMessage(MATCH_ULTIMATE_ACTIVATE_EVENT, (client, _payload: MatchUltimateActivatePayload) => {
+      this.handleUltimateActivate(client);
+    });
+
     this.clock.setInterval(() => {
       if (!this.stateDirty) {
         return;
@@ -216,6 +237,10 @@ export class GlobalMatchRoom extends Room {
       this.broadcast(MATCH_SNAPSHOT_EVENT, cloneState(this.matchState));
       this.stateDirty = false;
     }, MATCH_STATE_SYNC_INTERVAL_MS);
+
+    this.clock.setInterval(() => {
+      this.tickUltimateChargeForTesting();
+    }, MATCH_ULTIMATE_AUTO_CHARGE_INTERVAL_MS);
   }
 
   async onJoin(client: Client, options?: MatchJoinOptions): Promise<void> {
@@ -246,8 +271,16 @@ export class GlobalMatchRoom extends Room {
       y: spawn.y,
       z: resolvedSpawn.z,
       rotationY: 0,
+      maxHealth: 0,
+      currentHealth: 0,
+      isAlive: true,
+      ultimateCharge: 0,
+      ultimateMax: 0,
+      isUltimateReady: false,
       joinedAt: Date.now()
     };
+    resetHealth(player);
+    resetUltimate(player);
 
     this.matchState.players[client.sessionId] = player;
     this.stateDirty = true;
@@ -280,6 +313,50 @@ export class GlobalMatchRoom extends Room {
       leftAt: Date.now()
     });
     this.broadcast(MATCH_SNAPSHOT_EVENT, cloneState(this.matchState));
+  }
+
+  private handleUltimateActivate(client: Client): void {
+    const player = this.matchState.players[client.sessionId];
+    if (!player || !player.isAlive) {
+      return;
+    }
+
+    syncUltimateReady(player);
+    if (!player.isUltimateReady || player.ultimateCharge < player.ultimateMax) {
+      return;
+    }
+
+    const wasConsumed = consumeUltimate(player);
+    if (!wasConsumed) {
+      return;
+    }
+
+    this.stateDirty = true;
+  }
+
+  private tickUltimateChargeForTesting(): void {
+    let didUpdateAnyPlayer = false;
+
+    Object.values(this.matchState.players).forEach((player) => {
+      if (!player.isAlive) {
+        return;
+      }
+
+      const previousUltimateCharge = player.ultimateCharge;
+      const previousUltimateReady = player.isUltimateReady;
+      addUltimateCharge(player, MATCH_ULTIMATE_AUTO_CHARGE_AMOUNT);
+
+      if (
+        player.ultimateCharge !== previousUltimateCharge ||
+        player.isUltimateReady !== previousUltimateReady
+      ) {
+        didUpdateAnyPlayer = true;
+      }
+    });
+
+    if (didUpdateAnyPlayer) {
+      this.stateDirty = true;
+    }
   }
 
   private handlePlayerMove(client: Client, payload: MatchMovePayload): void {

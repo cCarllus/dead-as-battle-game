@@ -44,6 +44,12 @@ function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     y: player.y,
     z: player.z,
     rotationY: player.rotationY,
+    maxHealth: player.maxHealth,
+    currentHealth: player.currentHealth,
+    isAlive: player.isAlive,
+    ultimateCharge: player.ultimateCharge,
+    ultimateMax: player.ultimateMax,
+    isUltimateReady: player.isUltimateReady,
     joinedAt: player.joinedAt
   };
 }
