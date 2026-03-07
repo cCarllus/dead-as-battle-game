@@ -1,6 +1,11 @@
-// Responsável por gerenciar presença multiplayer da sala global_match (join, snapshot, spawn e leave).
+// Responsável por manter estado autoritativo de jogadores da global_match e sincronizar posição entre clientes.
 import { Client, Room } from "@colyseus/core";
-import type { GlobalMatchState, MatchJoinOptions, MatchPlayerState } from "../models/match-player.model.js";
+import type {
+  GlobalMatchState,
+  MatchJoinOptions,
+  MatchMovePayload,
+  MatchPlayerState
+} from "../models/match-player.model.js";
 import { SpawnService } from "../services/spawn.service.js";
 
 const DEFAULT_HERO_ID = "user";
@@ -9,6 +14,9 @@ const MATCH_SNAPSHOT_REQUEST_EVENT = "match:snapshot:request";
 const MATCH_SNAPSHOT_EVENT = "match:snapshot";
 const MATCH_PLAYER_JOINED_EVENT = "match:player:joined";
 const MATCH_PLAYER_LEFT_EVENT = "match:player:left";
+const MATCH_PLAYER_MOVE_EVENT = "player_move";
+const MATCH_PLAYER_MOVED_EVENT = "match:player:moved";
+const MATCH_STATE_SYNC_INTERVAL_MS = 120;
 
 const VALID_HERO_IDS = new Set<string>(["user", "sukuna", "kaiju_no_8"]);
 
@@ -30,7 +38,7 @@ function normalizeNickname(value: unknown): string | null {
   return normalized.slice(0, MAX_NICKNAME_LENGTH);
 }
 
-function normalizeSelectedHeroId(value: unknown): string {
+function normalizeHeroId(value: unknown): string {
   const normalized = normalizeText(value);
   if (!normalized) {
     return DEFAULT_HERO_ID;
@@ -39,14 +47,33 @@ function normalizeSelectedHeroId(value: unknown): string {
   return VALID_HERO_IDS.has(normalized) ? normalized : DEFAULT_HERO_ID;
 }
 
+function normalizePositionValue(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return value;
+}
+
+function normalizeRotationValue(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return value;
+}
+
 function clonePlayer(player: MatchPlayerState): MatchPlayerState {
   return {
-    ...player,
-    position: {
-      x: player.position.x,
-      y: player.position.y,
-      z: player.position.z
-    }
+    sessionId: player.sessionId,
+    userId: player.userId,
+    nickname: player.nickname,
+    heroId: player.heroId,
+    x: player.x,
+    y: player.y,
+    z: player.z,
+    rotationY: player.rotationY,
+    joinedAt: player.joinedAt
   };
 }
 
@@ -59,8 +86,27 @@ function cloneState(state: GlobalMatchState): GlobalMatchState {
   };
 }
 
+function normalizeMovePayload(payload: MatchMovePayload | undefined): {
+  x: number;
+  y: number;
+  z: number;
+  rotationY: number;
+} | null {
+  const x = normalizePositionValue(payload?.x);
+  const y = normalizePositionValue(payload?.y);
+  const z = normalizePositionValue(payload?.z);
+  const rotationY = normalizeRotationValue(payload?.rotationY);
+
+  if (x === null || y === null || z === null || rotationY === null) {
+    return null;
+  }
+
+  return { x, y, z, rotationY };
+}
+
 export class GlobalMatchRoom extends Room {
   private readonly spawnService = new SpawnService();
+  private stateDirty = false;
 
   private get matchState(): GlobalMatchState {
     return this.state as GlobalMatchState;
@@ -86,11 +132,25 @@ export class GlobalMatchRoom extends Room {
   onCreate(): void {
     this.autoDispose = false;
     this.setState({ players: {} });
+    this.stateDirty = true;
     void this.syncLobbyMetadata();
 
     this.onMessage(MATCH_SNAPSHOT_REQUEST_EVENT, (client) => {
       client.send(MATCH_SNAPSHOT_EVENT, cloneState(this.matchState));
     });
+
+    this.onMessage(MATCH_PLAYER_MOVE_EVENT, (client, payload: MatchMovePayload) => {
+      this.handlePlayerMove(client, payload);
+    });
+
+    this.clock.setInterval(() => {
+      if (!this.stateDirty) {
+        return;
+      }
+
+      this.broadcast(MATCH_SNAPSHOT_EVENT, cloneState(this.matchState));
+      this.stateDirty = false;
+    }, MATCH_STATE_SYNC_INTERVAL_MS);
   }
 
   async onJoin(client: Client, options?: MatchJoinOptions): Promise<void> {
@@ -101,19 +161,23 @@ export class GlobalMatchRoom extends Room {
       throw new Error("Invalid join payload. 'userId' and 'nickname' are required.");
     }
 
-    const selectedHeroId = normalizeSelectedHeroId(options?.selectedHeroId);
-    const spawnPosition = this.spawnService.getNextSpawnPoint();
+    const heroId = normalizeHeroId(options?.heroId);
+    const spawn = this.spawnService.getNextSpawnPoint();
 
     const player: MatchPlayerState = {
       sessionId: client.sessionId,
       userId,
       nickname,
-      selectedHeroId,
-      position: spawnPosition,
+      heroId,
+      x: spawn.x,
+      y: spawn.y,
+      z: spawn.z,
+      rotationY: 0,
       joinedAt: Date.now()
     };
 
     this.matchState.players[client.sessionId] = player;
+    this.stateDirty = true;
     await this.syncLobbyMetadata();
 
     client.send(MATCH_SNAPSHOT_EVENT, cloneState(this.matchState));
@@ -134,6 +198,7 @@ export class GlobalMatchRoom extends Room {
     }
 
     delete this.matchState.players[client.sessionId];
+    this.stateDirty = true;
     await this.syncLobbyMetadata();
 
     this.broadcast(MATCH_PLAYER_LEFT_EVENT, {
@@ -142,5 +207,35 @@ export class GlobalMatchRoom extends Room {
       leftAt: Date.now()
     });
     this.broadcast(MATCH_SNAPSHOT_EVENT, cloneState(this.matchState));
+  }
+
+  private handlePlayerMove(client: Client, payload: MatchMovePayload): void {
+    const player = this.matchState.players[client.sessionId];
+    if (!player) {
+      return;
+    }
+
+    const normalizedMove = normalizeMovePayload(payload);
+    if (!normalizedMove) {
+      return;
+    }
+
+    player.x = normalizedMove.x;
+    player.y = normalizedMove.y;
+    player.z = normalizedMove.z;
+    player.rotationY = normalizedMove.rotationY;
+    this.stateDirty = true;
+
+    this.broadcast(
+      MATCH_PLAYER_MOVED_EVENT,
+      {
+        sessionId: player.sessionId,
+        x: player.x,
+        y: player.y,
+        z: player.z,
+        rotationY: player.rotationY
+      },
+      { except: client }
+    );
   }
 }

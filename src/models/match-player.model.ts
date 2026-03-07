@@ -1,16 +1,13 @@
 // Responsável por tipar payloads e estado de jogadores sincronizados na sala global_match.
-export type MatchPlayerPosition = {
-  x: number;
-  y: number;
-  z: number;
-};
-
 export type MatchPlayerState = {
   sessionId: string;
   userId: string;
   nickname: string;
-  selectedHeroId: string;
-  position: MatchPlayerPosition;
+  heroId: string;
+  x: number;
+  y: number;
+  z: number;
+  rotationY: number;
   joinedAt: number;
 };
 
@@ -26,4 +23,12 @@ export type MatchPlayerLeftPayload = {
   sessionId: string;
   userId?: string;
   leftAt?: number;
+};
+
+export type MatchPlayerMovedPayload = {
+  sessionId: string;
+  x: number;
+  y: number;
+  z: number;
+  rotationY: number;
 };

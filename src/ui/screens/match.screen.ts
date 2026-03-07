@@ -91,6 +91,28 @@ function renderPlayerList(
   });
 }
 
+function buildPresenceSignature(
+  players: MatchPlayerState[],
+  localSessionId: string | null,
+  teamMemberUserIds: ReadonlySet<string>
+): string {
+  const sortedPlayers = [...players].sort((left, right) => {
+    if (left.joinedAt !== right.joinedAt) {
+      return left.joinedAt - right.joinedAt;
+    }
+
+    return left.nickname.localeCompare(right.nickname);
+  });
+
+  return sortedPlayers
+    .map((player) => {
+      const isLocalPlayer = localSessionId !== null && player.sessionId === localSessionId;
+      const isTeammate = !isLocalPlayer && teamMemberUserIds.has(player.userId);
+      return `${player.sessionId}:${player.nickname}:${player.joinedAt}:${isLocalPlayer ? "1" : "0"}:${isTeammate ? "1" : "0"}`;
+    })
+    .join("|");
+}
+
 export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions): () => void {
   const locale = resolveScreenLocale(actions.locale);
   const screen = renderScreenTemplate(root, template, '[data-screen="match"]', locale);
@@ -132,6 +154,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   let wasPointerLocked = false;
   let localSessionId: string | null = null;
   let teamMemberUserIds = resolveTeamMemberUserIds(actions.teamService);
+  let lastPresenceSignature = "";
 
   const isSettingsModalOpen = (): boolean => {
     return screen.classList.contains("is-settings-open");
@@ -202,9 +225,13 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   };
 
   const renderMatchPresence = (players: MatchPlayerState[]): void => {
-    setPlayerCount(players.length);
-    renderPlayerList(playerList, players, localSessionId, teamMemberUserIds, locale);
-    sceneHandle?.setTeamMemberUserIds(Array.from(teamMemberUserIds));
+    const nextPresenceSignature = buildPresenceSignature(players, localSessionId, teamMemberUserIds);
+    if (nextPresenceSignature !== lastPresenceSignature) {
+      setPlayerCount(players.length);
+      renderPlayerList(playerList, players, localSessionId, teamMemberUserIds, locale);
+      lastPresenceSignature = nextPresenceSignature;
+    }
+
     sceneHandle?.setPlayers(players);
   };
 
@@ -214,6 +241,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   const disposeTeamUpdated = actions.teamService.onTeamUpdated(() => {
     teamMemberUserIds = resolveTeamMemberUserIds(actions.teamService);
+    sceneHandle?.setTeamMemberUserIds(Array.from(teamMemberUserIds));
     renderMatchPresence(actions.matchService.getPlayers());
   });
 
@@ -293,7 +321,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       sceneHandle = await createGlobalMatchScene({
         canvas,
         localSessionId,
-        initialPlayers: actions.matchService.getPlayers()
+        initialPlayers: actions.matchService.getPlayers(),
+        onLocalPlayerMoved: (position) => {
+          actions.matchService.sendLocalMovement(position);
+        }
       });
 
       const connectedPlayers = actions.matchService.getPlayers();

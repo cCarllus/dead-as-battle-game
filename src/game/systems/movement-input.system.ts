@@ -1,9 +1,10 @@
-// Responsável por reservar e rastrear estados de entrada WASD para futura movimentação de personagem.
+// Responsável por rastrear estados de entrada WASD + Space para movimentação local do personagem.
 export type MovementInputState = {
   forward: boolean;
   left: boolean;
   backward: boolean;
   right: boolean;
+  jump: boolean;
 };
 
 export type MovementInputSystem = {
@@ -16,7 +17,8 @@ const KEY_TO_DIRECTION: Record<string, keyof MovementInputState> = {
   KeyW: "forward",
   KeyA: "left",
   KeyS: "backward",
-  KeyD: "right"
+  KeyD: "right",
+  Space: "jump"
 };
 
 function createInitialState(): MovementInputState {
@@ -24,7 +26,8 @@ function createInitialState(): MovementInputState {
     forward: false,
     left: false,
     backward: false,
-    right: false
+    right: false,
+    jump: false
   };
 }
 
@@ -33,7 +36,8 @@ function cloneState(state: MovementInputState): MovementInputState {
     forward: state.forward,
     left: state.left,
     backward: state.backward,
-    right: state.right
+    right: state.right,
+    jump: state.jump
   };
 }
 
@@ -48,6 +52,11 @@ export function createMovementInputSystem(): MovementInputSystem {
   const onKeyDown = (event: KeyboardEvent): void => {
     const direction = KEY_TO_DIRECTION[event.code];
     if (!direction || !enabled) {
+      return;
+    }
+
+    if (event.repeat) {
+      event.preventDefault();
       return;
     }
 

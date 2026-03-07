@@ -91,7 +91,7 @@ export function bootstrap(): void {
     return {
       userId: snapshot?.userId ?? localUser.id,
       nickname: snapshot?.nickname ?? localUser.nickname,
-      selectedHeroId: heroSelectionService.resolveSafeSelectedHeroId(localUser)
+      heroId: heroSelectionService.resolveSafeSelectedHeroId(localUser)
     };
   };
 

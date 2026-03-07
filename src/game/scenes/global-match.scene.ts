@@ -1,26 +1,35 @@
-// Responsável por inicializar a cena multiplayer global, carregar mapa e sincronizar entidades de jogadores.
+// Responsável por orquestrar a cena da partida global usando estado autoritativo do servidor e PlayerViewManager.
 import {
   ArcRotateCamera,
   Color4,
   Engine,
   HemisphericLight,
   Scene,
+  TransformNode,
   Vector3
 } from "@babylonjs/core";
 import type { MatchPlayerState } from "../../models/match-player.model";
-import { createMatchPlayerEntity, type MatchPlayerEntity } from "../entities/player.entity";
+import { createPlayerViewManager } from "../systems/player-view-manager";
 import { createMovementInputSystem } from "../systems/movement-input.system";
 import { GLOBAL_MATCH_MAP_URL, loadGlobalMatchMap } from "../systems/map-loader.system";
 
-const CAMERA_RADIUS = 8.4;
+const CAMERA_RADIUS = 6.8;
 const CAMERA_MIN_BETA = 0.62;
 const CAMERA_MAX_BETA = 1.46;
 const CAMERA_MOUSE_SENSITIVITY = 0.0022;
+const LOCAL_MOVE_SPEED = 5.4;
+const LOCAL_JUMP_VELOCITY = 7.6;
+const LOCAL_GRAVITY = 22;
+const MAX_FRAME_DELTA_SECONDS = 0.05;
+const GROUND_EPSILON = 0.0001;
+const LOCAL_MOVEMENT_SYNC_INTERVAL_MS = 50;
+const LOCAL_MOVEMENT_SYNC_THRESHOLD = 0.015;
 
 export type GlobalMatchSceneOptions = {
   canvas: HTMLCanvasElement;
   localSessionId: string;
   initialPlayers?: MatchPlayerState[];
+  onLocalPlayerMoved?: (position: { x: number; y: number; z: number; rotationY: number }) => void;
 };
 
 export type GlobalMatchSceneHandle = {
@@ -37,15 +46,24 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function clonePlayer(player: MatchPlayerState): MatchPlayerState {
-  return {
-    ...player,
-    position: {
-      x: player.position.x,
-      y: player.position.y,
-      z: player.position.z
-    }
-  };
+function resolveGroundForward(camera: ArcRotateCamera): Vector3 {
+  const forward = new Vector3(-Math.cos(camera.alpha), 0, -Math.sin(camera.alpha));
+
+  if (forward.lengthSquared() <= 0.0001) {
+    return new Vector3(0, 0, 1);
+  }
+
+  return forward.normalize();
+}
+
+function positionDistanceSquared(
+  left: { x: number; y: number; z: number },
+  right: { x: number; y: number; z: number }
+): number {
+  const dx = left.x - right.x;
+  const dy = left.y - right.y;
+  const dz = left.z - right.z;
+  return dx * dx + dy * dy + dz * dz;
 }
 
 export async function createGlobalMatchScene(
@@ -81,77 +99,39 @@ export async function createGlobalMatchScene(
 
   const fillLight = new HemisphericLight("globalMatchFillLight", new Vector3(-0.2, -0.4, 0.32), scene);
   fillLight.intensity = 0.24;
+  const cameraTargetNode = new TransformNode("globalMatchCameraTarget", scene);
+  camera.lockedTarget = cameraTargetNode;
 
   const mapHandle = await loadGlobalMatchMap(scene, GLOBAL_MATCH_MAP_URL);
-  const entitiesBySessionId = new Map<string, MatchPlayerEntity>();
+  const playerViewManager = createPlayerViewManager({
+    scene,
+    localSessionId: options.localSessionId
+  });
   const movementInput = createMovementInputSystem();
 
-  let localPlayerEntity: MatchPlayerEntity | null = null;
   let inputEnabled = true;
   let pointerLocked = false;
-  let latestPlayers: MatchPlayerState[] = [];
-  let teamMemberUserIds = new Set<string>();
-
-  const clearEntities = (): void => {
-    entitiesBySessionId.forEach((entity) => {
-      entity.dispose();
-    });
-    entitiesBySessionId.clear();
-    localPlayerEntity = null;
-  };
-
-  const createEntityByContext = (player: MatchPlayerState, localUserId: string | null): MatchPlayerEntity => {
-    const isLocalPlayer = player.sessionId === options.localSessionId;
-    const isTeammate = !isLocalPlayer && localUserId !== null && teamMemberUserIds.has(player.userId);
-
-    const accentColorHex = isLocalPlayer
-      ? "#facc15"
-      : isTeammate
-        ? "#60a5fa"
-        : "#fb7185";
-    const labelColorHex = isLocalPlayer
-      ? "#fde68a"
-      : isTeammate
-        ? "#bfdbfe"
-        : "#fecdd3";
-
-    return createMatchPlayerEntity({
-      scene,
-      player,
-      accentColorHex,
-      labelColorHex,
-      labelPrefix: isTeammate ? "● " : ""
-    });
-  };
-
-  const renderPlayers = (): void => {
-    clearEntities();
-
-    if (latestPlayers.length === 0) {
-      return;
-    }
-
-    const localPlayer = latestPlayers.find((player) => player.sessionId === options.localSessionId) ?? null;
-    const localUserId = localPlayer?.userId ?? null;
-
-    latestPlayers.forEach((player) => {
-      const entity = createEntityByContext(player, localUserId);
-      entitiesBySessionId.set(player.sessionId, entity);
-
-      if (player.sessionId === options.localSessionId) {
-        localPlayerEntity = entity;
-      }
-    });
-  };
+  let localVerticalVelocity = 0;
+  let localGroundY = 0;
+  let hasLocalGroundReference = false;
+  let wasJumpPressed = false;
+  let accumulatedMouseDeltaX = 0;
+  let accumulatedMouseDeltaY = 0;
+  let lastMovementSyncAtMs = 0;
+  let lastSyncedLocalPosition: { x: number; y: number; z: number; rotationY: number } | null = null;
 
   const setPlayers = (players: MatchPlayerState[]): void => {
-    latestPlayers = players.map((player) => clonePlayer(player));
-    renderPlayers();
+    playerViewManager.syncPlayers(players);
+
+    const localState = playerViewManager.getLocalPlayerState();
+    if (localState && !hasLocalGroundReference) {
+      localGroundY = localState.y;
+      hasLocalGroundReference = true;
+    }
   };
 
   const setTeamMemberUserIds = (userIds: string[]): void => {
-    teamMemberUserIds = new Set(userIds);
-    renderPlayers();
+    playerViewManager.setTeamMemberUserIds(userIds);
   };
 
   const requestPointerLock = (): void => {
@@ -183,12 +163,8 @@ export async function createGlobalMatchScene(
       return;
     }
 
-    camera.alpha -= event.movementX * CAMERA_MOUSE_SENSITIVITY;
-    camera.beta = clamp(
-      camera.beta - event.movementY * CAMERA_MOUSE_SENSITIVITY,
-      CAMERA_MIN_BETA,
-      CAMERA_MAX_BETA
-    );
+    accumulatedMouseDeltaX += event.movementX;
+    accumulatedMouseDeltaY += event.movementY;
   };
 
   const onCanvasClick = (): void => {
@@ -200,8 +176,122 @@ export async function createGlobalMatchScene(
     movementInput.setEnabled(enabled);
 
     if (!enabled) {
+      wasJumpPressed = false;
       exitPointerLock();
     }
+  };
+
+  const maybeEmitLocalMovement = (transform: { x: number; y: number; z: number; rotationY: number }): void => {
+    if (!options.onLocalPlayerMoved) {
+      return;
+    }
+
+    const nowMs = Date.now();
+    const elapsedMs = nowMs - lastMovementSyncAtMs;
+
+    const movedEnough =
+      !lastSyncedLocalPosition ||
+      positionDistanceSquared(transform, lastSyncedLocalPosition) >=
+        LOCAL_MOVEMENT_SYNC_THRESHOLD * LOCAL_MOVEMENT_SYNC_THRESHOLD ||
+      Math.abs(transform.rotationY - lastSyncedLocalPosition.rotationY) >= 0.01;
+
+    if (!movedEnough || elapsedMs < LOCAL_MOVEMENT_SYNC_INTERVAL_MS) {
+      return;
+    }
+
+    options.onLocalPlayerMoved(transform);
+    lastSyncedLocalPosition = {
+      x: transform.x,
+      y: transform.y,
+      z: transform.z,
+      rotationY: transform.rotationY
+    };
+    lastMovementSyncAtMs = nowMs;
+  };
+
+  const applyLocalMovement = (deltaSeconds: number): void => {
+    if (!inputEnabled || deltaSeconds <= 0) {
+      return;
+    }
+
+    const localView = playerViewManager.getLocalPlayerView();
+    if (!localView) {
+      return;
+    }
+
+    const inputState = movementInput.getState();
+    const transform = localView.getTransform();
+
+    if (!hasLocalGroundReference) {
+      localGroundY = transform.y;
+      hasLocalGroundReference = true;
+    }
+
+    const forward = resolveGroundForward(camera);
+    const right = new Vector3(forward.z, 0, -forward.x);
+
+    const forwardAxis = (inputState.forward ? 1 : 0) - (inputState.backward ? 1 : 0);
+    const sideAxis = (inputState.right ? 1 : 0) - (inputState.left ? 1 : 0);
+
+    let movementDirection = new Vector3(
+      forward.x * forwardAxis + right.x * sideAxis,
+      0,
+      forward.z * forwardAxis + right.z * sideAxis
+    );
+
+    if (movementDirection.lengthSquared() > 0.0001) {
+      movementDirection = movementDirection.normalize();
+      transform.x += movementDirection.x * LOCAL_MOVE_SPEED * deltaSeconds;
+      transform.z += movementDirection.z * LOCAL_MOVE_SPEED * deltaSeconds;
+      transform.rotationY = Math.atan2(movementDirection.x, movementDirection.z);
+    }
+
+    const isGrounded = transform.y <= localGroundY + GROUND_EPSILON;
+    if (isGrounded && localVerticalVelocity < 0) {
+      localVerticalVelocity = 0;
+      transform.y = localGroundY;
+    }
+
+    const didPressJump = inputState.jump && !wasJumpPressed;
+    if (didPressJump && isGrounded) {
+      localVerticalVelocity = LOCAL_JUMP_VELOCITY;
+    }
+
+    if (!isGrounded || localVerticalVelocity > 0) {
+      localVerticalVelocity -= LOCAL_GRAVITY * deltaSeconds;
+      transform.y += localVerticalVelocity * deltaSeconds;
+
+      if (transform.y <= localGroundY) {
+        transform.y = localGroundY;
+        localVerticalVelocity = 0;
+      }
+    }
+
+    wasJumpPressed = inputState.jump;
+    playerViewManager.updateLocalPlayerTransform(transform);
+    maybeEmitLocalMovement(transform);
+  };
+
+  const applyMouseLook = (): void => {
+    if (!pointerLocked || !inputEnabled) {
+      accumulatedMouseDeltaX = 0;
+      accumulatedMouseDeltaY = 0;
+      return;
+    }
+
+    if (accumulatedMouseDeltaX === 0 && accumulatedMouseDeltaY === 0) {
+      return;
+    }
+
+    camera.alpha -= accumulatedMouseDeltaX * CAMERA_MOUSE_SENSITIVITY;
+    camera.beta = clamp(
+      camera.beta - accumulatedMouseDeltaY * CAMERA_MOUSE_SENSITIVITY,
+      CAMERA_MIN_BETA,
+      CAMERA_MAX_BETA
+    );
+
+    accumulatedMouseDeltaX = 0;
+    accumulatedMouseDeltaY = 0;
   };
 
   document.addEventListener("pointerlockchange", onPointerLockChange);
@@ -211,12 +301,16 @@ export async function createGlobalMatchScene(
   setPlayers(options.initialPlayers ?? []);
 
   engine.runRenderLoop(() => {
-    const localCameraTarget = localPlayerEntity?.getCameraTarget();
-    if (localCameraTarget) {
-      camera.setTarget(localCameraTarget);
+    applyMouseLook();
+    const deltaSeconds = Math.min(MAX_FRAME_DELTA_SECONDS, engine.getDeltaTime() / 1000);
+    applyLocalMovement(deltaSeconds);
+
+    const localView = playerViewManager.getLocalPlayerView();
+    if (localView) {
+      const target = localView.getCameraTarget();
+      cameraTargetNode.position.set(target.x, target.y, target.z);
     }
 
-    void movementInput.getState();
     scene.render();
   });
 
@@ -241,9 +335,11 @@ export async function createGlobalMatchScene(
 
       movementInput.dispose();
       setInputEnabled(false);
-      clearEntities();
+      playerViewManager.dispose();
 
       mapHandle.dispose();
+      camera.lockedTarget = null;
+      cameraTargetNode.dispose();
       scene.dispose();
       engine.stopRenderLoop();
       engine.dispose();

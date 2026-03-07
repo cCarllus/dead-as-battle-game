@@ -1,7 +1,8 @@
-// Responsável por conectar no room global_match e propagar eventos de presença de jogadores para a UI/cena.
+// Responsável por sincronizar estado autoritativo de jogadores da global_match e expor eventos por sessionId.
 import { Client, Room } from "@colyseus/sdk";
 import { resolveServerEndpoint } from "../config/server-endpoint";
 import type {
+  MatchPlayerMovedPayload,
   MatchPlayerJoinedPayload,
   MatchPlayerLeftPayload,
   MatchPlayerState,
@@ -13,11 +14,13 @@ const MATCH_SNAPSHOT_REQUEST_EVENT = "match:snapshot:request";
 const MATCH_SNAPSHOT_EVENT = "match:snapshot";
 const MATCH_PLAYER_JOINED_EVENT = "match:player:joined";
 const MATCH_PLAYER_LEFT_EVENT = "match:player:left";
+const MATCH_PLAYER_MOVED_EVENT = "match:player:moved";
+const MATCH_PLAYER_MOVE_EVENT = "player_move";
 
 export type MatchIdentity = {
   userId: string;
   nickname: string;
-  selectedHeroId: string;
+  heroId: string;
 };
 
 export type MatchServiceOptions = {
@@ -32,9 +35,11 @@ export type MatchService = {
   getLocalSessionId: () => string | null;
   getPlayers: () => MatchPlayerState[];
   onPlayersChanged: (callback: (players: MatchPlayerState[]) => void) => () => void;
-  onPlayerJoined: (callback: (player: MatchPlayerState) => void) => () => void;
-  onPlayerLeft: (callback: (sessionId: string) => void) => () => void;
+  onPlayerAdded: (callback: (player: MatchPlayerState) => void) => () => void;
+  onPlayerUpdated: (callback: (player: MatchPlayerState) => void) => () => void;
+  onPlayerRemoved: (callback: (sessionId: string) => void) => () => void;
   onError: (callback: (error: Error) => void) => () => void;
+  sendLocalMovement: (movement: { x: number; y: number; z: number; rotationY: number }) => void;
 };
 
 function normalizeText(value: unknown): string | null {
@@ -46,6 +51,14 @@ function normalizeText(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function normalizeNumber(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return value;
+}
+
 function normalizeIdentity(identity: MatchIdentity | null): MatchIdentity | null {
   if (!identity) {
     return null;
@@ -53,37 +66,16 @@ function normalizeIdentity(identity: MatchIdentity | null): MatchIdentity | null
 
   const userId = normalizeText(identity.userId);
   const nickname = normalizeText(identity.nickname);
-  const selectedHeroId = normalizeText(identity.selectedHeroId);
+  const heroId = normalizeText(identity.heroId);
 
-  if (!userId || !nickname || !selectedHeroId) {
+  if (!userId || !nickname || !heroId) {
     return null;
   }
 
   return {
     userId,
     nickname,
-    selectedHeroId
-  };
-}
-
-function normalizePosition(value: unknown): MatchPlayerState["position"] | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const candidate = value as Partial<MatchPlayerState["position"]>;
-  if (
-    typeof candidate.x !== "number" ||
-    typeof candidate.y !== "number" ||
-    typeof candidate.z !== "number"
-  ) {
-    return null;
-  }
-
-  return {
-    x: candidate.x,
-    y: candidate.y,
-    z: candidate.z
+    heroId
   };
 }
 
@@ -96,11 +88,14 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const sessionId = normalizeText(candidate.sessionId);
   const userId = normalizeText(candidate.userId);
   const nickname = normalizeText(candidate.nickname);
-  const selectedHeroId = normalizeText(candidate.selectedHeroId);
-  const position = normalizePosition(candidate.position);
+  const heroId = normalizeText(candidate.heroId);
+  const x = normalizeNumber(candidate.x);
+  const y = normalizeNumber(candidate.y);
+  const z = normalizeNumber(candidate.z);
+  const rotationY = normalizeNumber(candidate.rotationY);
   const joinedAt = typeof candidate.joinedAt === "number" ? candidate.joinedAt : Date.now();
 
-  if (!sessionId || !userId || !nickname || !selectedHeroId || !position) {
+  if (!sessionId || !userId || !nickname || !heroId || x === null || y === null || z === null || rotationY === null) {
     return null;
   }
 
@@ -108,8 +103,11 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
     sessionId,
     userId,
     nickname,
-    selectedHeroId,
-    position,
+    heroId,
+    x,
+    y,
+    z,
+    rotationY,
     joinedAt
   };
 }
@@ -147,14 +145,36 @@ function normalizeLeftPayload(payload: unknown): string | null {
   return normalizeText(candidate.sessionId);
 }
 
+function normalizeMovedPayload(payload: unknown): MatchPlayerMovedPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchPlayerMovedPayload>;
+  const sessionId = normalizeText(candidate.sessionId);
+  const x = normalizeNumber(candidate.x);
+  const y = normalizeNumber(candidate.y);
+  const z = normalizeNumber(candidate.z);
+  const rotationY = normalizeNumber(candidate.rotationY);
+
+  if (!sessionId || x === null || y === null || z === null || rotationY === null) {
+    return null;
+  }
+
+  return { sessionId, x, y, z, rotationY };
+}
+
 function clonePlayer(player: MatchPlayerState): MatchPlayerState {
   return {
-    ...player,
-    position: {
-      x: player.position.x,
-      y: player.position.y,
-      z: player.position.z
-    }
+    sessionId: player.sessionId,
+    userId: player.userId,
+    nickname: player.nickname,
+    heroId: player.heroId,
+    x: player.x,
+    y: player.y,
+    z: player.z,
+    rotationY: player.rotationY,
+    joinedAt: player.joinedAt
   };
 }
 
@@ -170,8 +190,9 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
   const playersBySessionId = new Map<string, MatchPlayerState>();
 
   const playersChangedListeners = new Set<(players: MatchPlayerState[]) => void>();
-  const playerJoinedListeners = new Set<(player: MatchPlayerState) => void>();
-  const playerLeftListeners = new Set<(sessionId: string) => void>();
+  const playerAddedListeners = new Set<(player: MatchPlayerState) => void>();
+  const playerUpdatedListeners = new Set<(player: MatchPlayerState) => void>();
+  const playerRemovedListeners = new Set<(sessionId: string) => void>();
   const errorListeners = new Set<(error: Error) => void>();
 
   const emitPlayersChanged = (): void => {
@@ -181,15 +202,22 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
     });
   };
 
-  const emitPlayerJoined = (player: MatchPlayerState): void => {
-    const clonedPlayer = clonePlayer(player);
-    playerJoinedListeners.forEach((listener) => {
-      listener(clonedPlayer);
+  const emitPlayerAdded = (player: MatchPlayerState): void => {
+    const snapshot = clonePlayer(player);
+    playerAddedListeners.forEach((listener) => {
+      listener(snapshot);
     });
   };
 
-  const emitPlayerLeft = (sessionId: string): void => {
-    playerLeftListeners.forEach((listener) => {
+  const emitPlayerUpdated = (player: MatchPlayerState): void => {
+    const snapshot = clonePlayer(player);
+    playerUpdatedListeners.forEach((listener) => {
+      listener(snapshot);
+    });
+  };
+
+  const emitPlayerRemoved = (sessionId: string): void => {
+    playerRemovedListeners.forEach((listener) => {
       listener(sessionId);
     });
   };
@@ -201,10 +229,40 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
   };
 
   const applySnapshot = (players: MatchPlayerState[]): void => {
-    playersBySessionId.clear();
-
+    const incomingBySessionId = new Map<string, MatchPlayerState>();
     players.forEach((player) => {
-      playersBySessionId.set(player.sessionId, player);
+      incomingBySessionId.set(player.sessionId, player);
+    });
+
+    playersBySessionId.forEach((existingPlayer, sessionId) => {
+      if (incomingBySessionId.has(sessionId)) {
+        return;
+      }
+
+      playersBySessionId.delete(sessionId);
+      emitPlayerRemoved(sessionId);
+    });
+
+    incomingBySessionId.forEach((incomingPlayer, sessionId) => {
+      const existingPlayer = playersBySessionId.get(sessionId);
+      if (!existingPlayer) {
+        playersBySessionId.set(sessionId, incomingPlayer);
+        emitPlayerAdded(incomingPlayer);
+        return;
+      }
+
+      const changed =
+        existingPlayer.x !== incomingPlayer.x ||
+        existingPlayer.y !== incomingPlayer.y ||
+        existingPlayer.z !== incomingPlayer.z ||
+        existingPlayer.rotationY !== incomingPlayer.rotationY ||
+        existingPlayer.nickname !== incomingPlayer.nickname ||
+        existingPlayer.heroId !== incomingPlayer.heroId;
+
+      if (changed) {
+        playersBySessionId.set(sessionId, incomingPlayer);
+        emitPlayerUpdated(incomingPlayer);
+      }
     });
 
     emitPlayersChanged();
@@ -222,7 +280,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       }
 
       playersBySessionId.set(joinedPlayer.sessionId, joinedPlayer);
-      emitPlayerJoined(joinedPlayer);
+      emitPlayerAdded(joinedPlayer);
       emitPlayersChanged();
     });
 
@@ -237,7 +295,31 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         return;
       }
 
-      emitPlayerLeft(sessionId);
+      emitPlayerRemoved(sessionId);
+      emitPlayersChanged();
+    });
+
+    connectedRoom.onMessage(MATCH_PLAYER_MOVED_EVENT, (payload: unknown) => {
+      const movedPlayer = normalizeMovedPayload(payload);
+      if (!movedPlayer) {
+        return;
+      }
+
+      const existingPlayer = playersBySessionId.get(movedPlayer.sessionId);
+      if (!existingPlayer) {
+        return;
+      }
+
+      const updatedPlayer: MatchPlayerState = {
+        ...existingPlayer,
+        x: movedPlayer.x,
+        y: movedPlayer.y,
+        z: movedPlayer.z,
+        rotationY: movedPlayer.rotationY
+      };
+
+      playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
+      emitPlayerUpdated(updatedPlayer);
       emitPlayersChanged();
     });
 
@@ -279,7 +361,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         const connectedRoom = await client.joinOrCreate(roomName, {
           userId: identity.userId,
           nickname: identity.nickname,
-          selectedHeroId: identity.selectedHeroId
+          heroId: identity.heroId
         });
 
         room = connectedRoom;
@@ -323,16 +405,22 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         playersChangedListeners.delete(callback);
       };
     },
-    onPlayerJoined: (callback) => {
-      playerJoinedListeners.add(callback);
+    onPlayerAdded: (callback) => {
+      playerAddedListeners.add(callback);
       return () => {
-        playerJoinedListeners.delete(callback);
+        playerAddedListeners.delete(callback);
       };
     },
-    onPlayerLeft: (callback) => {
-      playerLeftListeners.add(callback);
+    onPlayerUpdated: (callback) => {
+      playerUpdatedListeners.add(callback);
       return () => {
-        playerLeftListeners.delete(callback);
+        playerUpdatedListeners.delete(callback);
+      };
+    },
+    onPlayerRemoved: (callback) => {
+      playerRemovedListeners.add(callback);
+      return () => {
+        playerRemovedListeners.delete(callback);
       };
     },
     onError: (callback) => {
@@ -340,6 +428,18 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       return () => {
         errorListeners.delete(callback);
       };
+    },
+    sendLocalMovement: (movement) => {
+      if (!room) {
+        return;
+      }
+
+      room.send(MATCH_PLAYER_MOVE_EVENT, {
+        x: movement.x,
+        y: movement.y,
+        z: movement.z,
+        rotationY: movement.rotationY
+      });
     }
   };
 }

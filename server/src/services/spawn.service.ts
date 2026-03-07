@@ -1,7 +1,11 @@
 // Responsável por distribuir pontos de spawn em round-robin para novos jogadores da partida global.
-import type { MatchPosition } from "../models/match-player.model.js";
+type SpawnPoint = {
+  x: number;
+  y: number;
+  z: number;
+};
 
-const DEFAULT_SPAWN_POINTS: readonly MatchPosition[] = [
+const DEFAULT_SPAWN_POINTS: readonly SpawnPoint[] = [
   { x: 0, y: 0, z: 0 },
   { x: 4, y: 0, z: 0 },
   { x: -4, y: 0, z: 0 },
@@ -13,13 +17,13 @@ const DEFAULT_SPAWN_POINTS: readonly MatchPosition[] = [
 export class SpawnService {
   private nextSpawnIndex = 0;
 
-  constructor(private readonly spawnPoints: readonly MatchPosition[] = DEFAULT_SPAWN_POINTS) {
+  constructor(private readonly spawnPoints: readonly SpawnPoint[] = DEFAULT_SPAWN_POINTS) {
     if (spawnPoints.length === 0) {
       throw new Error("SpawnService requires at least one spawn point.");
     }
   }
 
-  getNextSpawnPoint(): MatchPosition {
+  getNextSpawnPoint(): SpawnPoint {
     const spawnPoint = this.spawnPoints[this.nextSpawnIndex % this.spawnPoints.length];
     this.nextSpawnIndex += 1;
 

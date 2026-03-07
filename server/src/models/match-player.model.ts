@@ -1,16 +1,13 @@
 // Responsável por tipar o estado de presença dos jogadores dentro da sala de partida global.
-export type MatchPosition = {
-  x: number;
-  y: number;
-  z: number;
-};
-
 export type MatchPlayerState = {
   sessionId: string;
   userId: string;
   nickname: string;
-  selectedHeroId: string;
-  position: MatchPosition;
+  heroId: string;
+  x: number;
+  y: number;
+  z: number;
+  rotationY: number;
   joinedAt: number;
 };
 
@@ -21,5 +18,12 @@ export type GlobalMatchState = {
 export type MatchJoinOptions = {
   userId?: unknown;
   nickname?: unknown;
-  selectedHeroId?: unknown;
+  heroId?: unknown;
+};
+
+export type MatchMovePayload = {
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+  rotationY?: unknown;
 };

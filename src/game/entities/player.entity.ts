@@ -1,11 +1,14 @@
 // Responsável por construir e descartar a representação visual base de um jogador no mapa da partida.
 import {
   AbstractMesh,
+  AssetContainer,
   Color3,
   DynamicTexture,
   MeshBuilder,
+  Node,
   Scene,
   SceneLoader,
+  Skeleton,
   StandardMaterial,
   TransformNode,
   Vector3
@@ -16,6 +19,7 @@ import type { MatchPlayerState } from "../../models/match-player.model";
 
 const TARGET_PLAYER_HEIGHT = 2.4;
 const CAMERA_TARGET_OFFSET_Y = 1.28;
+const heroModelContainerCache = new WeakMap<Scene, Map<string, Promise<AssetContainer>>>();
 
 function splitModelPath(modelUrl: string): { rootUrl: string; fileName: string } {
   const lastSlash = modelUrl.lastIndexOf("/");
@@ -27,6 +31,34 @@ function splitModelPath(modelUrl: string): { rootUrl: string; fileName: string }
     rootUrl: modelUrl.slice(0, lastSlash + 1),
     fileName: modelUrl.slice(lastSlash + 1)
   };
+}
+
+function resolveSceneContainerCache(scene: Scene): Map<string, Promise<AssetContainer>> {
+  const existingCache = heroModelContainerCache.get(scene);
+  if (existingCache) {
+    return existingCache;
+  }
+
+  const nextCache = new Map<string, Promise<AssetContainer>>();
+  heroModelContainerCache.set(scene, nextCache);
+  return nextCache;
+}
+
+async function loadHeroModelContainer(scene: Scene, modelUrl: string): Promise<AssetContainer> {
+  const sceneCache = resolveSceneContainerCache(scene);
+  const cachedContainerPromise = sceneCache.get(modelUrl);
+  if (cachedContainerPromise) {
+    return cachedContainerPromise;
+  }
+
+  const { rootUrl, fileName } = splitModelPath(modelUrl);
+  const nextContainerPromise = SceneLoader.LoadAssetContainerAsync(rootUrl, fileName, scene).catch((error) => {
+    sceneCache.delete(modelUrl);
+    throw error;
+  });
+
+  sceneCache.set(modelUrl, nextContainerPromise);
+  return nextContainerPromise;
 }
 
 function normalizeAvatar(root: TransformNode): void {
@@ -42,8 +74,18 @@ function normalizeAvatar(root: TransformNode): void {
   root.position = new Vector3(-center.x, -scaledBounds.min.y, -center.z);
 }
 
-function createPlayerLabel(scene: Scene, nickname: string, textColor: string): AbstractMesh {
-  const texture = new DynamicTexture("matchPlayerLabelTexture", { width: 512, height: 128 }, scene, true);
+function createPlayerLabel(
+  scene: Scene,
+  nickname: string,
+  textColor: string,
+  sessionId: string
+): AbstractMesh {
+  const texture = new DynamicTexture(
+    `matchPlayerLabelTexture_${sessionId}`,
+    { width: 512, height: 128 },
+    scene,
+    true
+  );
   texture.hasAlpha = true;
   texture.drawText(
     nickname,
@@ -55,13 +97,17 @@ function createPlayerLabel(scene: Scene, nickname: string, textColor: string): A
     true
   );
 
-  const material = new StandardMaterial("matchPlayerLabelMaterial", scene);
+  const material = new StandardMaterial(`matchPlayerLabelMaterial_${sessionId}`, scene);
   material.diffuseTexture = texture;
   material.emissiveColor = Color3.White();
   material.specularColor = Color3.Black();
   material.backFaceCulling = false;
 
-  const plane = MeshBuilder.CreatePlane("matchPlayerLabel", { width: 2.6, height: 0.58 }, scene);
+  const plane = MeshBuilder.CreatePlane(
+    `matchPlayerLabel_${sessionId}`,
+    { width: 2.6, height: 0.58 },
+    scene
+  );
   plane.material = material;
   plane.billboardMode = AbstractMesh.BILLBOARDMODE_ALL;
   plane.position = new Vector3(0, TARGET_PLAYER_HEIGHT + 0.52, 0);
@@ -70,9 +116,27 @@ function createPlayerLabel(scene: Scene, nickname: string, textColor: string): A
   return plane;
 }
 
+function collectInstantiatedRootNodes(rootNodes: readonly Node[]): TransformNode[] {
+  const transformNodes = rootNodes.filter((node): node is TransformNode => node instanceof TransformNode);
+  const rootIds = new Set<number>(transformNodes.map((node) => node.uniqueId));
+
+  return transformNodes.filter((node) => {
+    const parentNode = node.parent as TransformNode | null;
+    if (!parentNode) {
+      return true;
+    }
+
+    return !rootIds.has(parentNode.uniqueId);
+  });
+}
+
 export type MatchPlayerEntity = {
   sessionId: string;
-  setPosition: (position: MatchPlayerState["position"]) => void;
+  rootNode: TransformNode;
+  characterNode: TransformNode;
+  nameplateNode: AbstractMesh;
+  setTransform: (transform: { x: number; y: number; z: number; rotationY: number }) => void;
+  getTransform: () => { x: number; y: number; z: number; rotationY: number };
   getCameraTarget: () => Vector3;
   dispose: () => void;
 };
@@ -83,6 +147,7 @@ export type CreateMatchPlayerEntityOptions = {
   accentColorHex: string;
   labelColorHex: string;
   labelPrefix?: string;
+  forceFallbackOnly?: boolean;
 };
 
 export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions): MatchPlayerEntity {
@@ -91,7 +156,12 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   avatarRoot.parent = root;
 
   const labelText = `${options.labelPrefix ?? ""}${options.player.nickname}`;
-  const label = createPlayerLabel(options.scene, labelText, options.labelColorHex);
+  const label = createPlayerLabel(
+    options.scene,
+    labelText,
+    options.labelColorHex,
+    options.player.sessionId
+  );
   label.parent = root;
 
   const accentColor = Color3.FromHexString(options.accentColorHex);
@@ -128,42 +198,49 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   normalizeAvatar(avatarRoot);
 
   let disposed = false;
+  const importedSkeletons: Skeleton[] = [];
+  const importedAnimationGroups: { dispose: () => void; stop: () => void }[] = [];
 
-  const resolvedHeroId = isChampionId(options.player.selectedHeroId)
-    ? options.player.selectedHeroId
+  const resolvedHeroId = isChampionId(options.player.heroId)
+    ? options.player.heroId
     : DEFAULT_CHAMPION_ID;
   const heroModelUrl = getBaseChampionById(resolvedHeroId).modelUrl;
 
-  if (heroModelUrl) {
-    const { rootUrl, fileName } = splitModelPath(heroModelUrl);
-
-    void SceneLoader.ImportMeshAsync("", rootUrl, fileName, options.scene)
-      .then((result) => {
+  if (heroModelUrl && options.forceFallbackOnly !== true) {
+    void loadHeroModelContainer(options.scene, heroModelUrl)
+      .then((modelContainer) => {
         if (disposed) {
-          result.meshes.forEach((mesh) => {
-            mesh.dispose();
+          return;
+        }
+
+        const instantiated = modelContainer.instantiateModelsToScene(
+          (sourceName) => `${sourceName}_${options.player.sessionId}`,
+          true
+        );
+
+        importedSkeletons.push(...instantiated.skeletons);
+        instantiated.animationGroups.forEach((group) => {
+          group.stop();
+        });
+        importedAnimationGroups.push(...instantiated.animationGroups);
+
+        const instantiatedRoots = collectInstantiatedRootNodes(instantiated.rootNodes);
+        if (instantiatedRoots.length === 0) {
+          instantiated.rootNodes.forEach((rootNode) => {
+            rootNode.dispose(false, true);
           });
-          result.skeletons.forEach((skeleton) => {
-            skeleton.dispose();
-          });
-          result.animationGroups.forEach((group) => {
+          instantiated.animationGroups.forEach((group) => {
             group.dispose();
           });
+          instantiated.skeletons.forEach((skeleton) => {
+            skeleton.dispose();
+          });
           return;
         }
 
-        let attachedMeshCount = 0;
-
-        result.meshes.forEach((mesh) => {
-          if (!mesh.parent) {
-            mesh.parent = avatarRoot;
-            attachedMeshCount += 1;
-          }
+        instantiatedRoots.forEach((rootNode) => {
+          rootNode.setParent(avatarRoot);
         });
-
-        if (attachedMeshCount === 0) {
-          return;
-        }
 
         fallbackBody.dispose();
         fallbackBase.dispose();
@@ -174,12 +251,25 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       });
   }
 
-  root.position = new Vector3(options.player.position.x, options.player.position.y, options.player.position.z);
+  root.position = new Vector3(options.player.x, options.player.y, options.player.z);
+  root.rotation.y = options.player.rotationY;
 
   return {
     sessionId: options.player.sessionId,
-    setPosition: (position) => {
-      root.position.set(position.x, position.y, position.z);
+    rootNode: root,
+    characterNode: avatarRoot,
+    nameplateNode: label,
+    setTransform: (transform) => {
+      root.position.set(transform.x, transform.y, transform.z);
+      root.rotation.y = transform.rotationY;
+    },
+    getTransform: () => {
+      return {
+        x: root.position.x,
+        y: root.position.y,
+        z: root.position.z,
+        rotationY: root.rotation.y
+      };
     },
     getCameraTarget: () => {
       return new Vector3(root.position.x, root.position.y + CAMERA_TARGET_OFFSET_Y, root.position.z);
@@ -190,6 +280,15 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       }
 
       disposed = true;
+
+      importedSkeletons.forEach((skeleton) => {
+        skeleton.dispose();
+      });
+      importedAnimationGroups.forEach((group) => {
+        group.stop();
+        group.dispose();
+      });
+
       root.dispose(false, true);
     }
   };
