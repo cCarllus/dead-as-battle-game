@@ -9,11 +9,12 @@ import {
   TransformNode,
   Vector3
 } from "@babylonjs/core";
-import type { MatchPlayerState } from "../../models/match-player.model";
+import type { MatchCombatUltimatePayload, MatchPlayerState } from "../../models/match-player.model";
 import type {
   AnimationGameplayState,
   MovementDirection
 } from "../animation/animation-state";
+import { createEffectManager } from "../effects/effect-manager";
 import { createCombatInputSystem } from "../systems/combat-input.system";
 import { createPlayerViewManager } from "../systems/player-view-manager";
 import { createMovementInputSystem } from "../systems/movement-input.system";
@@ -69,6 +70,7 @@ export type GlobalMatchSceneHandle = {
   onPointerLockChanged: (listener: (locked: boolean) => void) => () => void;
   triggerLocalUltimateAnimation: () => void;
   triggerPlayerUltimateAnimation: (sessionId: string) => void;
+  triggerPlayerUltimateEffect: (payload: Pick<MatchCombatUltimatePayload, "sessionId" | "characterId" | "durationMs">) => void;
   getPlayerScreenPosition: (sessionId: string) => { x: number; y: number } | null;
   dispose: () => void;
 };
@@ -216,6 +218,12 @@ export async function createGlobalMatchScene(
     scene,
     localSessionId: options.localSessionId
   });
+  const effectManager = createEffectManager({
+    scene,
+    resolvePlayerEffectAnchor: (sessionId) => {
+      return playerViewManager.getPlayerEffectAnchor(sessionId);
+    }
+  });
   const movementInput = createMovementInputSystem();
   let inputEnabled = true;
   const pointerLockSystem = createPointerLockSystem({
@@ -289,6 +297,7 @@ export async function createGlobalMatchScene(
   };
 
   const removePlayer = (sessionId: string): void => {
+    effectManager.stopEffectsForPlayer(sessionId);
     playerViewManager.removePlayer(sessionId);
     if (sessionId === options.localSessionId) {
       hasLocalGroundReference = false;
@@ -799,6 +808,13 @@ export async function createGlobalMatchScene(
     triggerPlayerUltimateAnimation: (sessionId) => {
       playerViewManager.playPlayerAnimationCommand(sessionId, "ultimate");
     },
+    triggerPlayerUltimateEffect: (payload) => {
+      effectManager.playUltimateEffect({
+        sessionId: payload.sessionId,
+        characterId: payload.characterId,
+        durationMs: payload.durationMs
+      });
+    },
     getPlayerScreenPosition: (sessionId) => {
       const target = playerViewManager.getPlayerCameraTarget(sessionId);
       if (!target) {
@@ -822,6 +838,7 @@ export async function createGlobalMatchScene(
       combatInput.dispose();
 
       movementInput.dispose();
+      effectManager.dispose();
       playerViewManager.dispose();
 
       mapHandle.dispose();

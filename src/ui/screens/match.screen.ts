@@ -735,11 +735,11 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     applyLocalChampionKdaDelta(killsDelta, deathsDelta);
   });
   const disposeCombatUltimate = actions.matchService.onCombatUltimate((payload) => {
-    if (localSessionId && payload.sessionId === localSessionId) {
-      return;
-    }
-
-    sceneHandle?.triggerPlayerUltimateAnimation(payload.sessionId);
+    sceneHandle?.triggerPlayerUltimateEffect({
+      sessionId: payload.sessionId,
+      characterId: payload.characterId,
+      durationMs: payload.durationMs
+    });
   });
 
   const disposeFlyToggleClick = bind(flyToggleButton, "click", () => {
@@ -867,7 +867,6 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       }
 
       event.preventDefault();
-      sceneHandle?.triggerLocalUltimateAnimation();
       actions.matchService.sendUltimateActivate();
       return;
     }

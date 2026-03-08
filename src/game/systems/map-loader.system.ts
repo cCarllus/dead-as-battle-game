@@ -3,7 +3,7 @@ import { Color3, MeshBuilder, Scene, SceneLoader, StandardMaterial } from "@baby
 import "@babylonjs/loaders/glTF";
 
 export const GLOBAL_MATCH_MAP_URL =
-  "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/models/maps/bunker_map.glb";
+  "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/models/maps/lightcycle_arena_rev_02__tebg.glb";
 
 function splitModelPath(modelUrl: string): { rootUrl: string; fileName: string } {
   const lastSlash = modelUrl.lastIndexOf("/");

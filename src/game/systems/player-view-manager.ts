@@ -147,6 +147,10 @@ export type PlayerViewManager = {
   getLocalPlayerView: () => LocalPlayerView | null;
   getLocalPlayerState: () => MatchPlayerState | null;
   getPlayerCameraTarget: (sessionId: string) => { x: number; y: number; z: number } | null;
+  getPlayerEffectAnchor: (sessionId: string) => {
+    gameplayRoot: RemotePlayerView["gameplayRoot"];
+    visualRoot: RemotePlayerView["visualRoot"];
+  } | null;
   playPlayerAnimationCommand: (sessionId: string, command: AnimationCommand) => void;
   dispose: () => void;
 };
@@ -437,6 +441,17 @@ export function createPlayerViewManager(options: CreatePlayerViewManagerOptions)
       }
 
       return view.getCameraTarget();
+    },
+    getPlayerEffectAnchor: (sessionId) => {
+      const view = playerViewsBySessionId.get(sessionId);
+      if (!view) {
+        return null;
+      }
+
+      return {
+        gameplayRoot: view.gameplayRoot,
+        visualRoot: view.visualRoot
+      };
     },
     playPlayerAnimationCommand: (sessionId, command) => {
       const view = playerViewsBySessionId.get(sessionId);

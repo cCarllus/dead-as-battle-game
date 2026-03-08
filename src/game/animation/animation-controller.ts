@@ -35,6 +35,29 @@ function shouldLoopCommand(command: AnimationCommand, animationConfig: HeroAnima
 }
 
 const DEFAULT_BLENDING_DURATION_SECONDS = 0.18;
+const NON_RESTARTABLE_SAME_COMMANDS: readonly AnimationCommand[] = ["ultimate", "jump"];
+const JUMP_START_TRIM_RATIO = 0.35;
+
+function startGroupForCommand(
+  group: AnimationGroup,
+  command: AnimationCommand,
+  shouldLoop: boolean
+): void {
+  if (command !== "jump") {
+    group.start(shouldLoop);
+    return;
+  }
+
+  const fromFrame = group.from;
+  const toFrame = group.to;
+  if (!Number.isFinite(fromFrame) || !Number.isFinite(toFrame) || toFrame <= fromFrame) {
+    group.start(shouldLoop);
+    return;
+  }
+
+  const trimmedFromFrame = fromFrame + (toFrame - fromFrame) * JUMP_START_TRIM_RATIO;
+  group.start(shouldLoop, 1, trimmedFromFrame, toFrame, false);
+}
 
 function resolveCommandPriority(command: AnimationCommand): number {
   switch (command) {
@@ -164,6 +187,10 @@ export function createAnimationController(options: CreateAnimationControllerOpti
   const play = (requestedCommand: AnimationCommand): void => {
     if (currentRequestedCommand === requestedCommand) {
       if (currentGroup && currentPlaybackCommand) {
+        if (NON_RESTARTABLE_SAME_COMMANDS.includes(currentPlaybackCommand)) {
+          return;
+        }
+
         const isLooping = shouldLoopCommand(currentPlaybackCommand, options.animationConfig);
         if (!isLooping && !currentGroup.isPlaying) {
           currentGroup.reset();
@@ -206,7 +233,11 @@ export function createAnimationController(options: CreateAnimationControllerOpti
     }
 
     playableAnimation.group.reset();
-    playableAnimation.group.start(shouldLoopCommand(playableAnimation.playbackCommand, options.animationConfig));
+    startGroupForCommand(
+      playableAnimation.group,
+      playableAnimation.playbackCommand,
+      shouldLoopCommand(playableAnimation.playbackCommand, options.animationConfig)
+    );
 
     currentGroup = playableAnimation.group;
     currentRequestedCommand = requestedCommand;
