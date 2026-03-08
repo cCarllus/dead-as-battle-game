@@ -52,6 +52,10 @@ function resolveMovementSpeed(player: MatchPlayerState, now: number): number {
     return 0;
   }
 
+  if (player.isBlocking) {
+    return MOVEMENT_STATE_CONFIG.walkSpeed * 0.68;
+  }
+
   return player.isSprinting ? resolveRunSpeed() : MOVEMENT_STATE_CONFIG.walkSpeed;
 }
 

@@ -33,12 +33,13 @@ const LOCAL_FLY_VERTICAL_SPEED = 5.8;
 const LOCAL_GRAVITY = 22;
 const MAX_FRAME_DELTA_SECONDS = 0.05;
 const GROUND_EPSILON = 0.0001;
-const LOCAL_MOVEMENT_SYNC_INTERVAL_MS = 33;
+const LOCAL_MOVEMENT_SYNC_INTERVAL_MS = 50;
 const LOCAL_MOVEMENT_SYNC_THRESHOLD = 0.015;
 const LOCAL_SPRINT_INPUT_SYNC_INTERVAL_MS = 50;
 const LOCAL_ATTACK_INTERVAL_MS = 300;
 const LOCAL_COMBO_RESET_TIME_MS = 1000;
 const LOCAL_ATTACK_ANIMATION_WINDOW_MS = 260;
+const LOCAL_ATTACK_INPUT_BUFFER_MS = 120;
 const LOCAL_BLOCK_MAX_HOLD_MS = 2500;
 
 export type GlobalMatchSceneOptions = {
@@ -67,6 +68,7 @@ export type GlobalMatchSceneHandle = {
   isPointerLocked: () => boolean;
   onPointerLockChanged: (listener: (locked: boolean) => void) => () => void;
   triggerLocalUltimateAnimation: () => void;
+  triggerPlayerUltimateAnimation: (sessionId: string) => void;
   getPlayerScreenPosition: (sessionId: string) => { x: number; y: number } | null;
   dispose: () => void;
 };
@@ -236,15 +238,20 @@ export async function createGlobalMatchScene(
   let lastSentSprintIntent: { isShiftPressed: boolean; isForwardPressed: boolean } | null = null;
   let isLocalVisualHiddenForCamera = false;
   let localUltimateRequested = false;
-  let localPredictedAttackComboIndex: 0 | 1 | 2 | 3 = 0;
+  let localPredictedComboChainIndex: 0 | 1 | 2 | 3 = 0;
+  let localPredictedActiveAttackComboIndex: 0 | 1 | 2 | 3 = 0;
   let localPredictedLastAttackAtMs = 0;
   let localPredictedAttackUntilMs = 0;
+  let localBufferedAttackUntilMs = 0;
   let localPredictedBlockActive = false;
   let localPredictedBlockStartedAtMs = 0;
 
   const resetPredictedCombatState = (): void => {
-    localPredictedAttackComboIndex = 0;
+    localPredictedComboChainIndex = 0;
+    localPredictedActiveAttackComboIndex = 0;
+    localPredictedLastAttackAtMs = 0;
     localPredictedAttackUntilMs = 0;
+    localBufferedAttackUntilMs = 0;
     localPredictedBlockActive = false;
     localPredictedBlockStartedAtMs = 0;
   };
@@ -349,6 +356,27 @@ export async function createGlobalMatchScene(
     return true;
   };
 
+  const commitLocalAttackIntent = (now: number): void => {
+    const shouldResetCombo =
+      localPredictedComboChainIndex <= 0 ||
+      now - localPredictedLastAttackAtMs > LOCAL_COMBO_RESET_TIME_MS;
+
+    if (shouldResetCombo) {
+      localPredictedComboChainIndex = 1;
+    } else {
+      localPredictedComboChainIndex =
+        ((localPredictedComboChainIndex % 3) + 1) as 1 | 2 | 3;
+    }
+
+    localPredictedActiveAttackComboIndex = localPredictedComboChainIndex;
+    localPredictedLastAttackAtMs = now;
+    localPredictedAttackUntilMs = now + LOCAL_ATTACK_ANIMATION_WINDOW_MS;
+    localBufferedAttackUntilMs = 0;
+    localPredictedBlockActive = false;
+    localPredictedBlockStartedAtMs = 0;
+    options.onLocalAttackRequested?.();
+  };
+
   const handleLocalAttackIntent = (): void => {
     const now = Date.now();
     const localPlayerState = playerViewManager.getLocalPlayerState();
@@ -360,26 +388,16 @@ export async function createGlobalMatchScene(
       return;
     }
 
-    if (now - localPredictedLastAttackAtMs < LOCAL_ATTACK_INTERVAL_MS) {
+    const elapsedSinceLastAttack = now - localPredictedLastAttackAtMs;
+    if (elapsedSinceLastAttack < LOCAL_ATTACK_INTERVAL_MS) {
+      const remainingCooldown = LOCAL_ATTACK_INTERVAL_MS - elapsedSinceLastAttack;
+      if (remainingCooldown <= LOCAL_ATTACK_INPUT_BUFFER_MS) {
+        localBufferedAttackUntilMs = now + LOCAL_ATTACK_INPUT_BUFFER_MS;
+      }
       return;
     }
 
-    const shouldResetCombo =
-      localPredictedAttackComboIndex <= 0 ||
-      now - localPredictedLastAttackAtMs > LOCAL_COMBO_RESET_TIME_MS;
-
-    if (shouldResetCombo) {
-      localPredictedAttackComboIndex = 1;
-    } else {
-      localPredictedAttackComboIndex =
-        ((localPredictedAttackComboIndex % 3) + 1) as 1 | 2 | 3;
-    }
-
-    localPredictedLastAttackAtMs = now;
-    localPredictedAttackUntilMs = now + LOCAL_ATTACK_ANIMATION_WINDOW_MS;
-    localPredictedBlockActive = false;
-    localPredictedBlockStartedAtMs = 0;
-    options.onLocalAttackRequested?.();
+    commitLocalAttackIntent(now);
   };
 
   const handleLocalBlockStartIntent = (): void => {
@@ -510,8 +528,26 @@ export async function createGlobalMatchScene(
       (localPlayerState.isGuardBroken || nowMs < localPlayerState.stunUntil || !localPlayerState.isAlive);
 
     if (localPredictedAttackUntilMs > 0 && nowMs >= localPredictedAttackUntilMs) {
-      localPredictedAttackComboIndex = 0;
+      localPredictedActiveAttackComboIndex = 0;
       localPredictedAttackUntilMs = 0;
+    }
+
+    if (
+      localPredictedComboChainIndex > 0 &&
+      nowMs - localPredictedLastAttackAtMs > LOCAL_COMBO_RESET_TIME_MS
+    ) {
+      localPredictedComboChainIndex = 0;
+    }
+
+    const canCommitBufferedAttack =
+      localBufferedAttackUntilMs > 0 &&
+      nowMs <= localBufferedAttackUntilMs &&
+      nowMs - localPredictedLastAttackAtMs >= LOCAL_ATTACK_INTERVAL_MS &&
+      canUseCombatInput();
+    if (canCommitBufferedAttack) {
+      commitLocalAttackIntent(nowMs);
+    } else if (localBufferedAttackUntilMs > 0 && nowMs > localBufferedAttackUntilMs) {
+      localBufferedAttackUntilMs = 0;
     }
 
     if (
@@ -532,11 +568,13 @@ export async function createGlobalMatchScene(
       localPlayerState && localPlayerState.isAttacking
         ? (Math.max(1, Math.min(3, localPlayerState.attackComboIndex)) as 1 | 2 | 3)
         : 0;
-    const predictedAttackComboIndex =
-      localPredictedAttackComboIndex > 0 ? localPredictedAttackComboIndex : serverAttackComboIndex;
+    const activeAttackComboIndex =
+      localPredictedActiveAttackComboIndex > 0
+        ? localPredictedActiveAttackComboIndex
+        : serverAttackComboIndex;
 
     const serverBlocking = !!localPlayerState?.isBlocking;
-    const effectiveBlocking = (localPredictedBlockActive || serverBlocking) && predictedAttackComboIndex === 0;
+    const effectiveBlocking = (localPredictedBlockActive || serverBlocking) && activeAttackComboIndex === 0;
 
     const canRequestSprintIntent =
       inputEnabled &&
@@ -544,7 +582,7 @@ export async function createGlobalMatchScene(
       (localPlayerState?.isAlive ?? true) &&
       !isLocallyStunned &&
       !effectiveBlocking &&
-      predictedAttackComboIndex === 0;
+      activeAttackComboIndex === 0;
 
     maybeEmitLocalSprintIntent({
       isShiftPressed: canRequestSprintIntent ? inputState.descend : false,
@@ -559,8 +597,8 @@ export async function createGlobalMatchScene(
         isJumping: false,
         isUltimateActive: localUltimateRequested,
         isBlocking: effectiveBlocking,
-        attackComboIndex: predictedAttackComboIndex,
-        isHitReacting: isLocallyStunned && !effectiveBlocking && predictedAttackComboIndex === 0
+        attackComboIndex: activeAttackComboIndex,
+        isHitReacting: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
       };
       playerViewManager.updateLocalPlayerTransform(localView.getTransform(), idleAnimationState);
       localUltimateRequested = false;
@@ -585,7 +623,7 @@ export async function createGlobalMatchScene(
     const isPredictedMoving = predictedMovementDirection !== "none";
     const isPredictedSprinting =
       canRequestSprintIntent && inputState.descend && inputState.forward && isPredictedMoving;
-    const isUltimatePredictedActive = localUltimateRequested;
+    const isUltimatePredictedActive = localUltimateRequested || !!localPlayerState?.isUsingUltimate;
 
     let movementVector = new Vector3(
       forward.x * forwardAxis + right.x * sideAxis,
@@ -620,8 +658,8 @@ export async function createGlobalMatchScene(
         isJumping: false,
         isUltimateActive: isUltimatePredictedActive,
         isBlocking: effectiveBlocking,
-        attackComboIndex: predictedAttackComboIndex,
-        isHitReacting: isLocallyStunned && !effectiveBlocking && predictedAttackComboIndex === 0
+        attackComboIndex: activeAttackComboIndex,
+        isHitReacting: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
       };
       playerViewManager.updateLocalPlayerTransform(transform, predictedAnimationState);
       localUltimateRequested = false;
@@ -661,8 +699,8 @@ export async function createGlobalMatchScene(
         didPressJump,
       isUltimateActive: isUltimatePredictedActive,
       isBlocking: effectiveBlocking,
-      attackComboIndex: predictedAttackComboIndex,
-      isHitReacting: isLocallyStunned && !effectiveBlocking && predictedAttackComboIndex === 0
+      attackComboIndex: activeAttackComboIndex,
+      isHitReacting: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
     };
     playerViewManager.updateLocalPlayerTransform(transform, predictedAnimationState);
     localUltimateRequested = false;
@@ -758,6 +796,9 @@ export async function createGlobalMatchScene(
       };
     },
     triggerLocalUltimateAnimation,
+    triggerPlayerUltimateAnimation: (sessionId) => {
+      playerViewManager.playPlayerAnimationCommand(sessionId, "ultimate");
+    },
     getPlayerScreenPosition: (sessionId) => {
       const target = playerViewManager.getPlayerCameraTarget(sessionId);
       if (!target) {

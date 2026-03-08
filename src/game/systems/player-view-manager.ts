@@ -2,6 +2,7 @@
 import type { Scene } from "@babylonjs/core";
 import type { MatchPlayerState } from "../../models/match-player.model";
 import type { AnimationGameplayState } from "../animation/animation-state";
+import type { AnimationCommand } from "../animation/animation-command";
 import type { LocalPlayerView } from "../entities/local-player.view";
 import type { PlayerViewRole, RemotePlayerView } from "../entities/remote-player.view";
 import { createPlayerFactory } from "./player-factory";
@@ -53,6 +54,9 @@ function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     ultimateCharge: player.ultimateCharge,
     ultimateMax: player.ultimateMax,
     isUltimateReady: player.isUltimateReady,
+    isUsingUltimate: player.isUsingUltimate,
+    ultimateStartedAt: player.ultimateStartedAt,
+    ultimateEndsAt: player.ultimateEndsAt,
     maxStamina: player.maxStamina,
     currentStamina: player.currentStamina,
     isSprinting: player.isSprinting,
@@ -93,6 +97,9 @@ function didPlayerStateChange(previous: MatchPlayerState | undefined, next: Matc
     previous.isGuardBroken !== next.isGuardBroken ||
     previous.stunUntil !== next.stunUntil ||
     previous.lastGuardDamagedAt !== next.lastGuardDamagedAt ||
+    previous.isUsingUltimate !== next.isUsingUltimate ||
+    previous.ultimateStartedAt !== next.ultimateStartedAt ||
+    previous.ultimateEndsAt !== next.ultimateEndsAt ||
     previous.isAlive !== next.isAlive ||
     previous.nickname !== next.nickname ||
     previous.heroId !== next.heroId ||
@@ -125,6 +132,7 @@ export type PlayerViewManager = {
   getLocalPlayerView: () => LocalPlayerView | null;
   getLocalPlayerState: () => MatchPlayerState | null;
   getPlayerCameraTarget: (sessionId: string) => { x: number; y: number; z: number } | null;
+  playPlayerAnimationCommand: (sessionId: string, command: AnimationCommand) => void;
   dispose: () => void;
 };
 
@@ -397,6 +405,14 @@ export function createPlayerViewManager(options: CreatePlayerViewManagerOptions)
       }
 
       return view.getCameraTarget();
+    },
+    playPlayerAnimationCommand: (sessionId, command) => {
+      const view = playerViewsBySessionId.get(sessionId);
+      if (!view) {
+        return;
+      }
+
+      view.playAnimationCommand(command);
     },
     dispose: () => {
       playerViewsBySessionId.forEach((view) => {

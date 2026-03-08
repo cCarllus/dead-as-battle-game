@@ -8,12 +8,17 @@ export type MatchPlayerState = {
   y: number;
   z: number;
   rotationY: number;
+  kills: number;
+  deaths: number;
   maxHealth: number;
   currentHealth: number;
   isAlive: boolean;
   ultimateCharge: number;
   ultimateMax: number;
   isUltimateReady: boolean;
+  isUsingUltimate: boolean;
+  ultimateStartedAt: number;
+  ultimateEndsAt: number;
   maxStamina: number;
   currentStamina: number;
   isSprinting: boolean;
@@ -104,4 +109,19 @@ export type CombatStateEventPayload = {
   x: number;
   y: number;
   z: number;
+};
+
+export type CombatKillEventPayload = {
+  killerSessionId: string;
+  victimSessionId: string;
+  killerKills: number;
+  victimDeaths: number;
+};
+
+export type CombatUltimateEventPayload = {
+  sessionId: string;
+  characterId: string;
+  durationMs: number;
+  startedAt: number;
+  endsAt: number;
 };

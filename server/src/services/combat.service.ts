@@ -3,6 +3,7 @@ import type {
   CombatBlockEventPayload,
   CombatGuardBreakEventPayload,
   CombatHitEventPayload,
+  CombatKillEventPayload,
   MatchPlayerState
 } from "../models/match-player.model.js";
 import { setHealth } from "./health.service.js";
@@ -45,6 +46,7 @@ export type AttackResolution = {
   hitEvent: CombatHitEventPayload | null;
   blockEvent: CombatBlockEventPayload | null;
   guardBreakEvent: CombatGuardBreakEventPayload | null;
+  killEvent: CombatKillEventPayload | null;
 };
 
 function asComboHitIndex(value: number): ComboHitIndex {
@@ -116,7 +118,8 @@ export function handleAttackStart(options: {
       stateChanged: false,
       hitEvent: null,
       blockEvent: null,
-      guardBreakEvent: null
+      guardBreakEvent: null,
+      killEvent: null
     };
   }
 
@@ -134,7 +137,8 @@ export function handleAttackStart(options: {
       stateChanged: true,
       hitEvent: null,
       blockEvent: null,
-      guardBreakEvent: null
+      guardBreakEvent: null,
+      killEvent: null
     };
   }
 
@@ -167,10 +171,12 @@ export function handleAttackStart(options: {
             targetSessionId: target.sessionId,
             guardBreakDurationMs: BLOCK_GUARD_CONFIG.guardBreakStunMs
           }
-        : null
+        : null,
+      killEvent: null
     };
   }
 
+  const targetWasAlive = target.isAlive;
   const damage = resolveComboDamage(comboHitIndex);
   const nextHealth = target.currentHealth - damage;
   setHealth(target, nextHealth);
@@ -179,6 +185,15 @@ export function handleAttackStart(options: {
 
   applyHitStun(target, comboHitIndex, now);
   applyLightKnockback(attacker, target, resolveComboKnockback(comboHitIndex));
+
+  const didKillTarget = targetWasAlive && !target.isAlive;
+  if (didKillTarget) {
+    target.isUsingUltimate = false;
+    target.ultimateStartedAt = 0;
+    target.ultimateEndsAt = 0;
+    attacker.kills += 1;
+    target.deaths += 1;
+  }
 
   return {
     stateChanged: true,
@@ -191,7 +206,15 @@ export function handleAttackStart(options: {
       didGuardBreak: false
     },
     blockEvent: null,
-    guardBreakEvent: null
+    guardBreakEvent: null,
+    killEvent: didKillTarget
+      ? {
+          killerSessionId: attacker.sessionId,
+          victimSessionId: target.sessionId,
+          killerKills: attacker.kills,
+          victimDeaths: target.deaths
+        }
+      : null
   };
 }
 

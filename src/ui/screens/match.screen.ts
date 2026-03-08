@@ -5,6 +5,8 @@ import type { MatchService } from "../../services/match.service";
 import type { GameSettings, SettingsService } from "../../services/settings.service";
 import type { TeamService } from "../../services/team.service";
 import type { UserService } from "../../services/user.service";
+import type { ChampionId } from "../../models/champion.model";
+import { isChampionId } from "../../data/champions.catalog";
 import { resolveCombatHudState } from "../../services/hud.service";
 import { createFullscreenSystem } from "../../game/systems/fullscreen.system";
 import { createInputModeSystem } from "../../game/systems/input-mode.system";
@@ -59,11 +61,6 @@ function resolveTeamMemberUserIds(teamService: TeamService): Set<string> {
   return new Set(currentTeam.members.map((member) => member.userId));
 }
 
-type ScoreboardKda = {
-  kills: number;
-  deaths: number;
-};
-
 function normalizeCounter(value: number): number {
   if (!Number.isFinite(value)) {
     return 0;
@@ -95,11 +92,7 @@ function resolvePingLabel(): string {
   return "--ms";
 }
 
-function resolvePlayerKda(player: MatchPlayerState, isLocalPlayer: boolean, localKda: ScoreboardKda): ScoreboardKda {
-  if (isLocalPlayer) {
-    return localKda;
-  }
-
+function resolvePlayerKda(player: MatchPlayerState): { kills: number; deaths: number } {
   return {
     kills: normalizeCounter(player.kills),
     deaths: normalizeCounter(player.deaths)
@@ -110,7 +103,6 @@ function renderPlayerList(
   listNode: HTMLElement,
   players: MatchPlayerState[],
   localSessionId: string | null,
-  localKda: ScoreboardKda,
   localPingLabel: string,
   locale: Locale
 ): void {
@@ -131,8 +123,8 @@ function renderPlayerList(
       return leftIsLocal ? -1 : 1;
     }
 
-    const leftKda = resolvePlayerKda(left, leftIsLocal, localKda);
-    const rightKda = resolvePlayerKda(right, rightIsLocal, localKda);
+    const leftKda = resolvePlayerKda(left);
+    const rightKda = resolvePlayerKda(right);
     if (leftKda.kills !== rightKda.kills) {
       return rightKda.kills - leftKda.kills;
     }
@@ -150,7 +142,7 @@ function renderPlayerList(
 
   sortedPlayers.forEach((player) => {
     const isLocalPlayer = localSessionId !== null && player.sessionId === localSessionId;
-    const kda = resolvePlayerKda(player, isLocalPlayer, localKda);
+    const kda = resolvePlayerKda(player);
     const pingLabel = isLocalPlayer ? localPingLabel : "--ms";
 
     const row = document.createElement("li");
@@ -193,7 +185,6 @@ function renderPlayerList(
 function buildPresenceSignature(
   players: MatchPlayerState[],
   localSessionId: string | null,
-  localKda: ScoreboardKda,
   localPingLabel: string
 ): string {
   const sortedPlayers = [...players].sort((left, right) => {
@@ -207,7 +198,7 @@ function buildPresenceSignature(
   return sortedPlayers
     .map((player) => {
       const isLocalPlayer = localSessionId !== null && player.sessionId === localSessionId;
-      const kda = resolvePlayerKda(player, isLocalPlayer, localKda);
+      const kda = resolvePlayerKda(player);
       const ping = isLocalPlayer ? localPingLabel : "--ms";
       return `${player.sessionId}:${player.nickname}:${player.heroId}:${player.joinedAt}:${kda.kills}:${kda.deaths}:${ping}:${isLocalPlayer ? "1" : "0"}`;
     })
@@ -341,10 +332,6 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   let disposeScenePointerLockChanged: (() => void) | null = null;
   let isFlyModeEnabled = false;
   let isScoreboardRequested = false;
-  let localKda: ScoreboardKda = {
-    kills: 0,
-    deaths: 0
-  };
   let localPingLabel = "--ms";
   let previousLocalStaminaPercent = 100;
   let previousSprintBlocked = false;
@@ -429,25 +416,51 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     });
   };
 
-  const refreshHudFromUserProfile = (): void => {
+  const resolveLocalChampionIdForProfile = (): ChampionId | null => {
+    if (localSessionId) {
+      const localMatchPlayer =
+        actions.matchService.getPlayers().find((player) => player.sessionId === localSessionId) ?? null;
+      if (localMatchPlayer && isChampionId(localMatchPlayer.heroId)) {
+        return localMatchPlayer.heroId;
+      }
+    }
+
     const user = actions.userService.getCurrentUser();
     if (!user) {
-      localKda = {
-        kills: 0,
-        deaths: 0
-      };
-      hudKills.textContent = "0";
-      hudDeaths.textContent = "0";
+      return null;
+    }
+
+    return user.selectedChampionId;
+  };
+
+  const applyLocalChampionKdaDelta = (killsDelta: number, deathsDelta: number): void => {
+    if (killsDelta === 0 && deathsDelta === 0) {
       return;
     }
 
-    const selectedChampionProgress = user.champions[user.selectedChampionId];
-    localKda = {
-      kills: normalizeCounter(selectedChampionProgress?.kills ?? 0),
-      deaths: normalizeCounter(selectedChampionProgress?.deaths ?? 0)
-    };
-    hudKills.textContent = String(localKda.kills);
-    hudDeaths.textContent = String(localKda.deaths);
+    const championId = resolveLocalChampionIdForProfile();
+    if (!championId) {
+      return;
+    }
+
+    actions.userService.updateCurrentUser((user) => {
+      const championProgress = user.champions[championId];
+      if (!championProgress) {
+        return user;
+      }
+
+      return {
+        ...user,
+        champions: {
+          ...user.champions,
+          [championId]: {
+            ...championProgress,
+            kills: normalizeCounter(championProgress.kills + killsDelta),
+            deaths: normalizeCounter(championProgress.deaths + deathsDelta)
+          }
+        }
+      };
+    });
   };
 
   const refreshLocalPingLabel = (): void => {
@@ -558,6 +571,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   const updateLocalCombatHud = (players: MatchPlayerState[]): void => {
     if (!localSessionId) {
+      hudKills.textContent = "0";
+      hudDeaths.textContent = "0";
       setLocalCombatHud(null);
       respawnRequestPending = false;
       deathModalRespawnButton.disabled = false;
@@ -567,6 +582,13 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     }
 
     const localPlayer = players.find((player) => player.sessionId === localSessionId) ?? null;
+    if (!localPlayer) {
+      hudKills.textContent = "0";
+      hudDeaths.textContent = "0";
+    } else {
+      hudKills.textContent = String(normalizeCounter(localPlayer.kills));
+      hudDeaths.textContent = String(normalizeCounter(localPlayer.deaths));
+    }
     setLocalCombatHud(localPlayer);
 
     const isDead = !!localPlayer && !localPlayer.isAlive;
@@ -670,10 +692,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const renderMatchPresence = (players: MatchPlayerState[]): void => {
     updateLocalCombatHud(players);
 
-    const nextPresenceSignature = buildPresenceSignature(players, localSessionId, localKda, localPingLabel);
+    const nextPresenceSignature = buildPresenceSignature(players, localSessionId, localPingLabel);
     if (nextPresenceSignature !== lastPresenceSignature) {
       setPlayerCount(players.length);
-      renderPlayerList(playerList, players, localSessionId, localKda, localPingLabel, locale);
+      renderPlayerList(playerList, players, localSessionId, localPingLabel, locale);
       lastPresenceSignature = nextPresenceSignature;
     }
   };
@@ -702,6 +724,22 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   const disposeMatchError = actions.matchService.onError((error) => {
     showError(error.message);
+  });
+  const disposeCombatKill = actions.matchService.onCombatKill((payload) => {
+    if (!localSessionId) {
+      return;
+    }
+
+    const killsDelta = payload.killerSessionId === localSessionId ? 1 : 0;
+    const deathsDelta = payload.victimSessionId === localSessionId ? 1 : 0;
+    applyLocalChampionKdaDelta(killsDelta, deathsDelta);
+  });
+  const disposeCombatUltimate = actions.matchService.onCombatUltimate((payload) => {
+    if (localSessionId && payload.sessionId === localSessionId) {
+      return;
+    }
+
+    sceneHandle?.triggerPlayerUltimateAnimation(payload.sessionId);
   });
 
   const disposeFlyToggleClick = bind(flyToggleButton, "click", () => {
@@ -901,10 +939,11 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   });
 
   setPlayerCount(0);
-  renderPlayerList(playerList, [], localSessionId, localKda, localPingLabel, locale);
+  renderPlayerList(playerList, [], localSessionId, localPingLabel, locale);
   hudTimer.textContent = formatMatchElapsedTime(elapsedSeconds);
   setLocalCombatHud(null);
-  refreshHudFromUserProfile();
+  hudKills.textContent = "0";
+  hudDeaths.textContent = "0";
   refreshLocalPingLabel();
   inputModeSystem.setSettingsOpen(isSettingsModalOpen());
   applyInputState();
@@ -965,7 +1004,6 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       }, 1000);
 
       hudRefreshIntervalId = window.setInterval(() => {
-        refreshHudFromUserProfile();
         refreshLocalPingLabel();
         renderMatchPresence(actions.matchService.getPlayers());
       }, 2000);
@@ -995,6 +1033,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     disposePlayerRemoved();
     disposeTeamUpdated();
     disposeMatchError();
+    disposeCombatKill();
+    disposeCombatUltimate();
 
     pauseMenuSystem?.dispose();
     pauseMenuSystem = null;

@@ -4,19 +4,19 @@ import type { HeroAnimationConfig } from "../../animation/animation-types";
 export const DEFAULT_HERO_ANIMATION_CONFIG: HeroAnimationConfig = {
   heroId: "user",
   commandToGroupName: {
-    idle: "Walk_Backward",
+    idle: "ForwardRight_Run_Fight",
     walk: "Regular_Jump",
-    walkBack: "Idle_5",
+    walkBack: "Walking",
     walkLeft: "Running",
-    walkRight: "Skill_01",
-    run: "ForwardLeft_Run_Fight",
-    jump: "Walking",
-    ultimate: "ForwardRight_Run_Fight",
-    attack1: "Skill_01",
-    attack2: "Skill_01",
-    attack3: "Skill_01",
-    block: "Idle_5",
-    hit: "Regular_Jump"
+    walkRight: "ForwardLeft_Run_Fight",
+    run: "Sword_Parry",
+    jump: "Skill_01",
+    ultimate: "Walk_Backward",
+    attack1: "Charged_Slash",
+    attack2: "Idle_5",
+    attack3: "Left_Hook_from_Guard",
+    block: "Left_Jab_from_Guard",
+    hit: "Walking"
   },
   loopedCommands: ["idle", "walk", "walkBack", "walkLeft", "walkRight", "run", "block"]
 };

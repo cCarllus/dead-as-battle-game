@@ -13,8 +13,8 @@ export const USER_CHAMPION_TEMPLATE: ChampionCatalogItem = {
   priceCoins: 0,
   isDefault: true,
   universeName: "Dead as Battle",
-  modelUrl: "models-testes/champion.glb",
-  cardImageUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/images/champions/default/default_card.png",
+  modelUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/models/champions/default/default_champion_reload.glb",
+  cardImageUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/images/champions/default/default_champ_card.png",
   splashImageUrl: "https://imgs.search.brave.com/aenZAYJGTuXL89r7XCaO2E788nw3F7osgmTKkUj5-2Y/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pMS5z/bmRjZG4uY29tL2Fy/dHdvcmtzLWl5VXZT/UDVvSDBPQS0wLXQx/MDgweDEwODAuanBn",
   selectAudioUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/sounds/champions/default/default_audio_lobby.mp3",
   themeColor: DEFAULT_USER_CHAMPION_THEME

@@ -5,7 +5,9 @@ import type {
   MatchCombatBlockPayload,
   MatchCombatGuardBreakPayload,
   MatchCombatHitPayload,
+  MatchCombatKillPayload,
   MatchCombatStatePayload,
+  MatchCombatUltimatePayload,
   MatchPlayerMovedPayload,
   MatchPlayerJoinedPayload,
   MatchPlayerLeftPayload,
@@ -29,6 +31,8 @@ const MATCH_PLAYER_RESPAWN_EVENT = "player:respawn";
 const MATCH_COMBAT_HIT_EVENT = "combat:hit";
 const MATCH_COMBAT_BLOCK_EVENT = "combat:block";
 const MATCH_COMBAT_GUARD_BREAK_EVENT = "combat:guardBreak";
+const MATCH_COMBAT_KILL_EVENT = "combat:kill";
+const MATCH_COMBAT_ULTIMATE_EVENT = "combat:ultimate";
 const MATCH_COMBAT_STATE_EVENT = "combat:state";
 const DEFAULT_MAX_HEALTH = 1000;
 const DEFAULT_ULTIMATE_MAX = 100;
@@ -60,6 +64,8 @@ export type MatchService = {
   onCombatHit: (callback: (payload: MatchCombatHitPayload) => void) => () => void;
   onCombatBlock: (callback: (payload: MatchCombatBlockPayload) => void) => () => void;
   onCombatGuardBreak: (callback: (payload: MatchCombatGuardBreakPayload) => void) => () => void;
+  onCombatKill: (callback: (payload: MatchCombatKillPayload) => void) => () => void;
+  onCombatUltimate: (callback: (payload: MatchCombatUltimatePayload) => void) => () => void;
   onCombatState: (callback: (payload: MatchCombatStatePayload) => void) => () => void;
   onError: (callback: (error: Error) => void) => () => void;
   sendLocalMovement: (movement: { x: number; y: number; z: number; rotationY: number }) => void;
@@ -142,6 +148,9 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const ultimateMax = normalizeNumber(candidate.ultimateMax) ?? DEFAULT_ULTIMATE_MAX;
   const ultimateCharge = normalizeNumber(candidate.ultimateCharge) ?? 0;
   const isUltimateReady = normalizeBoolean(candidate.isUltimateReady) ?? ultimateCharge >= ultimateMax;
+  const isUsingUltimate = normalizeBoolean(candidate.isUsingUltimate) ?? false;
+  const ultimateStartedAt = normalizeNumber(candidate.ultimateStartedAt) ?? 0;
+  const ultimateEndsAt = normalizeNumber(candidate.ultimateEndsAt) ?? 0;
   const maxStamina = normalizeNumber(candidate.maxStamina) ?? DEFAULT_MAX_STAMINA;
   const currentStamina = normalizeNumber(candidate.currentStamina) ?? maxStamina;
   const isSprinting = normalizeBoolean(candidate.isSprinting) ?? false;
@@ -196,6 +205,9 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
     ultimateCharge: safeUltimateCharge,
     ultimateMax: safeUltimateMax,
     isUltimateReady: safeUltimateCharge >= safeUltimateMax ? true : isUltimateReady,
+    isUsingUltimate,
+    ultimateStartedAt,
+    ultimateEndsAt,
     maxStamina: safeMaxStamina,
     currentStamina: safeCurrentStamina,
     isSprinting: safeIsSprinting,
@@ -417,6 +429,60 @@ function normalizeCombatStatePayload(payload: unknown): MatchCombatStatePayload 
   };
 }
 
+function normalizeCombatKillPayload(payload: unknown): MatchCombatKillPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchCombatKillPayload>;
+  const killerSessionId = normalizeText(candidate.killerSessionId);
+  const victimSessionId = normalizeText(candidate.victimSessionId);
+  const killerKills = normalizeNumber(candidate.killerKills);
+  const victimDeaths = normalizeNumber(candidate.victimDeaths);
+
+  if (!killerSessionId || !victimSessionId || killerKills === null || victimDeaths === null) {
+    return null;
+  }
+
+  return {
+    killerSessionId,
+    victimSessionId,
+    killerKills: Math.max(0, Math.floor(killerKills)),
+    victimDeaths: Math.max(0, Math.floor(victimDeaths))
+  };
+}
+
+function normalizeCombatUltimatePayload(payload: unknown): MatchCombatUltimatePayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchCombatUltimatePayload>;
+  const sessionId = normalizeText(candidate.sessionId);
+  const characterId = normalizeText(candidate.characterId);
+  const durationMs = normalizeNumber(candidate.durationMs);
+  const startedAt = normalizeNumber(candidate.startedAt);
+  const endsAt = normalizeNumber(candidate.endsAt);
+
+  if (
+    !sessionId ||
+    !characterId ||
+    durationMs === null ||
+    startedAt === null ||
+    endsAt === null
+  ) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    characterId,
+    durationMs: Math.max(0, Math.floor(durationMs)),
+    startedAt,
+    endsAt
+  };
+}
+
 function clonePlayer(player: MatchPlayerState): MatchPlayerState {
   return {
     sessionId: player.sessionId,
@@ -435,6 +501,9 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     ultimateCharge: player.ultimateCharge,
     ultimateMax: player.ultimateMax,
     isUltimateReady: player.isUltimateReady,
+    isUsingUltimate: player.isUsingUltimate,
+    ultimateStartedAt: player.ultimateStartedAt,
+    ultimateEndsAt: player.ultimateEndsAt,
     maxStamina: player.maxStamina,
     currentStamina: player.currentStamina,
     isSprinting: player.isSprinting,
@@ -473,6 +542,8 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
   const combatHitListeners = new Set<(payload: MatchCombatHitPayload) => void>();
   const combatBlockListeners = new Set<(payload: MatchCombatBlockPayload) => void>();
   const combatGuardBreakListeners = new Set<(payload: MatchCombatGuardBreakPayload) => void>();
+  const combatKillListeners = new Set<(payload: MatchCombatKillPayload) => void>();
+  const combatUltimateListeners = new Set<(payload: MatchCombatUltimatePayload) => void>();
   const combatStateListeners = new Set<(payload: MatchCombatStatePayload) => void>();
   const errorListeners = new Set<(error: Error) => void>();
 
@@ -517,6 +588,18 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
 
   const emitCombatGuardBreak = (payload: MatchCombatGuardBreakPayload): void => {
     combatGuardBreakListeners.forEach((listener) => {
+      listener(payload);
+    });
+  };
+
+  const emitCombatKill = (payload: MatchCombatKillPayload): void => {
+    combatKillListeners.forEach((listener) => {
+      listener(payload);
+    });
+  };
+
+  const emitCombatUltimate = (payload: MatchCombatUltimatePayload): void => {
+    combatUltimateListeners.forEach((listener) => {
       listener(payload);
     });
   };
@@ -571,6 +654,9 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         existingPlayer.ultimateCharge !== incomingPlayer.ultimateCharge ||
         existingPlayer.ultimateMax !== incomingPlayer.ultimateMax ||
         existingPlayer.isUltimateReady !== incomingPlayer.isUltimateReady ||
+        existingPlayer.isUsingUltimate !== incomingPlayer.isUsingUltimate ||
+        existingPlayer.ultimateStartedAt !== incomingPlayer.ultimateStartedAt ||
+        existingPlayer.ultimateEndsAt !== incomingPlayer.ultimateEndsAt ||
         existingPlayer.maxStamina !== incomingPlayer.maxStamina ||
         existingPlayer.currentStamina !== incomingPlayer.currentStamina ||
         existingPlayer.isSprinting !== incomingPlayer.isSprinting ||
@@ -676,6 +762,55 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       }
 
       emitCombatGuardBreak(guardBreakPayload);
+    });
+
+    connectedRoom.onMessage(MATCH_COMBAT_KILL_EVENT, (payload: unknown) => {
+      const killPayload = normalizeCombatKillPayload(payload);
+      if (!killPayload) {
+        return;
+      }
+
+      const killer = playersBySessionId.get(killPayload.killerSessionId);
+      if (killer) {
+        playersBySessionId.set(killer.sessionId, {
+          ...killer,
+          kills: killPayload.killerKills
+        });
+      }
+
+      const victim = playersBySessionId.get(killPayload.victimSessionId);
+      if (victim) {
+        playersBySessionId.set(victim.sessionId, {
+          ...victim,
+          deaths: killPayload.victimDeaths
+        });
+      }
+
+      emitCombatKill(killPayload);
+      emitPlayersChanged();
+    });
+
+    connectedRoom.onMessage(MATCH_COMBAT_ULTIMATE_EVENT, (payload: unknown) => {
+      const ultimatePayload = normalizeCombatUltimatePayload(payload);
+      if (!ultimatePayload) {
+        return;
+      }
+
+      const player = playersBySessionId.get(ultimatePayload.sessionId);
+      if (player) {
+        const updatedPlayer: MatchPlayerState = {
+          ...player,
+          isUsingUltimate: true,
+          ultimateStartedAt: ultimatePayload.startedAt,
+          ultimateEndsAt: ultimatePayload.endsAt
+        };
+
+        playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
+        emitPlayerUpdated(updatedPlayer);
+        emitPlayersChanged();
+      }
+
+      emitCombatUltimate(ultimatePayload);
     });
 
     connectedRoom.onMessage(MATCH_COMBAT_STATE_EVENT, (payload: unknown) => {
@@ -846,6 +981,18 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       combatGuardBreakListeners.add(callback);
       return () => {
         combatGuardBreakListeners.delete(callback);
+      };
+    },
+    onCombatKill: (callback) => {
+      combatKillListeners.add(callback);
+      return () => {
+        combatKillListeners.delete(callback);
+      };
+    },
+    onCombatUltimate: (callback) => {
+      combatUltimateListeners.add(callback);
+      return () => {
+        combatUltimateListeners.delete(callback);
       };
     },
     onCombatState: (callback) => {

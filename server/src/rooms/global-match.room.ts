@@ -56,12 +56,15 @@ const MATCH_PLAYER_RESPAWN_EVENT = "player:respawn";
 const MATCH_COMBAT_HIT_EVENT = "combat:hit";
 const MATCH_COMBAT_BLOCK_EVENT = "combat:block";
 const MATCH_COMBAT_GUARD_BREAK_EVENT = "combat:guardBreak";
+const MATCH_COMBAT_KILL_EVENT = "combat:kill";
+const MATCH_COMBAT_ULTIMATE_EVENT = "combat:ultimate";
 const MATCH_COMBAT_STATE_EVENT = "combat:state";
 const MATCH_STATE_SYNC_INTERVAL_MS = 50;
 const MATCH_SPRINT_TICK_INTERVAL_MS = 50;
 const MATCH_MAX_SPRINT_DELTA_SECONDS = 0.2;
 const MATCH_ULTIMATE_AUTO_CHARGE_INTERVAL_MS = 2000;
 const MATCH_ULTIMATE_AUTO_CHARGE_AMOUNT = 5;
+const ULTIMATE_ACTIVE_DURATION_MS = 1200;
 const PLAYER_COLLISION_RADIUS = 0.44;
 const PLAYER_COLLISION_HEIGHT = 2.4;
 const PLAYER_COLLISION_MIN_DISTANCE = PLAYER_COLLISION_RADIUS * 2;
@@ -141,6 +144,8 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     userId: player.userId,
     nickname: player.nickname,
     heroId: player.heroId,
+    kills: player.kills,
+    deaths: player.deaths,
     x: player.x,
     y: player.y,
     z: player.z,
@@ -151,6 +156,9 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     ultimateCharge: player.ultimateCharge,
     ultimateMax: player.ultimateMax,
     isUltimateReady: player.isUltimateReady,
+    isUsingUltimate: player.isUsingUltimate,
+    ultimateStartedAt: player.ultimateStartedAt,
+    ultimateEndsAt: player.ultimateEndsAt,
     maxStamina: player.maxStamina,
     currentStamina: player.currentStamina,
     isSprinting: player.isSprinting,
@@ -435,6 +443,8 @@ export class GlobalMatchRoom extends Room {
       userId,
       nickname,
       heroId,
+      kills: 0,
+      deaths: 0,
       x: resolvedSpawn.x,
       y: spawn.y,
       z: resolvedSpawn.z,
@@ -445,6 +455,9 @@ export class GlobalMatchRoom extends Room {
       ultimateCharge: 0,
       ultimateMax: 0,
       isUltimateReady: false,
+      isUsingUltimate: false,
+      ultimateStartedAt: 0,
+      ultimateEndsAt: 0,
       maxStamina: 0,
       currentStamina: 0,
       isSprinting: false,
@@ -542,6 +555,10 @@ export class GlobalMatchRoom extends Room {
     if (result.guardBreakEvent) {
       this.broadcast(MATCH_COMBAT_GUARD_BREAK_EVENT, result.guardBreakEvent);
     }
+
+    if (result.killEvent) {
+      this.broadcast(MATCH_COMBAT_KILL_EVENT, result.killEvent);
+    }
   }
 
   private handleBlockStart(client: Client): void {
@@ -580,6 +597,11 @@ export class GlobalMatchRoom extends Room {
       return;
     }
 
+    const now = Date.now();
+    if (now < player.stunUntil || player.isGuardBroken) {
+      return;
+    }
+
     syncUltimateReady(player);
     if (!player.isUltimateReady || player.ultimateCharge < player.ultimateMax) {
       return;
@@ -589,6 +611,17 @@ export class GlobalMatchRoom extends Room {
     if (!wasConsumed) {
       return;
     }
+
+    player.isUsingUltimate = true;
+    player.ultimateStartedAt = now;
+    player.ultimateEndsAt = now + ULTIMATE_ACTIVE_DURATION_MS;
+    this.broadcast(MATCH_COMBAT_ULTIMATE_EVENT, {
+      sessionId: player.sessionId,
+      characterId: player.heroId,
+      durationMs: ULTIMATE_ACTIVE_DURATION_MS,
+      startedAt: player.ultimateStartedAt,
+      endsAt: player.ultimateEndsAt
+    });
 
     this.stateDirty = true;
   }
@@ -626,6 +659,9 @@ export class GlobalMatchRoom extends Room {
     player.blockStartedAt = 0;
     player.isSprinting = false;
     player.stunUntil = 0;
+    player.isUsingUltimate = false;
+    player.ultimateStartedAt = 0;
+    player.ultimateEndsAt = 0;
     player.x = resolvedSpawn.x;
     player.y = spawn.y;
     player.z = resolvedSpawn.z;
@@ -719,6 +755,20 @@ export class GlobalMatchRoom extends Room {
     });
 
     const didChangeCombat = tickCombatState(this.matchState.players, deltaTime, now);
+    let didChangeUltimateState = false;
+
+    Object.values(this.matchState.players).forEach((player) => {
+      if (!player.isUsingUltimate) {
+        return;
+      }
+
+      if (now < player.ultimateEndsAt) {
+        return;
+      }
+
+      player.isUsingUltimate = false;
+      didChangeUltimateState = true;
+    });
 
     if (didChangeCombat) {
       Object.values(this.matchState.players).forEach((player) => {
@@ -735,7 +785,7 @@ export class GlobalMatchRoom extends Room {
       });
     }
 
-    if (didChangeSprintOrStamina || didChangeCombat) {
+    if (didChangeSprintOrStamina || didChangeCombat || didChangeUltimateState) {
       this.stateDirty = true;
     }
   }

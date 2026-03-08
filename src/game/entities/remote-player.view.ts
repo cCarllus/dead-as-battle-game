@@ -2,6 +2,7 @@
 import type { AbstractMesh, TransformNode } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { MatchPlayerState } from "../../models/match-player.model";
+import type { AnimationCommand } from "../animation/animation-command";
 import {
   createDefaultAnimationGameplayState,
   type AnimationGameplayState,
@@ -21,6 +22,9 @@ const REMOTE_IDLE_TIMEOUT_MS = 480;
 const JUMP_ANIMATION_GRACE_MS = 260;
 const SPRINT_ANIMATION_GRACE_MS = 180;
 const ATTACK_ANIMATION_GRACE_MS = 240;
+const REMOTE_POSITION_LERP_FACTOR = 0.16;
+const REMOTE_ROTATION_LERP_FACTOR = 0.2;
+const REMOTE_SNAP_DISTANCE_SQUARED = 36;
 
 export type PlayerViewRole = "local" | "teammate" | "enemy";
 
@@ -37,10 +41,27 @@ export type RemotePlayerView = {
   lastKnownRotationY: number;
   updateFromState: (player: MatchPlayerState, animationOverride?: AnimationGameplayState) => void;
   tick: (nowMs: number) => void;
+  playAnimationCommand: (command: AnimationCommand) => void;
   getTransform: () => { x: number; y: number; z: number; rotationY: number };
   getCameraTarget: () => { x: number; y: number; z: number };
   dispose: () => void;
 };
+
+function lerp(from: number, to: number, factor: number): number {
+  return from + (to - from) * factor;
+}
+
+function normalizeAngleRadians(angle: number): number {
+  const tau = Math.PI * 2;
+  let normalized = angle % tau;
+  if (normalized > Math.PI) {
+    normalized -= tau;
+  }
+  if (normalized < -Math.PI) {
+    normalized += tau;
+  }
+  return normalized;
+}
 
 function toTransform(player: MatchPlayerState): { x: number; y: number; z: number; rotationY: number } {
   return {
@@ -90,6 +111,7 @@ function resolveAnimationGameplayState(options: {
   isBlocking: boolean;
   attackComboIndex: 0 | 1 | 2 | 3;
   isStunned: boolean;
+  isUltimateActive: boolean;
 }): AnimationGameplayState {
   if (!options.isAlive) {
     return createDefaultAnimationGameplayState();
@@ -125,7 +147,7 @@ function resolveAnimationGameplayState(options: {
     movementDirection,
     isSprinting: options.isSprinting,
     isJumping: Math.abs(deltaY) >= VERTICAL_MOVEMENT_EPSILON,
-    isUltimateActive: false,
+    isUltimateActive: options.isUltimateActive,
     isBlocking,
     attackComboIndex: options.attackComboIndex,
     isHitReacting
@@ -167,6 +189,7 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
   let sprintAnimationGraceUntilMs = 0;
   let attackAnimationGraceUntilMs = 0;
   let lastAttackComboIndex: 1 | 2 | 3 = 1;
+  let remoteTargetTransform = toTransform(options.player);
 
   const updateFromState = (
     player: MatchPlayerState,
@@ -174,7 +197,11 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
   ): void => {
     const previousPosition = view.lastKnownPosition;
     const transform = toTransform(player);
-    entity.setTransform(transform);
+    if (options.role === "local") {
+      entity.setTransform(transform);
+    } else {
+      remoteTargetTransform = transform;
+    }
 
     if (view.nickname !== player.nickname) {
       entity.setNickname(player.nickname);
@@ -214,7 +241,8 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
             isSprinting: player.isSprinting,
             isBlocking: player.isBlocking,
             attackComboIndex: serverAttackComboIndex,
-            isStunned: serverIsStunned
+            isStunned: serverIsStunned,
+            isUltimateActive: player.isUsingUltimate
           });
 
     if (!shouldKeepLocalPredictedAnimation) {
@@ -292,6 +320,25 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
         return;
       }
 
+      const currentTransform = entity.getTransform();
+      const dx = remoteTargetTransform.x - currentTransform.x;
+      const dy = remoteTargetTransform.y - currentTransform.y;
+      const dz = remoteTargetTransform.z - currentTransform.z;
+      const distanceSquared = dx * dx + dy * dy + dz * dz;
+
+      const deltaRotation = normalizeAngleRadians(remoteTargetTransform.rotationY - currentTransform.rotationY);
+      const shouldSnap = distanceSquared >= REMOTE_SNAP_DISTANCE_SQUARED;
+      if (shouldSnap) {
+        entity.setTransform(remoteTargetTransform);
+      } else if (distanceSquared > 0.000001 || Math.abs(deltaRotation) > 0.0005) {
+        entity.setTransform({
+          x: lerp(currentTransform.x, remoteTargetTransform.x, REMOTE_POSITION_LERP_FACTOR),
+          y: lerp(currentTransform.y, remoteTargetTransform.y, REMOTE_POSITION_LERP_FACTOR),
+          z: lerp(currentTransform.z, remoteTargetTransform.z, REMOTE_POSITION_LERP_FACTOR),
+          rotationY: currentTransform.rotationY + deltaRotation * REMOTE_ROTATION_LERP_FACTOR
+        });
+      }
+
       if (!animationGameplayState.isMoving) {
         return;
       }
@@ -313,6 +360,9 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
         isHitReacting: false
       };
       entity.setAnimationGameplayState(animationGameplayState);
+    },
+    playAnimationCommand: (command) => {
+      entity.playAnimationCommand(command);
     },
     getTransform: () => {
       return entity.getTransform();

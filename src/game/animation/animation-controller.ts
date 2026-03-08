@@ -63,6 +63,10 @@ function resolveCommandPriority(command: AnimationCommand): number {
   }
 }
 
+function isComboAttackCommand(command: AnimationCommand): boolean {
+  return command === "attack1" || command === "attack2" || command === "attack3";
+}
+
 export function createAnimationController(options: CreateAnimationControllerOptions): AnimationController {
   const warnedMissingMappings = new Set<AnimationCommand>();
   const warnedMissingGroups = new Set<string>();
@@ -173,10 +177,14 @@ export function createAnimationController(options: CreateAnimationControllerOpti
       const currentIsLooping = shouldLoopCommand(currentPlaybackCommand, options.animationConfig);
 
       if (!currentIsLooping && currentGroup.isPlaying) {
+        const canOverrideComboAttack =
+          isComboAttackCommand(currentPlaybackCommand) &&
+          isComboAttackCommand(requestedCommand) &&
+          currentPlaybackCommand !== requestedCommand;
         const canOverrideByPriority =
           resolveCommandPriority(requestedCommand) > resolveCommandPriority(currentPlaybackCommand);
 
-        if (!canOverrideByPriority) {
+        if (!canOverrideByPriority && !canOverrideComboAttack) {
           return;
         }
       }
