@@ -3,7 +3,7 @@ import type { ChampionCatalogItem, ChampionId } from "../models/champion.model";
 
 export const CHAMPION_IDS: readonly ChampionId[] = ["user", "sukuna", "kaiju_no_8"];
 
-const DEFAULT_USER_CHAMPION_THEME = "#ff4a4a" as const;
+const DEFAULT_USER_CHAMPION_THEME = "#850404af" as const;
 
 export const DEFAULT_CHAMPION_ID: ChampionId = "user";
 

@@ -56,11 +56,18 @@ function splitModelPath(modelUrl: string): { rootUrl: string; fileName: string }
   };
 }
 
-function playAnimationGroups(groups: readonly { start: (loop?: boolean, speedRatio?: number) => unknown; reset: () => unknown }[]): void {
-  groups.forEach((group) => {
-    group.reset();
-    group.start(true, 1);
-  });
+function playAnimationGroups(
+  groups: readonly { name?: string; start: (loop?: boolean, speedRatio?: number) => unknown; reset: () => unknown; stop?: () => unknown }[],
+  preferredName: string
+): void {
+  const target = groups.find((g) => (g.name ?? "").toLowerCase() === preferredName.toLowerCase());
+  const fallback = groups[0];
+  const selected = target ?? fallback;
+  if (!selected) return;
+
+  groups.forEach((g) => g.stop?.());
+  selected.reset();
+  selected.start(true, 1);
 }
 
 function normalizeModel(root: TransformNode): ChampionPreviewFrame {
@@ -229,7 +236,7 @@ export function mountChampionPreview(container: HTMLElement, options: ChampionPr
 
         modelFrame = normalizeModel(modelRoot);
         frameCamera(camera, engine, modelFrame);
-        playAnimationGroups(result.animationGroups);
+        playAnimationGroups(result.animationGroups, "Walk_Backward");
 
         if (fallbackIcon && !isDisposed) {
           fallbackIcon.style.display = "none";

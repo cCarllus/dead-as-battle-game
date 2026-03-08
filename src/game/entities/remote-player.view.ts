@@ -13,9 +13,13 @@ import {
   type PlayerVisualStyle
 } from "./player.entity";
 
-const MOVEMENT_EPSILON_SQUARED = 0.0004;
+const MOVEMENT_START_EPSILON_SQUARED = 0.0004;
+const MOVEMENT_STOP_EPSILON_SQUARED = 0.0001;
+const MOVEMENT_DIRECTION_STICKY_EPSILON_SQUARED = 0.0016;
 const VERTICAL_MOVEMENT_EPSILON = 0.02;
-const REMOTE_IDLE_TIMEOUT_MS = 320;
+const REMOTE_IDLE_TIMEOUT_MS = 480;
+const JUMP_ANIMATION_GRACE_MS = 260;
+const SPRINT_ANIMATION_GRACE_MS = 180;
 
 export type PlayerViewRole = "local" | "teammate" | "enemy";
 
@@ -30,7 +34,7 @@ export type RemotePlayerView = {
   heroId: string;
   lastKnownPosition: { x: number; y: number; z: number };
   lastKnownRotationY: number;
-  updateFromState: (player: MatchPlayerState) => void;
+  updateFromState: (player: MatchPlayerState, animationOverride?: AnimationGameplayState) => void;
   tick: (nowMs: number) => void;
   getTransform: () => { x: number; y: number; z: number; rotationY: number };
   getCameraTarget: () => { x: number; y: number; z: number };
@@ -78,6 +82,7 @@ function resolveMovementDirectionFromDelta(
 function resolveAnimationGameplayState(options: {
   previousPosition: { x: number; y: number; z: number };
   currentPosition: { x: number; y: number; z: number };
+  previousAnimationState: AnimationGameplayState;
   rotationY: number;
   isAlive: boolean;
   isSprinting: boolean;
@@ -90,11 +95,23 @@ function resolveAnimationGameplayState(options: {
   const deltaY = options.currentPosition.y - options.previousPosition.y;
   const deltaZ = options.currentPosition.z - options.previousPosition.z;
 
-  const isMoving =
-    horizontalDistanceSquared(options.previousPosition, options.currentPosition) >= MOVEMENT_EPSILON_SQUARED;
-  const movementDirection = isMoving
-    ? resolveMovementDirectionFromDelta(deltaX, deltaZ, options.rotationY)
-    : "none";
+  const horizontalDistance = horizontalDistanceSquared(options.previousPosition, options.currentPosition);
+  const movementThreshold = options.previousAnimationState.isMoving
+    ? MOVEMENT_STOP_EPSILON_SQUARED
+    : MOVEMENT_START_EPSILON_SQUARED;
+  const isMoving = horizontalDistance >= movementThreshold;
+
+  let movementDirection: MovementDirection = "none";
+  if (isMoving) {
+    const shouldKeepPreviousDirection =
+      options.previousAnimationState.isMoving &&
+      options.previousAnimationState.movementDirection !== "none" &&
+      horizontalDistance <= MOVEMENT_DIRECTION_STICKY_EPSILON_SQUARED;
+
+    movementDirection = shouldKeepPreviousDirection
+      ? options.previousAnimationState.movementDirection
+      : resolveMovementDirectionFromDelta(deltaX, deltaZ, options.rotationY);
+  }
 
   return {
     isMoving,
@@ -127,8 +144,13 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
   let animationGameplayState = createDefaultAnimationGameplayState();
   let lastMovementAtMs = Date.now();
   let lastStateSyncAtMs = Date.now();
+  let jumpAnimationGraceUntilMs = 0;
+  let sprintAnimationGraceUntilMs = 0;
 
-  const updateFromState = (player: MatchPlayerState): void => {
+  const updateFromState = (
+    player: MatchPlayerState,
+    animationOverride?: AnimationGameplayState
+  ): void => {
     const previousPosition = view.lastKnownPosition;
     const transform = toTransform(player);
     entity.setTransform(transform);
@@ -143,22 +165,58 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
       view.heroId = player.heroId;
     }
 
-    const nextAnimationGameplayState = resolveAnimationGameplayState({
-      previousPosition,
-      currentPosition: transform,
-      rotationY: transform.rotationY,
-      isAlive: player.isAlive,
-      isSprinting: player.isSprinting
-    });
+    const shouldKeepLocalPredictedAnimation = options.role === "local" && !animationOverride;
+    const nextAnimationGameplayState: AnimationGameplayState = shouldKeepLocalPredictedAnimation
+      ? animationGameplayState
+      : animationOverride
+        ? {
+            isMoving: animationOverride.isMoving,
+            movementDirection: animationOverride.movementDirection,
+            isSprinting: animationOverride.isSprinting,
+            isJumping: animationOverride.isJumping,
+            isUltimateActive: animationOverride.isUltimateActive
+          }
+        : resolveAnimationGameplayState({
+            previousPosition,
+            currentPosition: transform,
+            previousAnimationState: animationGameplayState,
+            rotationY: transform.rotationY,
+            isAlive: player.isAlive,
+            isSprinting: player.isSprinting
+          });
 
     const nowMs = Date.now();
-    if (nextAnimationGameplayState.isMoving) {
-      lastMovementAtMs = nowMs;
+    if (!shouldKeepLocalPredictedAnimation) {
+      if (animationOverride) {
+        jumpAnimationGraceUntilMs = 0;
+        sprintAnimationGraceUntilMs = 0;
+      } else if (!player.isAlive) {
+        jumpAnimationGraceUntilMs = 0;
+        sprintAnimationGraceUntilMs = 0;
+      } else {
+        const verticalDelta = transform.y - previousPosition.y;
+        if (verticalDelta >= VERTICAL_MOVEMENT_EPSILON) {
+          jumpAnimationGraceUntilMs = nowMs + JUMP_ANIMATION_GRACE_MS;
+        }
+        if (player.isSprinting) {
+          sprintAnimationGraceUntilMs = nowMs + SPRINT_ANIMATION_GRACE_MS;
+        }
+      }
+
+      nextAnimationGameplayState.isJumping =
+        nextAnimationGameplayState.isJumping || nowMs < jumpAnimationGraceUntilMs;
+      nextAnimationGameplayState.isSprinting =
+        nextAnimationGameplayState.isSprinting || nowMs < sprintAnimationGraceUntilMs;
+
+      if (nextAnimationGameplayState.isMoving) {
+        lastMovementAtMs = nowMs;
+      }
+
+      animationGameplayState = nextAnimationGameplayState;
+      entity.setAnimationGameplayState(animationGameplayState);
     }
 
     lastStateSyncAtMs = nowMs;
-    animationGameplayState = nextAnimationGameplayState;
-    entity.setAnimationGameplayState(animationGameplayState);
 
     view.lastKnownPosition = {
       x: transform.x,

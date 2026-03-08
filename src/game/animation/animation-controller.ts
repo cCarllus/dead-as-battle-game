@@ -34,6 +34,27 @@ function shouldLoopCommand(command: AnimationCommand, animationConfig: HeroAnima
   return loopedCommands.some((loopedCommand) => loopedCommand === command);
 }
 
+const DEFAULT_BLENDING_DURATION_SECONDS = 0.18;
+
+function resolveCommandPriority(command: AnimationCommand): number {
+  switch (command) {
+    case "ultimate":
+      return 4;
+    case "jump":
+      return 3;
+    case "run":
+      return 2;
+    case "walk":
+    case "walkBack":
+    case "walkLeft":
+    case "walkRight":
+      return 1;
+    case "idle":
+    default:
+      return 0;
+  }
+}
+
 export function createAnimationController(options: CreateAnimationControllerOptions): AnimationController {
   const warnedMissingMappings = new Set<AnimationCommand>();
   const warnedMissingGroups = new Set<string>();
@@ -41,7 +62,7 @@ export function createAnimationController(options: CreateAnimationControllerOpti
   const blendingDurationSeconds =
     typeof options.blendingDurationSeconds === "number" && options.blendingDurationSeconds >= 0
       ? options.blendingDurationSeconds
-      : 0;
+      : DEFAULT_BLENDING_DURATION_SECONDS;
 
   const normalizedGroups = options.animationGroups.map((group) => {
     group.stop();
@@ -131,6 +152,19 @@ export function createAnimationController(options: CreateAnimationControllerOpti
   const play = (requestedCommand: AnimationCommand): void => {
     if (currentRequestedCommand === requestedCommand) {
       return;
+    }
+
+    if (currentGroup && currentPlaybackCommand) {
+      const currentIsLooping = shouldLoopCommand(currentPlaybackCommand, options.animationConfig);
+
+      if (!currentIsLooping && currentGroup.isPlaying) {
+        const canOverrideByPriority =
+          resolveCommandPriority(requestedCommand) > resolveCommandPriority(currentPlaybackCommand);
+
+        if (!canOverrideByPriority) {
+          return;
+        }
+      }
     }
 
     const playableAnimation = resolvePlayableAnimation(requestedCommand);

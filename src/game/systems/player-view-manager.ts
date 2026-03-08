@@ -1,6 +1,7 @@
 // Responsável por manter PlayerViews em Map<sessionId, PlayerView> e aplicar sync de rede apenas no gameplayRoot.
 import type { Scene } from "@babylonjs/core";
 import type { MatchPlayerState } from "../../models/match-player.model";
+import type { AnimationGameplayState } from "../animation/animation-state";
 import type { LocalPlayerView } from "../entities/local-player.view";
 import type { PlayerViewRole, RemotePlayerView } from "../entities/remote-player.view";
 import { createPlayerFactory } from "./player-factory";
@@ -96,7 +97,10 @@ export type PlayerViewManager = {
   updatePlayer: (player: MatchPlayerState) => void;
   removePlayer: (sessionId: string) => void;
   setTeamMemberUserIds: (userIds: string[]) => void;
-  updateLocalPlayerTransform: (transform: { x: number; y: number; z: number; rotationY: number }) => void;
+  updateLocalPlayerTransform: (
+    transform: { x: number; y: number; z: number; rotationY: number },
+    animationState?: AnimationGameplayState
+  ) => void;
   tick: (nowMs: number) => void;
   getLocalPlayerView: () => LocalPlayerView | null;
   getLocalPlayerState: () => MatchPlayerState | null;
@@ -335,7 +339,7 @@ export function createPlayerViewManager(options: CreatePlayerViewManagerOptions)
         syncPlayerViewFromServer(player, localUserId);
       });
     },
-    updateLocalPlayerTransform: (transform) => {
+    updateLocalPlayerTransform: (transform, animationState) => {
       const localPlayer = playersBySessionId.get(options.localSessionId);
       const localPlayerView = getLocalPlayerView();
       if (!localPlayer || !localPlayerView) {
@@ -348,7 +352,7 @@ export function createPlayerViewManager(options: CreatePlayerViewManagerOptions)
         y: transform.y,
         z: transform.z,
         rotationY: transform.rotationY
-      });
+      }, animationState);
 
       playersBySessionId.set(options.localSessionId, {
         ...localPlayer,

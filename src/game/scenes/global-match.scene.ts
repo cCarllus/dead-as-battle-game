@@ -9,6 +9,10 @@ import {
   Vector3
 } from "@babylonjs/core";
 import type { MatchPlayerState } from "../../models/match-player.model";
+import type {
+  AnimationGameplayState,
+  MovementDirection
+} from "../animation/animation-state";
 import { createPlayerViewManager } from "../systems/player-view-manager";
 import { createMovementInputSystem } from "../systems/movement-input.system";
 import { createPointerLockSystem } from "../systems/pointer-lock.system";
@@ -27,9 +31,9 @@ const LOCAL_FLY_VERTICAL_SPEED = 5.8;
 const LOCAL_GRAVITY = 22;
 const MAX_FRAME_DELTA_SECONDS = 0.05;
 const GROUND_EPSILON = 0.0001;
-const LOCAL_MOVEMENT_SYNC_INTERVAL_MS = 50;
+const LOCAL_MOVEMENT_SYNC_INTERVAL_MS = 33;
 const LOCAL_MOVEMENT_SYNC_THRESHOLD = 0.015;
-const LOCAL_SPRINT_INPUT_SYNC_INTERVAL_MS = 100;
+const LOCAL_SPRINT_INPUT_SYNC_INTERVAL_MS = 50;
 
 export type GlobalMatchSceneOptions = {
   canvas: HTMLCanvasElement;
@@ -53,6 +57,7 @@ export type GlobalMatchSceneHandle = {
   exitPointerLock: () => void;
   isPointerLocked: () => boolean;
   onPointerLockChanged: (listener: (locked: boolean) => void) => () => void;
+  triggerLocalUltimateAnimation: () => void;
   dispose: () => void;
 };
 
@@ -78,6 +83,18 @@ function positionDistanceSquared(
   const dy = left.y - right.y;
   const dz = left.z - right.z;
   return dx * dx + dy * dy + dz * dz;
+}
+
+function resolveMovementDirectionFromAxes(forwardAxis: number, sideAxis: number): MovementDirection {
+  if (forwardAxis === 0 && sideAxis === 0) {
+    return "none";
+  }
+
+  if (Math.abs(forwardAxis) >= Math.abs(sideAxis)) {
+    return forwardAxis >= 0 ? "forward" : "backward";
+  }
+
+  return sideAxis >= 0 ? "right" : "left";
 }
 
 function resolveOverShoulderTargetPosition(
@@ -179,6 +196,7 @@ export async function createGlobalMatchScene(
   let lastSprintInputSyncAtMs = 0;
   let lastSentSprintIntent: { isShiftPressed: boolean; isForwardPressed: boolean } | null = null;
   let isLocalVisualHiddenForCamera = false;
+  let localUltimateRequested = false;
 
   const setPlayers = (players: MatchPlayerState[]): void => {
     playerViewManager.syncPlayers(players);
@@ -222,6 +240,15 @@ export async function createGlobalMatchScene(
 
   const setTeamMemberUserIds = (userIds: string[]): void => {
     playerViewManager.setTeamMemberUserIds(userIds);
+  };
+
+  const triggerLocalUltimateAnimation = (): void => {
+    const localPlayerState = playerViewManager.getLocalPlayerState();
+    if (!localPlayerState || !localPlayerState.isAlive) {
+      return;
+    }
+
+    localUltimateRequested = true;
   };
 
   const setFlyModeEnabled = (enabled: boolean): void => {
@@ -357,20 +384,26 @@ export async function createGlobalMatchScene(
     const forwardAxis = (inputState.forward ? 1 : 0) - (inputState.backward ? 1 : 0);
     const sideAxis = (inputState.right ? 1 : 0) - (inputState.left ? 1 : 0);
 
-    let movementDirection = new Vector3(
+    const predictedMovementDirection = resolveMovementDirectionFromAxes(forwardAxis, sideAxis);
+    const isPredictedMoving = predictedMovementDirection !== "none";
+    const isPredictedSprinting =
+      canRequestSprintIntent && inputState.descend && inputState.forward && isPredictedMoving;
+    const isUltimatePredictedActive = localUltimateRequested;
+
+    let movementVector = new Vector3(
       forward.x * forwardAxis + right.x * sideAxis,
       0,
       forward.z * forwardAxis + right.z * sideAxis
     );
     const localMoveSpeed =
-      !flyModeEnabled && (localPlayerState?.isSprinting ?? false)
+      !flyModeEnabled && (isPredictedSprinting || (localPlayerState?.isSprinting ?? false))
         ? LOCAL_WALK_SPEED * LOCAL_RUN_SPEED_MULTIPLIER
         : LOCAL_WALK_SPEED;
 
-    if (movementDirection.lengthSquared() > 0.0001) {
-      movementDirection = movementDirection.normalize();
-      transform.x += movementDirection.x * localMoveSpeed * deltaSeconds;
-      transform.z += movementDirection.z * localMoveSpeed * deltaSeconds;
+    if (movementVector.lengthSquared() > 0.0001) {
+      movementVector = movementVector.normalize();
+      transform.x += movementVector.x * localMoveSpeed * deltaSeconds;
+      transform.z += movementVector.z * localMoveSpeed * deltaSeconds;
     }
 
     // A frente do personagem acompanha sempre a direção da câmera/crosshair (TPS over-the-shoulder).
@@ -384,7 +417,15 @@ export async function createGlobalMatchScene(
 
       localVerticalVelocity = 0;
       wasJumpPressed = inputState.jump;
-      playerViewManager.updateLocalPlayerTransform(transform);
+      const predictedAnimationState: AnimationGameplayState = {
+        isMoving: isPredictedMoving,
+        movementDirection: predictedMovementDirection,
+        isSprinting: false,
+        isJumping: false,
+        isUltimateActive: isUltimatePredictedActive
+      };
+      playerViewManager.updateLocalPlayerTransform(transform, predictedAnimationState);
+      localUltimateRequested = false;
       maybeEmitLocalMovement(transform);
       return;
     }
@@ -411,7 +452,18 @@ export async function createGlobalMatchScene(
     }
 
     wasJumpPressed = inputState.jump;
-    playerViewManager.updateLocalPlayerTransform(transform);
+    const predictedAnimationState: AnimationGameplayState = {
+      isMoving: isPredictedMoving,
+      movementDirection: predictedMovementDirection,
+      isSprinting: isPredictedSprinting,
+      isJumping:
+        transform.y > localGroundY + GROUND_EPSILON ||
+        localVerticalVelocity > 0.01 ||
+        didPressJump,
+      isUltimateActive: isUltimatePredictedActive
+    };
+    playerViewManager.updateLocalPlayerTransform(transform, predictedAnimationState);
+    localUltimateRequested = false;
     maybeEmitLocalMovement(transform);
   };
 
@@ -503,6 +555,7 @@ export async function createGlobalMatchScene(
         pointerLockChangeListeners.delete(listener);
       };
     },
+    triggerLocalUltimateAnimation,
     dispose: () => {
       window.removeEventListener("resize", onWindowResize);
       document.removeEventListener("mousemove", onMouseMove);

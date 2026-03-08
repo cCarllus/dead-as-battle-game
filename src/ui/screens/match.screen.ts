@@ -694,7 +694,20 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
         return;
       }
 
+      const localPlayer = localSessionId
+        ? actions.matchService.getPlayers().find((player) => player.sessionId === localSessionId) ?? null
+        : null;
+      const canActivateUltimate =
+        !!localPlayer &&
+        localPlayer.isAlive &&
+        localPlayer.isUltimateReady &&
+        localPlayer.ultimateCharge >= localPlayer.ultimateMax;
+      if (!canActivateUltimate) {
+        return;
+      }
+
       event.preventDefault();
+      sceneHandle?.triggerLocalUltimateAnimation();
       actions.matchService.sendUltimateActivate();
       return;
     }
