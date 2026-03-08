@@ -39,6 +39,14 @@ const DEFAULT_BLENDING_DURATION_SECONDS = 0.18;
 function resolveCommandPriority(command: AnimationCommand): number {
   switch (command) {
     case "ultimate":
+      return 7;
+    case "attack1":
+    case "attack2":
+    case "attack3":
+      return 6;
+    case "hit":
+      return 5;
+    case "block":
       return 4;
     case "jump":
       return 3;
@@ -151,6 +159,13 @@ export function createAnimationController(options: CreateAnimationControllerOpti
 
   const play = (requestedCommand: AnimationCommand): void => {
     if (currentRequestedCommand === requestedCommand) {
+      if (currentGroup && currentPlaybackCommand) {
+        const isLooping = shouldLoopCommand(currentPlaybackCommand, options.animationConfig);
+        if (!isLooping && !currentGroup.isPlaying) {
+          currentGroup.reset();
+          currentGroup.start(false);
+        }
+      }
       return;
     }
 

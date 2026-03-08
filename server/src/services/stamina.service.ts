@@ -34,9 +34,13 @@ export function initializeStamina(player: MatchPlayerState, now: number = Date.n
   player.lastSprintEndedAt = now;
 }
 
-export function canSprint(player: MatchPlayerState, inputState: SprintInputState): boolean {
+export function canSprint(player: MatchPlayerState, inputState: SprintInputState, now: number): boolean {
   return (
     player.isAlive &&
+    !player.isBlocking &&
+    !player.isAttacking &&
+    !player.isGuardBroken &&
+    now >= player.stunUntil &&
     inputState.isForwardPressed &&
     inputState.isShiftPressed &&
     !player.sprintBlocked &&
@@ -102,7 +106,7 @@ export function updateSprintState(
   now: number
 ): void {
   const wasSprinting = player.isSprinting;
-  const shouldSprint = canSprint(player, inputState);
+  const shouldSprint = canSprint(player, inputState, now);
 
   if (shouldSprint) {
     player.isSprinting = true;

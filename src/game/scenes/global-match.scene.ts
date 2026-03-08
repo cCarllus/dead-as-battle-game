@@ -4,6 +4,7 @@ import {
   Color4,
   Engine,
   HemisphericLight,
+  Matrix,
   Scene,
   TransformNode,
   Vector3
@@ -13,6 +14,7 @@ import type {
   AnimationGameplayState,
   MovementDirection
 } from "../animation/animation-state";
+import { createCombatInputSystem } from "../systems/combat-input.system";
 import { createPlayerViewManager } from "../systems/player-view-manager";
 import { createMovementInputSystem } from "../systems/movement-input.system";
 import { createPointerLockSystem } from "../systems/pointer-lock.system";
@@ -34,6 +36,10 @@ const GROUND_EPSILON = 0.0001;
 const LOCAL_MOVEMENT_SYNC_INTERVAL_MS = 33;
 const LOCAL_MOVEMENT_SYNC_THRESHOLD = 0.015;
 const LOCAL_SPRINT_INPUT_SYNC_INTERVAL_MS = 50;
+const LOCAL_ATTACK_INTERVAL_MS = 300;
+const LOCAL_COMBO_RESET_TIME_MS = 1000;
+const LOCAL_ATTACK_ANIMATION_WINDOW_MS = 260;
+const LOCAL_BLOCK_MAX_HOLD_MS = 2500;
 
 export type GlobalMatchSceneOptions = {
   canvas: HTMLCanvasElement;
@@ -41,6 +47,9 @@ export type GlobalMatchSceneOptions = {
   initialPlayers?: MatchPlayerState[];
   onLocalPlayerMoved?: (position: { x: number; y: number; z: number; rotationY: number }) => void;
   onLocalSprintIntentChanged?: (intent: { isShiftPressed: boolean; isForwardPressed: boolean }) => void;
+  onLocalAttackRequested?: () => void;
+  onLocalBlockStartRequested?: () => void;
+  onLocalBlockEndRequested?: () => void;
 };
 
 export type GlobalMatchSceneHandle = {
@@ -58,6 +67,7 @@ export type GlobalMatchSceneHandle = {
   isPointerLocked: () => boolean;
   onPointerLockChanged: (listener: (locked: boolean) => void) => () => void;
   triggerLocalUltimateAnimation: () => void;
+  getPlayerScreenPosition: (sessionId: string) => { x: number; y: number } | null;
   dispose: () => void;
 };
 
@@ -134,6 +144,35 @@ function shouldHideLocalVisualForCamera(
   return distance <= radius * 1.05;
 }
 
+function resolveProjectedPoint(
+  scene: Scene,
+  camera: ArcRotateCamera,
+  engine: Engine,
+  worldPosition: Vector3
+): { x: number; y: number } | null {
+  const renderWidth = engine.getRenderWidth(true);
+  const renderHeight = engine.getRenderHeight(true);
+  if (renderWidth <= 0 || renderHeight <= 0) {
+    return null;
+  }
+
+  const viewport = camera.viewport.toGlobal(renderWidth, renderHeight);
+  const projected = Vector3.Project(worldPosition, Matrix.Identity(), scene.getTransformMatrix(), viewport);
+
+  if (projected.z < 0 || projected.z > 1) {
+    return null;
+  }
+
+  if (projected.x < 0 || projected.x > renderWidth || projected.y < 0 || projected.y > renderHeight) {
+    return null;
+  }
+
+  return {
+    x: projected.x,
+    y: projected.y
+  };
+}
+
 export async function createGlobalMatchScene(
   options: GlobalMatchSceneOptions
 ): Promise<GlobalMatchSceneHandle> {
@@ -197,6 +236,18 @@ export async function createGlobalMatchScene(
   let lastSentSprintIntent: { isShiftPressed: boolean; isForwardPressed: boolean } | null = null;
   let isLocalVisualHiddenForCamera = false;
   let localUltimateRequested = false;
+  let localPredictedAttackComboIndex: 0 | 1 | 2 | 3 = 0;
+  let localPredictedLastAttackAtMs = 0;
+  let localPredictedAttackUntilMs = 0;
+  let localPredictedBlockActive = false;
+  let localPredictedBlockStartedAtMs = 0;
+
+  const resetPredictedCombatState = (): void => {
+    localPredictedAttackComboIndex = 0;
+    localPredictedAttackUntilMs = 0;
+    localPredictedBlockActive = false;
+    localPredictedBlockStartedAtMs = 0;
+  };
 
   const setPlayers = (players: MatchPlayerState[]): void => {
     playerViewManager.syncPlayers(players);
@@ -235,6 +286,7 @@ export async function createGlobalMatchScene(
     if (sessionId === options.localSessionId) {
       hasLocalGroundReference = false;
       localVerticalVelocity = 0;
+      resetPredictedCombatState();
     }
   };
 
@@ -283,13 +335,104 @@ export async function createGlobalMatchScene(
     accumulatedMouseDeltaY += event.movementY;
   };
 
+  const canUseCombatInput = (): boolean => {
+    const localPlayerState = playerViewManager.getLocalPlayerState();
+    const now = Date.now();
+    if (!inputEnabled || !localPlayerState || !localPlayerState.isAlive) {
+      return false;
+    }
+
+    if (localPlayerState.isGuardBroken || now < localPlayerState.stunUntil) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleLocalAttackIntent = (): void => {
+    const now = Date.now();
+    const localPlayerState = playerViewManager.getLocalPlayerState();
+    if (!localPlayerState || !localPlayerState.isAlive) {
+      return;
+    }
+
+    if (localPlayerState.isGuardBroken || now < localPlayerState.stunUntil) {
+      return;
+    }
+
+    if (now - localPredictedLastAttackAtMs < LOCAL_ATTACK_INTERVAL_MS) {
+      return;
+    }
+
+    const shouldResetCombo =
+      localPredictedAttackComboIndex <= 0 ||
+      now - localPredictedLastAttackAtMs > LOCAL_COMBO_RESET_TIME_MS;
+
+    if (shouldResetCombo) {
+      localPredictedAttackComboIndex = 1;
+    } else {
+      localPredictedAttackComboIndex =
+        ((localPredictedAttackComboIndex % 3) + 1) as 1 | 2 | 3;
+    }
+
+    localPredictedLastAttackAtMs = now;
+    localPredictedAttackUntilMs = now + LOCAL_ATTACK_ANIMATION_WINDOW_MS;
+    localPredictedBlockActive = false;
+    localPredictedBlockStartedAtMs = 0;
+    options.onLocalAttackRequested?.();
+  };
+
+  const handleLocalBlockStartIntent = (): void => {
+    const now = Date.now();
+    const localPlayerState = playerViewManager.getLocalPlayerState();
+    if (!localPlayerState || !localPlayerState.isAlive) {
+      return;
+    }
+
+    if (localPlayerState.isGuardBroken || now < localPlayerState.stunUntil) {
+      return;
+    }
+
+    if (now < localPredictedAttackUntilMs) {
+      return;
+    }
+
+    if (localPredictedBlockActive) {
+      return;
+    }
+
+    localPredictedBlockActive = true;
+    localPredictedBlockStartedAtMs = now;
+    options.onLocalBlockStartRequested?.();
+  };
+
+  const handleLocalBlockEndIntent = (): void => {
+    if (!localPredictedBlockActive) {
+      options.onLocalBlockEndRequested?.();
+      return;
+    }
+
+    localPredictedBlockActive = false;
+    localPredictedBlockStartedAtMs = 0;
+    options.onLocalBlockEndRequested?.();
+  };
+
+  const combatInput = createCombatInputSystem({
+    canProcessInput: canUseCombatInput,
+    onAttackStart: handleLocalAttackIntent,
+    onBlockStart: handleLocalBlockStartIntent,
+    onBlockEnd: handleLocalBlockEndIntent
+  });
+
   const setInputEnabled = (enabled: boolean): void => {
     inputEnabled = enabled;
     movementInput.setEnabled(enabled);
     pointerLockSystem.setEnabled(enabled);
+    combatInput.setEnabled(enabled);
 
     if (!enabled) {
       wasJumpPressed = false;
+      resetPredictedCombatState();
       exitPointerLock();
     }
   };
@@ -349,12 +492,59 @@ export async function createGlobalMatchScene(
   };
 
   const applyLocalMovement = (deltaSeconds: number): void => {
+    const nowMs = Date.now();
     const inputState = movementInput.getState();
     const localPlayerState = playerViewManager.getLocalPlayerState();
+    const localView = playerViewManager.getLocalPlayerView();
+
+    if (!localView) {
+      maybeEmitLocalSprintIntent({
+        isShiftPressed: false,
+        isForwardPressed: false
+      });
+      return;
+    }
+
+    const isLocallyStunned =
+      !!localPlayerState &&
+      (localPlayerState.isGuardBroken || nowMs < localPlayerState.stunUntil || !localPlayerState.isAlive);
+
+    if (localPredictedAttackUntilMs > 0 && nowMs >= localPredictedAttackUntilMs) {
+      localPredictedAttackComboIndex = 0;
+      localPredictedAttackUntilMs = 0;
+    }
+
+    if (
+      localPredictedBlockActive &&
+      localPredictedBlockStartedAtMs > 0 &&
+      nowMs - localPredictedBlockStartedAtMs >= LOCAL_BLOCK_MAX_HOLD_MS
+    ) {
+      localPredictedBlockActive = false;
+      localPredictedBlockStartedAtMs = 0;
+    }
+
+    if (isLocallyStunned) {
+      localPredictedBlockActive = false;
+      localPredictedBlockStartedAtMs = 0;
+    }
+
+    const serverAttackComboIndex =
+      localPlayerState && localPlayerState.isAttacking
+        ? (Math.max(1, Math.min(3, localPlayerState.attackComboIndex)) as 1 | 2 | 3)
+        : 0;
+    const predictedAttackComboIndex =
+      localPredictedAttackComboIndex > 0 ? localPredictedAttackComboIndex : serverAttackComboIndex;
+
+    const serverBlocking = !!localPlayerState?.isBlocking;
+    const effectiveBlocking = (localPredictedBlockActive || serverBlocking) && predictedAttackComboIndex === 0;
+
     const canRequestSprintIntent =
       inputEnabled &&
       !flyModeEnabled &&
-      (localPlayerState?.isAlive ?? true);
+      (localPlayerState?.isAlive ?? true) &&
+      !isLocallyStunned &&
+      !effectiveBlocking &&
+      predictedAttackComboIndex === 0;
 
     maybeEmitLocalSprintIntent({
       isShiftPressed: canRequestSprintIntent ? inputState.descend : false,
@@ -362,11 +552,18 @@ export async function createGlobalMatchScene(
     });
 
     if (!inputEnabled || deltaSeconds <= 0) {
-      return;
-    }
-
-    const localView = playerViewManager.getLocalPlayerView();
-    if (!localView) {
+      const idleAnimationState: AnimationGameplayState = {
+        isMoving: false,
+        movementDirection: "none",
+        isSprinting: false,
+        isJumping: false,
+        isUltimateActive: localUltimateRequested,
+        isBlocking: effectiveBlocking,
+        attackComboIndex: predictedAttackComboIndex,
+        isHitReacting: isLocallyStunned && !effectiveBlocking && predictedAttackComboIndex === 0
+      };
+      playerViewManager.updateLocalPlayerTransform(localView.getTransform(), idleAnimationState);
+      localUltimateRequested = false;
       return;
     }
 
@@ -381,8 +578,8 @@ export async function createGlobalMatchScene(
     const right = new Vector3(forward.z, 0, -forward.x);
     const aimYaw = Math.atan2(forward.x, forward.z);
 
-    const forwardAxis = (inputState.forward ? 1 : 0) - (inputState.backward ? 1 : 0);
-    const sideAxis = (inputState.right ? 1 : 0) - (inputState.left ? 1 : 0);
+    const forwardAxis = isLocallyStunned ? 0 : (inputState.forward ? 1 : 0) - (inputState.backward ? 1 : 0);
+    const sideAxis = isLocallyStunned ? 0 : (inputState.right ? 1 : 0) - (inputState.left ? 1 : 0);
 
     const predictedMovementDirection = resolveMovementDirectionFromAxes(forwardAxis, sideAxis);
     const isPredictedMoving = predictedMovementDirection !== "none";
@@ -406,11 +603,10 @@ export async function createGlobalMatchScene(
       transform.z += movementVector.z * localMoveSpeed * deltaSeconds;
     }
 
-    // A frente do personagem acompanha sempre a direção da câmera/crosshair (TPS over-the-shoulder).
     transform.rotationY = aimYaw;
 
     if (flyModeEnabled) {
-      const verticalAxis = (inputState.jump ? 1 : 0) - (inputState.descend ? 1 : 0);
+      const verticalAxis = isLocallyStunned ? 0 : (inputState.jump ? 1 : 0) - (inputState.descend ? 1 : 0);
       if (verticalAxis !== 0) {
         transform.y += verticalAxis * LOCAL_FLY_VERTICAL_SPEED * deltaSeconds;
       }
@@ -422,7 +618,10 @@ export async function createGlobalMatchScene(
         movementDirection: predictedMovementDirection,
         isSprinting: false,
         isJumping: false,
-        isUltimateActive: isUltimatePredictedActive
+        isUltimateActive: isUltimatePredictedActive,
+        isBlocking: effectiveBlocking,
+        attackComboIndex: predictedAttackComboIndex,
+        isHitReacting: isLocallyStunned && !effectiveBlocking && predictedAttackComboIndex === 0
       };
       playerViewManager.updateLocalPlayerTransform(transform, predictedAnimationState);
       localUltimateRequested = false;
@@ -436,7 +635,7 @@ export async function createGlobalMatchScene(
       transform.y = localGroundY;
     }
 
-    const didPressJump = inputState.jump && !wasJumpPressed;
+    const didPressJump = !isLocallyStunned && inputState.jump && !wasJumpPressed;
     if (didPressJump && isGrounded) {
       localVerticalVelocity = LOCAL_JUMP_VELOCITY;
     }
@@ -460,7 +659,10 @@ export async function createGlobalMatchScene(
         transform.y > localGroundY + GROUND_EPSILON ||
         localVerticalVelocity > 0.01 ||
         didPressJump,
-      isUltimateActive: isUltimatePredictedActive
+      isUltimateActive: isUltimatePredictedActive,
+      isBlocking: effectiveBlocking,
+      attackComboIndex: predictedAttackComboIndex,
+      isHitReacting: isLocallyStunned && !effectiveBlocking && predictedAttackComboIndex === 0
     };
     playerViewManager.updateLocalPlayerTransform(transform, predictedAnimationState);
     localUltimateRequested = false;
@@ -556,6 +758,19 @@ export async function createGlobalMatchScene(
       };
     },
     triggerLocalUltimateAnimation,
+    getPlayerScreenPosition: (sessionId) => {
+      const target = playerViewManager.getPlayerCameraTarget(sessionId);
+      if (!target) {
+        return null;
+      }
+
+      return resolveProjectedPoint(
+        scene,
+        camera,
+        engine,
+        new Vector3(target.x, target.y + 0.45, target.z)
+      );
+    },
     dispose: () => {
       window.removeEventListener("resize", onWindowResize);
       document.removeEventListener("mousemove", onMouseMove);
@@ -563,6 +778,7 @@ export async function createGlobalMatchScene(
       disposePointerLockChange();
       pointerLockChangeListeners.clear();
       pointerLockSystem.dispose();
+      combatInput.dispose();
 
       movementInput.dispose();
       playerViewManager.dispose();

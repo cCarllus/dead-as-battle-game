@@ -7,7 +7,12 @@ export const ANIMATION_COMMANDS = [
   "walkRight",
   "run",
   "jump",
-  "ultimate"
+  "ultimate",
+  "attack1",
+  "attack2",
+  "attack3",
+  "block",
+  "hit"
 ] as const;
 
 export type AnimationCommand = (typeof ANIMATION_COMMANDS)[number];
@@ -22,5 +27,6 @@ export const LOOPED_ANIMATION_COMMANDS: readonly AnimationCommand[] = [
   "walkBack",
   "walkLeft",
   "walkRight",
-  "run"
+  "run",
+  "block"
 ] as const;

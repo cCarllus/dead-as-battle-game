@@ -21,6 +21,16 @@ export type MatchPlayerState = {
   isSprinting: boolean;
   sprintBlocked: boolean;
   lastSprintEndedAt: number;
+  isAttacking: boolean;
+  attackComboIndex: number;
+  lastAttackAt: number;
+  isBlocking: boolean;
+  blockStartedAt: number;
+  maxGuard: number;
+  currentGuard: number;
+  isGuardBroken: boolean;
+  stunUntil: number;
+  lastGuardDamagedAt: number;
   joinedAt: number;
 };
 
@@ -44,4 +54,46 @@ export type MatchPlayerMovedPayload = {
   y: number;
   z: number;
   rotationY: number;
+};
+
+export type MatchCombatHitPayload = {
+  attackerSessionId: string;
+  targetSessionId: string;
+  damage: number;
+  comboHitIndex: number;
+  wasBlocked: boolean;
+  didGuardBreak: boolean;
+};
+
+export type MatchCombatBlockPayload = {
+  attackerSessionId: string;
+  targetSessionId: string;
+  comboHitIndex: number;
+  guardDamage: number;
+  currentGuard: number;
+  maxGuard: number;
+  didGuardBreak: boolean;
+};
+
+export type MatchCombatGuardBreakPayload = {
+  attackerSessionId: string;
+  targetSessionId: string;
+  guardBreakDurationMs: number;
+};
+
+export type MatchCombatStatePayload = {
+  sessionId: string;
+  isAttacking: boolean;
+  attackComboIndex: number;
+  lastAttackAt: number;
+  isBlocking: boolean;
+  blockStartedAt: number;
+  maxGuard: number;
+  currentGuard: number;
+  isGuardBroken: boolean;
+  stunUntil: number;
+  lastGuardDamagedAt: number;
+  x: number;
+  y: number;
+  z: number;
 };

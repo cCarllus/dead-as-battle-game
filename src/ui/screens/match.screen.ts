@@ -9,7 +9,9 @@ import { resolveCombatHudState } from "../../services/hud.service";
 import { createFullscreenSystem } from "../../game/systems/fullscreen.system";
 import { createInputModeSystem } from "../../game/systems/input-mode.system";
 import { createPauseMenuSystem } from "../../game/systems/pause-menu.system";
+import { createCombatFeedbackSystem, type CombatFeedbackSystem } from "../../game/systems/combat-feedback.system";
 import { createGlobalMatchScene, type GlobalMatchSceneHandle } from "../../game/scenes/global-match.scene";
+import { createDamageNumberEffect, type DamageNumberEffect } from "../effects/damage-number.effect";
 import { bind, qs } from "../components/dom";
 import { mountSettingsModal } from "../components/settings-modal";
 import template from "../layout/match.html?raw";
@@ -30,9 +32,22 @@ export type MatchScreenActions = {
 const FULLSCREEN_NOTICE_TIMEOUT_MS = 3000;
 const MIN_EMPTY_BAR_VISUAL_PERCENT = 0;
 const STAMINA_PULSE_DURATION_MS = 450;
+const HEALTH_BAR_MAX_HUE = 120;
 
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function resolveHealthBarFillGradient(healthPercent: number): { gradient: string; shadow: string } {
+  const safePercent = Math.max(0, Math.min(100, healthPercent));
+  const hue = (safePercent / 100) * HEALTH_BAR_MAX_HUE;
+  const accentHue = Math.max(0, hue - 14);
+  const highlightHue = Math.min(HEALTH_BAR_MAX_HUE, hue + 8);
+
+  return {
+    gradient: `linear-gradient(90deg, hsl(${accentHue} 88% 46%), hsl(${hue} 86% 52%), hsl(${highlightHue} 82% 66%))`,
+    shadow: `0 0 18px hsla(${hue} 92% 56% / 0.42)`
+  };
 }
 
 function resolveTeamMemberUserIds(teamService: TeamService): Set<string> {
@@ -211,6 +226,7 @@ function formatMatchElapsedTime(elapsedSeconds: number): string {
 export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions): () => void {
   const locale = resolveScreenLocale(actions.locale);
   const screen = renderScreenTemplate(root, template, '[data-screen="match"]', locale);
+  const viewport = qs<HTMLElement>(screen, ".dab-match__viewport");
 
   const canvas = qs<HTMLCanvasElement>(screen, '[data-slot="match-canvas"]');
   const loadingCard = qs<HTMLElement>(screen, '[data-slot="match-loading"]');
@@ -258,6 +274,11 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const pauseMenuOverlayButton = qs<HTMLButtonElement>(screen, 'button[data-action="match-menu-close"]');
   const flyToggleButton = qs<HTMLButtonElement>(screen, 'button[data-action="toggle-fly"]');
   const scoreboardCard = qs<HTMLElement>(screen, '[data-slot="match-scoreboard"]');
+  const deathModal = qs<HTMLElement>(screen, '[data-slot="match-death-modal"]');
+  const deathModalTitle = qs<HTMLElement>(screen, '[data-slot="match-death-title"]');
+  const deathModalMessage = qs<HTMLElement>(screen, '[data-slot="match-death-message"]');
+  const deathModalBackLobbyButton = qs<HTMLButtonElement>(screen, 'button[data-action="match-death-back-lobby"]');
+  const deathModalRespawnButton = qs<HTMLButtonElement>(screen, 'button[data-action="match-death-respawn"]');
 
   loadingTitle.textContent = t(locale, "match.loading.title");
   matchTitle.textContent = t(locale, "match.scoreboard.title");
@@ -272,6 +293,13 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   pauseMenuResumeButton.textContent = t(locale, "match.menu.resume");
   pauseMenuExitButton.textContent = t(locale, "match.menu.exit");
   pauseMenuSettingsButton.textContent = t(locale, "match.menu.settings");
+  deathModalTitle.textContent = locale === "pt-BR" ? "Você morreu" : "You Died";
+  deathModalMessage.textContent =
+    locale === "pt-BR"
+      ? "Escolha voltar ao lobby ou renascer para continuar a batalha."
+      : "Choose to return to the lobby or respawn and continue fighting.";
+  deathModalBackLobbyButton.textContent = locale === "pt-BR" ? "Voltar ao lobby" : "Back to lobby";
+  deathModalRespawnButton.textContent = locale === "pt-BR" ? "Renascer" : "Respawn";
 
   const settingsModal = mountSettingsModal({
     locale,
@@ -283,8 +311,21 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   });
   const fullscreenSystem = createFullscreenSystem();
   const inputModeSystem = createInputModeSystem();
-
   let sceneHandle: GlobalMatchSceneHandle | null = null;
+  const effectsLayer = document.createElement("div");
+  effectsLayer.dataset.slot = "match-effects-layer";
+  viewport.appendChild(effectsLayer);
+  const damageNumberEffect: DamageNumberEffect = createDamageNumberEffect({
+    container: effectsLayer
+  });
+  const combatFeedbackSystem: CombatFeedbackSystem = createCombatFeedbackSystem({
+    matchService: actions.matchService,
+    damageNumbers: damageNumberEffect,
+    resolveScreenPosition: (sessionId) => {
+      return sceneHandle?.getPlayerScreenPosition(sessionId) ?? null;
+    }
+  });
+
   let pauseMenuSystem: ReturnType<typeof createPauseMenuSystem> | null = null;
   let isMatchReady = false;
   let hasFatalError = false;
@@ -308,9 +349,30 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   let previousLocalStaminaPercent = 100;
   let previousSprintBlocked = false;
   let staminaPulseTimeoutId: number | null = null;
+  let deathModalOpen = false;
+  let respawnRequestPending = false;
 
   const isSettingsModalOpen = (): boolean => {
     return screen.classList.contains("is-settings-open");
+  };
+
+  const setDeathModalOpen = (open: boolean): void => {
+    if (deathModalOpen === open) {
+      return;
+    }
+
+    deathModalOpen = open;
+    deathModal.hidden = !open;
+    deathModal.classList.toggle("is-open", open);
+    deathModal.setAttribute("aria-hidden", String(!open));
+
+    if (open) {
+      sceneHandle?.exitPointerLock();
+      closePauseMenu(false);
+      setScoreboardRequested(false);
+    }
+
+    applyInputState();
   };
 
   const hideFullscreenNotice = (): void => {
@@ -337,7 +399,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   const hasGameplayInputPermission = (): boolean => {
     const inputState = inputModeSystem.getState();
-    return inputState.gameplayEnabled && isMatchReady && !hasFatalError;
+    return inputState.gameplayEnabled && isMatchReady && !hasFatalError && !deathModalOpen;
   };
 
   const renderScoreboardVisibility = (): void => {
@@ -451,6 +513,9 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const setLocalCombatHud = (player: MatchPlayerState | null): void => {
     const combatHudState = resolveCombatHudState(player);
     const healthPercent = setHudBarFill(hudHealthFill, combatHudState.healthPercent);
+    const healthBarVisual = resolveHealthBarFillGradient(healthPercent);
+    hudHealthFill.style.setProperty("--dab-health-bar-fill", healthBarVisual.gradient);
+    hudHealthFill.style.setProperty("--dab-health-bar-shadow", healthBarVisual.shadow);
     const ultimatePercent = setHudBarFill(hudResourceFill, combatHudState.ultimatePercent);
     const isUltimateReady = ultimatePercent >= 100;
 
@@ -494,11 +559,28 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const updateLocalCombatHud = (players: MatchPlayerState[]): void => {
     if (!localSessionId) {
       setLocalCombatHud(null);
+      respawnRequestPending = false;
+      deathModalRespawnButton.disabled = false;
+      deathModalRespawnButton.textContent = locale === "pt-BR" ? "Renascer" : "Respawn";
+      setDeathModalOpen(false);
       return;
     }
 
     const localPlayer = players.find((player) => player.sessionId === localSessionId) ?? null;
     setLocalCombatHud(localPlayer);
+
+    const isDead = !!localPlayer && !localPlayer.isAlive;
+    if (isDead) {
+      setDeathModalOpen(true);
+      return;
+    }
+
+    if (respawnRequestPending) {
+      respawnRequestPending = false;
+      deathModalRespawnButton.disabled = false;
+      deathModalRespawnButton.textContent = locale === "pt-BR" ? "Renascer" : "Respawn";
+    }
+    setDeathModalOpen(false);
   };
 
   const setFlyUiState = (enabled: boolean): void => {
@@ -507,7 +589,14 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   };
 
   const toggleFlyMode = (): void => {
-    if (!sceneHandle || !isMatchReady || hasFatalError || isSettingsModalOpen() || (pauseMenuSystem?.isOpen() ?? false)) {
+    if (
+      !sceneHandle ||
+      !isMatchReady ||
+      hasFatalError ||
+      deathModalOpen ||
+      isSettingsModalOpen() ||
+      (pauseMenuSystem?.isOpen() ?? false)
+    ) {
       return;
     }
 
@@ -543,7 +632,12 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   };
 
   const openPauseMenu = (): void => {
-    if ((!isMatchReady && !hasFatalError) || isSettingsModalOpen() || pauseMenuSystem?.isOpen()) {
+    if (
+      (!isMatchReady && !hasFatalError) ||
+      deathModalOpen ||
+      isSettingsModalOpen() ||
+      pauseMenuSystem?.isOpen()
+    ) {
       return;
     }
 
@@ -613,6 +707,28 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const disposeFlyToggleClick = bind(flyToggleButton, "click", () => {
     toggleFlyMode();
   });
+  const disposeDeathBackLobbyClick = bind(deathModalBackLobbyButton, "click", () => {
+    actions.onLeaveMatch();
+  });
+  const disposeDeathRespawnClick = bind(deathModalRespawnButton, "click", () => {
+    if (respawnRequestPending) {
+      return;
+    }
+
+    if (!localSessionId) {
+      return;
+    }
+
+    const localPlayer = actions.matchService.getPlayers().find((player) => player.sessionId === localSessionId) ?? null;
+    if (!localPlayer || localPlayer.isAlive) {
+      return;
+    }
+
+    respawnRequestPending = true;
+    deathModalRespawnButton.disabled = true;
+    deathModalRespawnButton.textContent = locale === "pt-BR" ? "Renascendo..." : "Respawning...";
+    actions.matchService.sendRespawnRequest();
+  });
 
   pauseMenuSystem = createPauseMenuSystem({
     menu: pauseMenu,
@@ -638,6 +754,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       wasPointerLocked &&
       !isPointerLocked &&
       (isMatchReady || hasFatalError) &&
+      !deathModalOpen &&
       !isSettingsModalOpen() &&
       !(pauseMenuSystem?.isOpen() ?? false)
     ) {
@@ -664,7 +781,12 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   const onWindowKeyDown = (event: KeyboardEvent): void => {
     if (event.code === "Tab") {
-      if (isTypingOnInputField() || isSettingsModalOpen() || (pauseMenuSystem?.isOpen() ?? false)) {
+      if (
+        isTypingOnInputField() ||
+        deathModalOpen ||
+        isSettingsModalOpen() ||
+        (pauseMenuSystem?.isOpen() ?? false)
+      ) {
         return;
       }
 
@@ -788,6 +910,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   applyInputState();
   setFlyUiState(false);
   setScoreboardRequested(false);
+  setDeathModalOpen(false);
   hideFullscreenNotice();
 
   void (async () => {
@@ -810,6 +933,15 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
         },
         onLocalSprintIntentChanged: (intent) => {
           actions.matchService.sendSprintIntent(intent);
+        },
+        onLocalAttackRequested: () => {
+          actions.matchService.sendAttackStart();
+        },
+        onLocalBlockStartRequested: () => {
+          actions.matchService.sendBlockStart();
+        },
+        onLocalBlockEndRequested: () => {
+          actions.matchService.sendBlockEnd();
         }
       });
 
@@ -855,6 +987,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     disposeScenePointerLockChanged = null;
 
     disposeFlyToggleClick();
+    disposeDeathBackLobbyClick();
+    disposeDeathRespawnClick();
     disposePlayersChanged();
     disposePlayerAdded();
     disposePlayerUpdated();
@@ -887,6 +1021,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       window.clearTimeout(staminaPulseTimeoutId);
       staminaPulseTimeoutId = null;
     }
+
+    combatFeedbackSystem.dispose();
+    damageNumberEffect.dispose();
+    effectsLayer.remove();
 
     actions.matchService.disconnect();
   };

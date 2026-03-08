@@ -9,6 +9,9 @@ export type AnimationGameplayState = {
   isSprinting: boolean;
   isJumping: boolean;
   isUltimateActive: boolean;
+  isBlocking: boolean;
+  attackComboIndex: 0 | 1 | 2 | 3;
+  isHitReacting: boolean;
 };
 
 export function createDefaultAnimationGameplayState(): AnimationGameplayState {
@@ -17,8 +20,23 @@ export function createDefaultAnimationGameplayState(): AnimationGameplayState {
     movementDirection: "none",
     isSprinting: false,
     isJumping: false,
-    isUltimateActive: false
+    isUltimateActive: false,
+    isBlocking: false,
+    attackComboIndex: 0,
+    isHitReacting: false
   };
+}
+
+function resolveAttackCommand(attackComboIndex: 1 | 2 | 3): AnimationCommand {
+  switch (attackComboIndex) {
+    case 2:
+      return "attack2";
+    case 3:
+      return "attack3";
+    case 1:
+    default:
+      return "attack1";
+  }
 }
 
 export function resolveAnimationCommandFromGameplay(
@@ -26,6 +44,18 @@ export function resolveAnimationCommandFromGameplay(
 ): AnimationCommand {
   if (gameplayState.isUltimateActive) {
     return "ultimate";
+  }
+
+  if (gameplayState.attackComboIndex > 0) {
+    return resolveAttackCommand(gameplayState.attackComboIndex as 1 | 2 | 3);
+  }
+
+  if (gameplayState.isBlocking) {
+    return "block";
+  }
+
+  if (gameplayState.isHitReacting) {
+    return "hit";
   }
 
   if (gameplayState.isJumping) {

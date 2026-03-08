@@ -31,8 +31,24 @@ function resolveRunSpeed(): number {
   return MOVEMENT_STATE_CONFIG.walkSpeed * MOVEMENT_STATE_CONFIG.runSpeedMultiplier;
 }
 
-function resolveMovementSpeed(player: MatchPlayerState): number {
+function canPlayerMove(player: MatchPlayerState, now: number): boolean {
   if (!player.isAlive) {
+    return false;
+  }
+
+  if (player.isGuardBroken) {
+    return false;
+  }
+
+  if (now < player.stunUntil) {
+    return false;
+  }
+
+  return true;
+}
+
+function resolveMovementSpeed(player: MatchPlayerState, now: number): number {
+  if (!canPlayerMove(player, now)) {
     return 0;
   }
 
@@ -48,6 +64,15 @@ export function initializePlayerMovementState(now: number = Date.now()): PlayerM
 export function applyAuthoritativeMovementValidation(
   options: AuthoritativeMoveValidationOptions
 ): { x: number; y: number; z: number; rotationY: number } {
+  if (!canPlayerMove(options.player, options.now)) {
+    return {
+      x: options.player.x,
+      y: options.player.y,
+      z: options.player.z,
+      rotationY: options.rotationY
+    };
+  }
+
   const elapsedSeconds = clamp(
     (options.now - options.movementState.lastMoveAt) / 1000,
     MOVEMENT_STATE_CONFIG.minMoveDeltaSeconds,
@@ -59,7 +84,8 @@ export function applyAuthoritativeMovementValidation(
   const horizontalDeltaZ = options.desiredZ - options.player.z;
   const desiredHorizontalDistance = Math.hypot(horizontalDeltaX, horizontalDeltaZ);
   const allowedHorizontalDistance =
-    resolveMovementSpeed(options.player) * elapsedSeconds + MOVEMENT_STATE_CONFIG.horizontalDistanceTolerance;
+    resolveMovementSpeed(options.player, options.now) * elapsedSeconds +
+    MOVEMENT_STATE_CONFIG.horizontalDistanceTolerance;
 
   if (desiredHorizontalDistance <= allowedHorizontalDistance || desiredHorizontalDistance <= 0.000001) {
     return {

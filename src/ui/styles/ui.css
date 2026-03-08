@@ -4882,9 +4882,11 @@ body {
 
 .dab-match__bar.is-health .dab-match__bar-fill {
   width: 0;
-  background:
-    linear-gradient(90deg, rgba(16, 185, 129, 0.98), rgba(74, 222, 128, 0.98), rgba(167, 243, 208, 0.95));
-  box-shadow: 0 0 18px rgba(74, 222, 128, 0.42);
+  background: var(
+    --dab-health-bar-fill,
+    linear-gradient(90deg, rgba(16, 185, 129, 0.98), rgba(74, 222, 128, 0.98), rgba(167, 243, 208, 0.95))
+  );
+  box-shadow: var(--dab-health-bar-shadow, 0 0 18px rgba(74, 222, 128, 0.42));
 }
 
 .dab-match__bar.is-resource .dab-match__bar-fill {
@@ -5174,6 +5176,74 @@ button.dab-match__skill {
   gap: 10px;
 }
 
+.dab-match-death {
+  position: absolute;
+  inset: 0;
+  z-index: 37;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.dab-match-death.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dab-match-death__overlay {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(2, 6, 23, 0.75);
+  backdrop-filter: blur(4px);
+}
+
+.dab-match-death__panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(420px, calc(100vw - 24px));
+  border-radius: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  background: linear-gradient(170deg, rgba(30, 11, 15, 0.96), rgba(12, 5, 7, 0.94));
+  box-shadow:
+    0 20px 40px rgba(2, 6, 23, 0.7),
+    0 0 26px rgba(239, 68, 68, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform: translate(-50%, -50%) scale(0.97);
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+  transition: transform 180ms ease;
+  text-align: center;
+}
+
+.dab-match-death.is-open .dab-match-death__panel {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.dab-match-death__panel h2 {
+  margin: 0;
+  color: #fecaca;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dab-match-death__panel p {
+  margin: 0;
+  color: rgba(254, 226, 226, 0.86);
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+}
+
+.dab-match-death__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 @media (max-width: 760px) {
   .dab-match__hud-layer {
     --dab-hud-safe-zone: 14px;
@@ -5290,5 +5360,9 @@ button.dab-match__skill {
 
   .dab-match__loading {
     top: calc(50% + 18px);
+  }
+
+  .dab-match-death__actions {
+    grid-template-columns: 1fr;
   }
 }

@@ -58,6 +58,16 @@ function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     isSprinting: player.isSprinting,
     sprintBlocked: player.sprintBlocked,
     lastSprintEndedAt: player.lastSprintEndedAt,
+    isAttacking: player.isAttacking,
+    attackComboIndex: player.attackComboIndex,
+    lastAttackAt: player.lastAttackAt,
+    isBlocking: player.isBlocking,
+    blockStartedAt: player.blockStartedAt,
+    maxGuard: player.maxGuard,
+    currentGuard: player.currentGuard,
+    isGuardBroken: player.isGuardBroken,
+    stunUntil: player.stunUntil,
+    lastGuardDamagedAt: player.lastGuardDamagedAt,
     joinedAt: player.joinedAt
   };
 }
@@ -73,6 +83,16 @@ function didPlayerStateChange(previous: MatchPlayerState | undefined, next: Matc
     previous.z !== next.z ||
     previous.rotationY !== next.rotationY ||
     previous.isSprinting !== next.isSprinting ||
+    previous.isAttacking !== next.isAttacking ||
+    previous.attackComboIndex !== next.attackComboIndex ||
+    previous.lastAttackAt !== next.lastAttackAt ||
+    previous.isBlocking !== next.isBlocking ||
+    previous.blockStartedAt !== next.blockStartedAt ||
+    previous.maxGuard !== next.maxGuard ||
+    previous.currentGuard !== next.currentGuard ||
+    previous.isGuardBroken !== next.isGuardBroken ||
+    previous.stunUntil !== next.stunUntil ||
+    previous.lastGuardDamagedAt !== next.lastGuardDamagedAt ||
     previous.isAlive !== next.isAlive ||
     previous.nickname !== next.nickname ||
     previous.heroId !== next.heroId ||
@@ -104,6 +124,7 @@ export type PlayerViewManager = {
   tick: (nowMs: number) => void;
   getLocalPlayerView: () => LocalPlayerView | null;
   getLocalPlayerState: () => MatchPlayerState | null;
+  getPlayerCameraTarget: (sessionId: string) => { x: number; y: number; z: number } | null;
   dispose: () => void;
 };
 
@@ -369,6 +390,14 @@ export function createPlayerViewManager(options: CreatePlayerViewManagerOptions)
     },
     getLocalPlayerView,
     getLocalPlayerState,
+    getPlayerCameraTarget: (sessionId) => {
+      const view = playerViewsBySessionId.get(sessionId);
+      if (!view) {
+        return null;
+      }
+
+      return view.getCameraTarget();
+    },
     dispose: () => {
       playerViewsBySessionId.forEach((view) => {
         view.dispose();

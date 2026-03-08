@@ -158,6 +158,29 @@
       </section>
     </div>
 
+    <div class="dab-match-death" data-slot="match-death-modal" aria-hidden="true" hidden>
+      <button
+        type="button"
+        class="dab-match-death__overlay"
+        aria-label="Tela de morte"
+        tabindex="-1"
+      ></button>
+
+      <section class="dab-match-death__panel" role="dialog" aria-modal="true" aria-labelledby="dab-match-death-title">
+        <h2 id="dab-match-death-title" data-slot="match-death-title">Você morreu</h2>
+        <p data-slot="match-death-message">Escolha voltar ao lobby ou renascer para continuar a batalha.</p>
+
+        <div class="dab-match-death__actions">
+          <button type="button" class="dab-settings-secondary" data-action="match-death-back-lobby">
+            Voltar ao lobby
+          </button>
+          <button type="button" class="dab-settings-primary" data-action="match-death-respawn">
+            Renascer
+          </button>
+        </div>
+      </section>
+    </div>
+
     <div class="dab-settings-modal" data-slot="settings-modal" aria-hidden="true" hidden>
       <button
         type="button"

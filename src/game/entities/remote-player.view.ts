@@ -20,6 +20,7 @@ const VERTICAL_MOVEMENT_EPSILON = 0.02;
 const REMOTE_IDLE_TIMEOUT_MS = 480;
 const JUMP_ANIMATION_GRACE_MS = 260;
 const SPRINT_ANIMATION_GRACE_MS = 180;
+const ATTACK_ANIMATION_GRACE_MS = 240;
 
 export type PlayerViewRole = "local" | "teammate" | "enemy";
 
@@ -86,6 +87,9 @@ function resolveAnimationGameplayState(options: {
   rotationY: number;
   isAlive: boolean;
   isSprinting: boolean;
+  isBlocking: boolean;
+  attackComboIndex: 0 | 1 | 2 | 3;
+  isStunned: boolean;
 }): AnimationGameplayState {
   if (!options.isAlive) {
     return createDefaultAnimationGameplayState();
@@ -113,13 +117,28 @@ function resolveAnimationGameplayState(options: {
       : resolveMovementDirectionFromDelta(deltaX, deltaZ, options.rotationY);
   }
 
+  const isBlocking = options.isBlocking && options.attackComboIndex === 0;
+  const isHitReacting = options.isStunned && !isBlocking && options.attackComboIndex === 0;
+
   return {
     isMoving,
     movementDirection,
     isSprinting: options.isSprinting,
     isJumping: Math.abs(deltaY) >= VERTICAL_MOVEMENT_EPSILON,
-    isUltimateActive: false
+    isUltimateActive: false,
+    isBlocking,
+    attackComboIndex: options.attackComboIndex,
+    isHitReacting
   };
+}
+
+function resolveSafeAttackComboIndex(player: MatchPlayerState): 0 | 1 | 2 | 3 {
+  if (!player.isAttacking) {
+    return 0;
+  }
+
+  const comboIndex = Math.max(1, Math.min(3, Math.floor(player.attackComboIndex)));
+  return comboIndex as 1 | 2 | 3;
 }
 
 export type CreateRemotePlayerViewOptions = {
@@ -146,6 +165,8 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
   let lastStateSyncAtMs = Date.now();
   let jumpAnimationGraceUntilMs = 0;
   let sprintAnimationGraceUntilMs = 0;
+  let attackAnimationGraceUntilMs = 0;
+  let lastAttackComboIndex: 1 | 2 | 3 = 1;
 
   const updateFromState = (
     player: MatchPlayerState,
@@ -166,6 +187,11 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
     }
 
     const shouldKeepLocalPredictedAnimation = options.role === "local" && !animationOverride;
+    const nowMs = Date.now();
+
+    const serverAttackComboIndex = resolveSafeAttackComboIndex(player);
+    const serverIsStunned = nowMs < player.stunUntil;
+
     const nextAnimationGameplayState: AnimationGameplayState = shouldKeepLocalPredictedAnimation
       ? animationGameplayState
       : animationOverride
@@ -174,7 +200,10 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
             movementDirection: animationOverride.movementDirection,
             isSprinting: animationOverride.isSprinting,
             isJumping: animationOverride.isJumping,
-            isUltimateActive: animationOverride.isUltimateActive
+            isUltimateActive: animationOverride.isUltimateActive,
+            isBlocking: animationOverride.isBlocking,
+            attackComboIndex: animationOverride.attackComboIndex,
+            isHitReacting: animationOverride.isHitReacting
           }
         : resolveAnimationGameplayState({
             previousPosition,
@@ -182,17 +211,21 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
             previousAnimationState: animationGameplayState,
             rotationY: transform.rotationY,
             isAlive: player.isAlive,
-            isSprinting: player.isSprinting
+            isSprinting: player.isSprinting,
+            isBlocking: player.isBlocking,
+            attackComboIndex: serverAttackComboIndex,
+            isStunned: serverIsStunned
           });
 
-    const nowMs = Date.now();
     if (!shouldKeepLocalPredictedAnimation) {
       if (animationOverride) {
         jumpAnimationGraceUntilMs = 0;
         sprintAnimationGraceUntilMs = 0;
+        attackAnimationGraceUntilMs = 0;
       } else if (!player.isAlive) {
         jumpAnimationGraceUntilMs = 0;
         sprintAnimationGraceUntilMs = 0;
+        attackAnimationGraceUntilMs = 0;
       } else {
         const verticalDelta = transform.y - previousPosition.y;
         if (verticalDelta >= VERTICAL_MOVEMENT_EPSILON) {
@@ -201,7 +234,19 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
         if (player.isSprinting) {
           sprintAnimationGraceUntilMs = nowMs + SPRINT_ANIMATION_GRACE_MS;
         }
+        if (serverAttackComboIndex > 0) {
+          attackAnimationGraceUntilMs = nowMs + ATTACK_ANIMATION_GRACE_MS;
+          lastAttackComboIndex = serverAttackComboIndex as 1 | 2 | 3;
+        }
       }
+
+      const shouldKeepAttackGrace = nowMs < attackAnimationGraceUntilMs && !player.isBlocking;
+      nextAnimationGameplayState.attackComboIndex =
+        nextAnimationGameplayState.attackComboIndex > 0
+          ? nextAnimationGameplayState.attackComboIndex
+          : shouldKeepAttackGrace
+            ? lastAttackComboIndex
+            : 0;
 
       nextAnimationGameplayState.isJumping =
         nextAnimationGameplayState.isJumping || nowMs < jumpAnimationGraceUntilMs;
@@ -262,7 +307,10 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
         movementDirection: "none",
         isSprinting: false,
         isJumping: false,
-        isUltimateActive: false
+        isUltimateActive: false,
+        isBlocking: false,
+        attackComboIndex: 0,
+        isHitReacting: false
       };
       entity.setAnimationGameplayState(animationGameplayState);
     },

@@ -11,7 +11,12 @@ export const DEFAULT_HERO_ANIMATION_CONFIG: HeroAnimationConfig = {
     walkRight: "Skill_01",
     run: "ForwardLeft_Run_Fight",
     jump: "Walking",
-    ultimate: "ForwardRight_Run_Fight"
+    ultimate: "ForwardRight_Run_Fight",
+    attack1: "Skill_01",
+    attack2: "Skill_01",
+    attack3: "Skill_01",
+    block: "Idle_5",
+    hit: "Regular_Jump"
   },
-  loopedCommands: ["idle", "walk", "walkBack", "walkLeft", "walkRight", "run"]
+  loopedCommands: ["idle", "walk", "walkBack", "walkLeft", "walkRight", "run", "block"]
 };

@@ -2,6 +2,10 @@
 import { Client, Room } from "@colyseus/sdk";
 import { resolveServerEndpoint } from "../config/server-endpoint";
 import type {
+  MatchCombatBlockPayload,
+  MatchCombatGuardBreakPayload,
+  MatchCombatHitPayload,
+  MatchCombatStatePayload,
   MatchPlayerMovedPayload,
   MatchPlayerJoinedPayload,
   MatchPlayerLeftPayload,
@@ -18,9 +22,18 @@ const MATCH_PLAYER_MOVED_EVENT = "match:player:moved";
 const MATCH_PLAYER_MOVE_EVENT = "player_move";
 const MATCH_PLAYER_SPRINT_INTENT_EVENT = "player:sprint:intent";
 const MATCH_ULTIMATE_ACTIVATE_EVENT = "ultimate:activate";
+const MATCH_ATTACK_START_EVENT = "attack:start";
+const MATCH_BLOCK_START_EVENT = "block:start";
+const MATCH_BLOCK_END_EVENT = "block:end";
+const MATCH_PLAYER_RESPAWN_EVENT = "player:respawn";
+const MATCH_COMBAT_HIT_EVENT = "combat:hit";
+const MATCH_COMBAT_BLOCK_EVENT = "combat:block";
+const MATCH_COMBAT_GUARD_BREAK_EVENT = "combat:guardBreak";
+const MATCH_COMBAT_STATE_EVENT = "combat:state";
 const DEFAULT_MAX_HEALTH = 1000;
 const DEFAULT_ULTIMATE_MAX = 100;
 const DEFAULT_MAX_STAMINA = 100;
+const DEFAULT_MAX_GUARD = 100;
 const DEFAULT_SCORE_VALUE = 0;
 
 export type MatchIdentity = {
@@ -44,10 +57,18 @@ export type MatchService = {
   onPlayerAdded: (callback: (player: MatchPlayerState) => void) => () => void;
   onPlayerUpdated: (callback: (player: MatchPlayerState) => void) => () => void;
   onPlayerRemoved: (callback: (sessionId: string) => void) => () => void;
+  onCombatHit: (callback: (payload: MatchCombatHitPayload) => void) => () => void;
+  onCombatBlock: (callback: (payload: MatchCombatBlockPayload) => void) => () => void;
+  onCombatGuardBreak: (callback: (payload: MatchCombatGuardBreakPayload) => void) => () => void;
+  onCombatState: (callback: (payload: MatchCombatStatePayload) => void) => () => void;
   onError: (callback: (error: Error) => void) => () => void;
   sendLocalMovement: (movement: { x: number; y: number; z: number; rotationY: number }) => void;
   sendSprintIntent: (intent: { isShiftPressed: boolean; isForwardPressed: boolean }) => void;
   sendUltimateActivate: () => void;
+  sendAttackStart: () => void;
+  sendBlockStart: () => void;
+  sendBlockEnd: () => void;
+  sendRespawnRequest: () => void;
 };
 
 function normalizeText(value: unknown): string | null {
@@ -125,6 +146,16 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const currentStamina = normalizeNumber(candidate.currentStamina) ?? maxStamina;
   const isSprinting = normalizeBoolean(candidate.isSprinting) ?? false;
   const sprintBlocked = normalizeBoolean(candidate.sprintBlocked) ?? currentStamina <= 0;
+  const isAttacking = normalizeBoolean(candidate.isAttacking) ?? false;
+  const attackComboIndex = normalizeNumber(candidate.attackComboIndex) ?? 0;
+  const lastAttackAt = normalizeNumber(candidate.lastAttackAt) ?? 0;
+  const isBlocking = normalizeBoolean(candidate.isBlocking) ?? false;
+  const blockStartedAt = normalizeNumber(candidate.blockStartedAt) ?? 0;
+  const maxGuard = normalizeNumber(candidate.maxGuard) ?? DEFAULT_MAX_GUARD;
+  const currentGuard = normalizeNumber(candidate.currentGuard) ?? maxGuard;
+  const isGuardBroken = normalizeBoolean(candidate.isGuardBroken) ?? false;
+  const stunUntil = normalizeNumber(candidate.stunUntil) ?? 0;
+  const lastGuardDamagedAt = normalizeNumber(candidate.lastGuardDamagedAt) ?? 0;
   const joinedAt = typeof candidate.joinedAt === "number" ? candidate.joinedAt : Date.now();
   const lastSprintEndedAt = normalizeNumber(candidate.lastSprintEndedAt) ?? joinedAt;
 
@@ -144,6 +175,9 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const safeSprintBlocked = sprintBlocked || safeCurrentStamina <= 0;
   const safeIsSprinting =
     safeIsAlive && !safeSprintBlocked && safeCurrentStamina > 0 ? isSprinting : false;
+  const safeMaxGuard = Math.max(1, maxGuard);
+  const safeCurrentGuard = clamp(currentGuard, 0, safeMaxGuard);
+  const safeAttackComboIndex = Math.max(0, Math.min(3, Math.floor(attackComboIndex)));
 
   return {
     sessionId,
@@ -167,6 +201,16 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
     isSprinting: safeIsSprinting,
     sprintBlocked: safeSprintBlocked,
     lastSprintEndedAt,
+    isAttacking: safeIsAlive ? isAttacking : false,
+    attackComboIndex: safeAttackComboIndex,
+    lastAttackAt,
+    isBlocking: safeIsAlive ? isBlocking : false,
+    blockStartedAt,
+    maxGuard: safeMaxGuard,
+    currentGuard: safeCurrentGuard,
+    isGuardBroken,
+    stunUntil,
+    lastGuardDamagedAt,
     joinedAt
   };
 }
@@ -223,6 +267,156 @@ function normalizeMovedPayload(payload: unknown): MatchPlayerMovedPayload | null
   return { sessionId, x, y, z, rotationY };
 }
 
+function normalizeCombatHitPayload(payload: unknown): MatchCombatHitPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchCombatHitPayload>;
+  const attackerSessionId = normalizeText(candidate.attackerSessionId);
+  const targetSessionId = normalizeText(candidate.targetSessionId);
+  const damage = normalizeNumber(candidate.damage);
+  const comboHitIndex = normalizeNumber(candidate.comboHitIndex);
+  const wasBlocked = normalizeBoolean(candidate.wasBlocked);
+  const didGuardBreak = normalizeBoolean(candidate.didGuardBreak);
+
+  if (
+    !attackerSessionId ||
+    !targetSessionId ||
+    damage === null ||
+    comboHitIndex === null ||
+    wasBlocked === null ||
+    didGuardBreak === null
+  ) {
+    return null;
+  }
+
+  return {
+    attackerSessionId,
+    targetSessionId,
+    damage: Math.max(0, Math.floor(damage)),
+    comboHitIndex: Math.max(1, Math.min(3, Math.floor(comboHitIndex))),
+    wasBlocked,
+    didGuardBreak
+  };
+}
+
+function normalizeCombatBlockPayload(payload: unknown): MatchCombatBlockPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchCombatBlockPayload>;
+  const attackerSessionId = normalizeText(candidate.attackerSessionId);
+  const targetSessionId = normalizeText(candidate.targetSessionId);
+  const comboHitIndex = normalizeNumber(candidate.comboHitIndex);
+  const guardDamage = normalizeNumber(candidate.guardDamage);
+  const currentGuard = normalizeNumber(candidate.currentGuard);
+  const maxGuard = normalizeNumber(candidate.maxGuard);
+  const didGuardBreak = normalizeBoolean(candidate.didGuardBreak);
+
+  if (
+    !attackerSessionId ||
+    !targetSessionId ||
+    comboHitIndex === null ||
+    guardDamage === null ||
+    currentGuard === null ||
+    maxGuard === null ||
+    didGuardBreak === null
+  ) {
+    return null;
+  }
+
+  return {
+    attackerSessionId,
+    targetSessionId,
+    comboHitIndex: Math.max(1, Math.min(3, Math.floor(comboHitIndex))),
+    guardDamage: Math.max(0, Math.floor(guardDamage)),
+    currentGuard: Math.max(0, currentGuard),
+    maxGuard: Math.max(1, maxGuard),
+    didGuardBreak
+  };
+}
+
+function normalizeCombatGuardBreakPayload(payload: unknown): MatchCombatGuardBreakPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchCombatGuardBreakPayload>;
+  const attackerSessionId = normalizeText(candidate.attackerSessionId);
+  const targetSessionId = normalizeText(candidate.targetSessionId);
+  const guardBreakDurationMs = normalizeNumber(candidate.guardBreakDurationMs);
+
+  if (!attackerSessionId || !targetSessionId || guardBreakDurationMs === null) {
+    return null;
+  }
+
+  return {
+    attackerSessionId,
+    targetSessionId,
+    guardBreakDurationMs: Math.max(0, Math.floor(guardBreakDurationMs))
+  };
+}
+
+function normalizeCombatStatePayload(payload: unknown): MatchCombatStatePayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchCombatStatePayload>;
+  const sessionId = normalizeText(candidate.sessionId);
+  const isAttacking = normalizeBoolean(candidate.isAttacking);
+  const attackComboIndex = normalizeNumber(candidate.attackComboIndex);
+  const lastAttackAt = normalizeNumber(candidate.lastAttackAt);
+  const isBlocking = normalizeBoolean(candidate.isBlocking);
+  const blockStartedAt = normalizeNumber(candidate.blockStartedAt);
+  const maxGuard = normalizeNumber(candidate.maxGuard);
+  const currentGuard = normalizeNumber(candidate.currentGuard);
+  const isGuardBroken = normalizeBoolean(candidate.isGuardBroken);
+  const stunUntil = normalizeNumber(candidate.stunUntil);
+  const lastGuardDamagedAt = normalizeNumber(candidate.lastGuardDamagedAt);
+  const x = normalizeNumber(candidate.x);
+  const y = normalizeNumber(candidate.y);
+  const z = normalizeNumber(candidate.z);
+
+  if (
+    !sessionId ||
+    isAttacking === null ||
+    attackComboIndex === null ||
+    lastAttackAt === null ||
+    isBlocking === null ||
+    blockStartedAt === null ||
+    maxGuard === null ||
+    currentGuard === null ||
+    isGuardBroken === null ||
+    stunUntil === null ||
+    lastGuardDamagedAt === null ||
+    x === null ||
+    y === null ||
+    z === null
+  ) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    isAttacking,
+    attackComboIndex: Math.max(0, Math.min(3, Math.floor(attackComboIndex))),
+    lastAttackAt,
+    isBlocking,
+    blockStartedAt,
+    maxGuard: Math.max(1, maxGuard),
+    currentGuard: Math.max(0, currentGuard),
+    isGuardBroken,
+    stunUntil,
+    lastGuardDamagedAt,
+    x,
+    y,
+    z
+  };
+}
+
 function clonePlayer(player: MatchPlayerState): MatchPlayerState {
   return {
     sessionId: player.sessionId,
@@ -246,6 +440,16 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     isSprinting: player.isSprinting,
     sprintBlocked: player.sprintBlocked,
     lastSprintEndedAt: player.lastSprintEndedAt,
+    isAttacking: player.isAttacking,
+    attackComboIndex: player.attackComboIndex,
+    lastAttackAt: player.lastAttackAt,
+    isBlocking: player.isBlocking,
+    blockStartedAt: player.blockStartedAt,
+    maxGuard: player.maxGuard,
+    currentGuard: player.currentGuard,
+    isGuardBroken: player.isGuardBroken,
+    stunUntil: player.stunUntil,
+    lastGuardDamagedAt: player.lastGuardDamagedAt,
     joinedAt: player.joinedAt
   };
 }
@@ -266,6 +470,10 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
   const playerAddedListeners = new Set<(player: MatchPlayerState) => void>();
   const playerUpdatedListeners = new Set<(player: MatchPlayerState) => void>();
   const playerRemovedListeners = new Set<(sessionId: string) => void>();
+  const combatHitListeners = new Set<(payload: MatchCombatHitPayload) => void>();
+  const combatBlockListeners = new Set<(payload: MatchCombatBlockPayload) => void>();
+  const combatGuardBreakListeners = new Set<(payload: MatchCombatGuardBreakPayload) => void>();
+  const combatStateListeners = new Set<(payload: MatchCombatStatePayload) => void>();
   const errorListeners = new Set<(error: Error) => void>();
 
   const emitPlayersChanged = (): void => {
@@ -292,6 +500,30 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
   const emitPlayerRemoved = (sessionId: string): void => {
     playerRemovedListeners.forEach((listener) => {
       listener(sessionId);
+    });
+  };
+
+  const emitCombatHit = (payload: MatchCombatHitPayload): void => {
+    combatHitListeners.forEach((listener) => {
+      listener(payload);
+    });
+  };
+
+  const emitCombatBlock = (payload: MatchCombatBlockPayload): void => {
+    combatBlockListeners.forEach((listener) => {
+      listener(payload);
+    });
+  };
+
+  const emitCombatGuardBreak = (payload: MatchCombatGuardBreakPayload): void => {
+    combatGuardBreakListeners.forEach((listener) => {
+      listener(payload);
+    });
+  };
+
+  const emitCombatState = (payload: MatchCombatStatePayload): void => {
+    combatStateListeners.forEach((listener) => {
+      listener(payload);
     });
   };
 
@@ -343,7 +575,17 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         existingPlayer.currentStamina !== incomingPlayer.currentStamina ||
         existingPlayer.isSprinting !== incomingPlayer.isSprinting ||
         existingPlayer.sprintBlocked !== incomingPlayer.sprintBlocked ||
-        existingPlayer.lastSprintEndedAt !== incomingPlayer.lastSprintEndedAt;
+        existingPlayer.lastSprintEndedAt !== incomingPlayer.lastSprintEndedAt ||
+        existingPlayer.isAttacking !== incomingPlayer.isAttacking ||
+        existingPlayer.attackComboIndex !== incomingPlayer.attackComboIndex ||
+        existingPlayer.lastAttackAt !== incomingPlayer.lastAttackAt ||
+        existingPlayer.isBlocking !== incomingPlayer.isBlocking ||
+        existingPlayer.blockStartedAt !== incomingPlayer.blockStartedAt ||
+        existingPlayer.maxGuard !== incomingPlayer.maxGuard ||
+        existingPlayer.currentGuard !== incomingPlayer.currentGuard ||
+        existingPlayer.isGuardBroken !== incomingPlayer.isGuardBroken ||
+        existingPlayer.stunUntil !== incomingPlayer.stunUntil ||
+        existingPlayer.lastGuardDamagedAt !== incomingPlayer.lastGuardDamagedAt;
 
       if (changed) {
         playersBySessionId.set(sessionId, incomingPlayer);
@@ -405,6 +647,67 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       };
 
       playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
+      emitPlayerUpdated(updatedPlayer);
+      emitPlayersChanged();
+    });
+
+    connectedRoom.onMessage(MATCH_COMBAT_HIT_EVENT, (payload: unknown) => {
+      const hitPayload = normalizeCombatHitPayload(payload);
+      if (!hitPayload) {
+        return;
+      }
+
+      emitCombatHit(hitPayload);
+    });
+
+    connectedRoom.onMessage(MATCH_COMBAT_BLOCK_EVENT, (payload: unknown) => {
+      const blockPayload = normalizeCombatBlockPayload(payload);
+      if (!blockPayload) {
+        return;
+      }
+
+      emitCombatBlock(blockPayload);
+    });
+
+    connectedRoom.onMessage(MATCH_COMBAT_GUARD_BREAK_EVENT, (payload: unknown) => {
+      const guardBreakPayload = normalizeCombatGuardBreakPayload(payload);
+      if (!guardBreakPayload) {
+        return;
+      }
+
+      emitCombatGuardBreak(guardBreakPayload);
+    });
+
+    connectedRoom.onMessage(MATCH_COMBAT_STATE_EVENT, (payload: unknown) => {
+      const combatStatePayload = normalizeCombatStatePayload(payload);
+      if (!combatStatePayload) {
+        return;
+      }
+
+      const existingPlayer = playersBySessionId.get(combatStatePayload.sessionId);
+      if (!existingPlayer) {
+        return;
+      }
+
+      const updatedPlayer: MatchPlayerState = {
+        ...existingPlayer,
+        isAttacking: combatStatePayload.isAttacking,
+        attackComboIndex: combatStatePayload.attackComboIndex,
+        lastAttackAt: combatStatePayload.lastAttackAt,
+        isBlocking: combatStatePayload.isBlocking,
+        blockStartedAt: combatStatePayload.blockStartedAt,
+        maxGuard: combatStatePayload.maxGuard,
+        currentGuard: clamp(combatStatePayload.currentGuard, 0, combatStatePayload.maxGuard),
+        isGuardBroken: combatStatePayload.isGuardBroken,
+        stunUntil: combatStatePayload.stunUntil,
+        lastGuardDamagedAt: combatStatePayload.lastGuardDamagedAt,
+        x: combatStatePayload.x,
+        y: combatStatePayload.y,
+        z: combatStatePayload.z
+      };
+
+      playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
+      emitCombatState(combatStatePayload);
       emitPlayerUpdated(updatedPlayer);
       emitPlayersChanged();
     });
@@ -527,6 +830,30 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         playerRemovedListeners.delete(callback);
       };
     },
+    onCombatHit: (callback) => {
+      combatHitListeners.add(callback);
+      return () => {
+        combatHitListeners.delete(callback);
+      };
+    },
+    onCombatBlock: (callback) => {
+      combatBlockListeners.add(callback);
+      return () => {
+        combatBlockListeners.delete(callback);
+      };
+    },
+    onCombatGuardBreak: (callback) => {
+      combatGuardBreakListeners.add(callback);
+      return () => {
+        combatGuardBreakListeners.delete(callback);
+      };
+    },
+    onCombatState: (callback) => {
+      combatStateListeners.add(callback);
+      return () => {
+        combatStateListeners.delete(callback);
+      };
+    },
     onError: (callback) => {
       errorListeners.add(callback);
       return () => {
@@ -561,6 +888,34 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       }
 
       room.send(MATCH_ULTIMATE_ACTIVATE_EVENT, {});
+    },
+    sendAttackStart: () => {
+      if (!room) {
+        return;
+      }
+
+      room.send(MATCH_ATTACK_START_EVENT, {});
+    },
+    sendBlockStart: () => {
+      if (!room) {
+        return;
+      }
+
+      room.send(MATCH_BLOCK_START_EVENT, {});
+    },
+    sendBlockEnd: () => {
+      if (!room) {
+        return;
+      }
+
+      room.send(MATCH_BLOCK_END_EVENT, {});
+    },
+    sendRespawnRequest: () => {
+      if (!room) {
+        return;
+      }
+
+      room.send(MATCH_PLAYER_RESPAWN_EVENT, {});
     }
   };
 }

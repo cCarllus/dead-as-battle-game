@@ -1,10 +1,14 @@
-// Responsável por manter estado autoritativo de jogadores da global_match e sincronizar posição entre clientes.
+// Responsável por manter estado autoritativo de jogadores da global_match, incluindo movimento, stamina, combate e sincronização.
 import { Client, Room } from "@colyseus/core";
 import type {
   GlobalMatchState,
+  MatchAttackStartPayload,
+  MatchBlockEndPayload,
+  MatchBlockStartPayload,
   MatchJoinOptions,
   MatchMovePayload,
   MatchPlayerState,
+  MatchRespawnRequestPayload,
   MatchSprintIntentPayload,
   MatchUltimateActivatePayload
 } from "../models/match-player.model.js";
@@ -27,6 +31,13 @@ import {
   resetUltimate,
   syncUltimateReady
 } from "../services/ultimate.service.js";
+import { initializeGuardState } from "../services/block-guard.service.js";
+import {
+  handleAttackStart,
+  handleBlockEnd,
+  handleBlockStart,
+  tickCombatState
+} from "../services/combat.service.js";
 
 const DEFAULT_HERO_ID = "user";
 const MAX_NICKNAME_LENGTH = 24;
@@ -38,6 +49,14 @@ const MATCH_PLAYER_MOVE_EVENT = "player_move";
 const MATCH_PLAYER_MOVED_EVENT = "match:player:moved";
 const MATCH_PLAYER_SPRINT_INTENT_EVENT = "player:sprint:intent";
 const MATCH_ULTIMATE_ACTIVATE_EVENT = "ultimate:activate";
+const MATCH_ATTACK_START_EVENT = "attack:start";
+const MATCH_BLOCK_START_EVENT = "block:start";
+const MATCH_BLOCK_END_EVENT = "block:end";
+const MATCH_PLAYER_RESPAWN_EVENT = "player:respawn";
+const MATCH_COMBAT_HIT_EVENT = "combat:hit";
+const MATCH_COMBAT_BLOCK_EVENT = "combat:block";
+const MATCH_COMBAT_GUARD_BREAK_EVENT = "combat:guardBreak";
+const MATCH_COMBAT_STATE_EVENT = "combat:state";
 const MATCH_STATE_SYNC_INTERVAL_MS = 50;
 const MATCH_SPRINT_TICK_INTERVAL_MS = 50;
 const MATCH_MAX_SPRINT_DELTA_SECONDS = 0.2;
@@ -49,6 +68,21 @@ const PLAYER_COLLISION_MIN_DISTANCE = PLAYER_COLLISION_RADIUS * 2;
 const PLAYER_COLLISION_MIN_DISTANCE_SQUARED = PLAYER_COLLISION_MIN_DISTANCE * PLAYER_COLLISION_MIN_DISTANCE;
 const PLAYER_COLLISION_EPSILON = 0.000001;
 const PLAYER_COLLISION_RESOLVE_PASSES = 5;
+
+type PlayerCombatSnapshot = {
+  isAttacking: boolean;
+  attackComboIndex: number;
+  lastAttackAt: number;
+  isBlocking: boolean;
+  blockStartedAt: number;
+  currentGuard: number;
+  isGuardBroken: boolean;
+  stunUntil: number;
+  lastGuardDamagedAt: number;
+  x: number;
+  y: number;
+  z: number;
+};
 
 function normalizeText(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -122,6 +156,16 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     isSprinting: player.isSprinting,
     sprintBlocked: player.sprintBlocked,
     lastSprintEndedAt: player.lastSprintEndedAt,
+    isAttacking: player.isAttacking,
+    attackComboIndex: player.attackComboIndex,
+    lastAttackAt: player.lastAttackAt,
+    isBlocking: player.isBlocking,
+    blockStartedAt: player.blockStartedAt,
+    maxGuard: player.maxGuard,
+    currentGuard: player.currentGuard,
+    isGuardBroken: player.isGuardBroken,
+    stunUntil: player.stunUntil,
+    lastGuardDamagedAt: player.lastGuardDamagedAt,
     joinedAt: player.joinedAt
   };
 }
@@ -194,7 +238,6 @@ function resolveHorizontalPlayerCollision(options: {
         continue;
       }
 
-      // Evita "colisão infinita" no eixo vertical: só bloqueia quando os corpos se sobrepõem em altura.
       const verticalDistance = Math.abs(options.desiredY - otherPlayer.y);
       if (verticalDistance > PLAYER_COLLISION_HEIGHT) {
         continue;
@@ -228,6 +271,40 @@ function resolveHorizontalPlayerCollision(options: {
   return { x: resolvedX, z: resolvedZ };
 }
 
+function snapshotCombatState(player: MatchPlayerState): PlayerCombatSnapshot {
+  return {
+    isAttacking: player.isAttacking,
+    attackComboIndex: player.attackComboIndex,
+    lastAttackAt: player.lastAttackAt,
+    isBlocking: player.isBlocking,
+    blockStartedAt: player.blockStartedAt,
+    currentGuard: player.currentGuard,
+    isGuardBroken: player.isGuardBroken,
+    stunUntil: player.stunUntil,
+    lastGuardDamagedAt: player.lastGuardDamagedAt,
+    x: player.x,
+    y: player.y,
+    z: player.z
+  };
+}
+
+function didCombatStateChange(previous: PlayerCombatSnapshot, current: MatchPlayerState): boolean {
+  return (
+    previous.isAttacking !== current.isAttacking ||
+    previous.attackComboIndex !== current.attackComboIndex ||
+    previous.lastAttackAt !== current.lastAttackAt ||
+    previous.isBlocking !== current.isBlocking ||
+    previous.blockStartedAt !== current.blockStartedAt ||
+    previous.currentGuard !== current.currentGuard ||
+    previous.isGuardBroken !== current.isGuardBroken ||
+    previous.stunUntil !== current.stunUntil ||
+    previous.lastGuardDamagedAt !== current.lastGuardDamagedAt ||
+    previous.x !== current.x ||
+    previous.y !== current.y ||
+    previous.z !== current.z
+  );
+}
+
 export class GlobalMatchRoom extends Room {
   private readonly spawnService = new SpawnService();
   private readonly sprintInputsBySessionId = new Map<string, SprintInputState>();
@@ -237,6 +314,25 @@ export class GlobalMatchRoom extends Room {
 
   private get matchState(): GlobalMatchState {
     return this.state as GlobalMatchState;
+  }
+
+  private broadcastCombatState(player: MatchPlayerState): void {
+    this.broadcast(MATCH_COMBAT_STATE_EVENT, {
+      sessionId: player.sessionId,
+      isAttacking: player.isAttacking,
+      attackComboIndex: player.attackComboIndex,
+      lastAttackAt: player.lastAttackAt,
+      isBlocking: player.isBlocking,
+      blockStartedAt: player.blockStartedAt,
+      maxGuard: player.maxGuard,
+      currentGuard: player.currentGuard,
+      isGuardBroken: player.isGuardBroken,
+      stunUntil: player.stunUntil,
+      lastGuardDamagedAt: player.lastGuardDamagedAt,
+      x: player.x,
+      y: player.y,
+      z: player.z
+    });
   }
 
   private async syncLobbyMetadata(): Promise<void> {
@@ -279,6 +375,22 @@ export class GlobalMatchRoom extends Room {
       this.handleUltimateActivate(client);
     });
 
+    this.onMessage(MATCH_ATTACK_START_EVENT, (client, _payload: MatchAttackStartPayload) => {
+      this.handleAttackStart(client);
+    });
+
+    this.onMessage(MATCH_BLOCK_START_EVENT, (client, _payload: MatchBlockStartPayload) => {
+      this.handleBlockStart(client);
+    });
+
+    this.onMessage(MATCH_BLOCK_END_EVENT, (client, _payload: MatchBlockEndPayload) => {
+      this.handleBlockEnd(client);
+    });
+
+    this.onMessage(MATCH_PLAYER_RESPAWN_EVENT, (client, _payload: MatchRespawnRequestPayload) => {
+      this.handleRespawnRequest(client);
+    });
+
     this.clock.setInterval(() => {
       if (!this.stateDirty) {
         return;
@@ -289,7 +401,7 @@ export class GlobalMatchRoom extends Room {
     }, MATCH_STATE_SYNC_INTERVAL_MS);
 
     this.clock.setInterval(() => {
-      this.tickSprintStamina();
+      this.tickSprintAndCombat();
     }, MATCH_SPRINT_TICK_INTERVAL_MS);
 
     this.clock.setInterval(() => {
@@ -305,6 +417,7 @@ export class GlobalMatchRoom extends Room {
       throw new Error("Invalid join payload. 'userId' and 'nickname' are required.");
     }
 
+    const now = Date.now();
     const heroId = normalizeHeroId(options?.heroId);
     const heroCombatConfig = resolveHeroCombatServerConfig(heroId);
     const spawn = this.spawnService.getNextSpawnPoint();
@@ -336,19 +449,31 @@ export class GlobalMatchRoom extends Room {
       currentStamina: 0,
       isSprinting: false,
       sprintBlocked: false,
-      lastSprintEndedAt: Date.now(),
-      joinedAt: Date.now()
+      lastSprintEndedAt: now,
+      isAttacking: false,
+      attackComboIndex: 0,
+      lastAttackAt: 0,
+      isBlocking: false,
+      blockStartedAt: 0,
+      maxGuard: 0,
+      currentGuard: 0,
+      isGuardBroken: false,
+      stunUntil: 0,
+      lastGuardDamagedAt: now,
+      joinedAt: now
     };
+
     resetHealth(player, heroCombatConfig.maxHealth);
     resetUltimate(player, heroCombatConfig.ultimateMax);
-    initializeStamina(player, Date.now());
+    initializeStamina(player, now);
+    initializeGuardState(player, now);
 
     this.matchState.players[client.sessionId] = player;
     this.sprintInputsBySessionId.set(client.sessionId, {
       isShiftPressed: false,
       isForwardPressed: false
     });
-    this.movementStateBySessionId.set(client.sessionId, initializePlayerMovementState(Date.now()));
+    this.movementStateBySessionId.set(client.sessionId, initializePlayerMovementState(now));
     this.stateDirty = true;
     await this.syncLobbyMetadata();
 
@@ -383,6 +508,72 @@ export class GlobalMatchRoom extends Room {
     this.broadcast(MATCH_SNAPSHOT_EVENT, cloneState(this.matchState));
   }
 
+  private handleAttackStart(client: Client): void {
+    const attacker = this.matchState.players[client.sessionId];
+    if (!attacker) {
+      return;
+    }
+
+    const result = handleAttackStart({
+      attacker,
+      players: this.matchState.players,
+      now: Date.now()
+    });
+
+    if (!result.stateChanged) {
+      return;
+    }
+
+    this.stateDirty = true;
+    this.broadcastCombatState(attacker);
+
+    if (result.hitEvent) {
+      this.broadcast(MATCH_COMBAT_HIT_EVENT, result.hitEvent);
+      const target = this.matchState.players[result.hitEvent.targetSessionId];
+      if (target) {
+        this.broadcastCombatState(target);
+      }
+    }
+
+    if (result.blockEvent) {
+      this.broadcast(MATCH_COMBAT_BLOCK_EVENT, result.blockEvent);
+    }
+
+    if (result.guardBreakEvent) {
+      this.broadcast(MATCH_COMBAT_GUARD_BREAK_EVENT, result.guardBreakEvent);
+    }
+  }
+
+  private handleBlockStart(client: Client): void {
+    const player = this.matchState.players[client.sessionId];
+    if (!player) {
+      return;
+    }
+
+    const didStart = handleBlockStart(player, Date.now());
+    if (!didStart) {
+      return;
+    }
+
+    this.stateDirty = true;
+    this.broadcastCombatState(player);
+  }
+
+  private handleBlockEnd(client: Client): void {
+    const player = this.matchState.players[client.sessionId];
+    if (!player) {
+      return;
+    }
+
+    const didEnd = handleBlockEnd(player);
+    if (!didEnd) {
+      return;
+    }
+
+    this.stateDirty = true;
+    this.broadcastCombatState(player);
+  }
+
   private handleUltimateActivate(client: Client): void {
     const player = this.matchState.players[client.sessionId];
     if (!player || !player.isAlive) {
@@ -400,6 +591,55 @@ export class GlobalMatchRoom extends Room {
     }
 
     this.stateDirty = true;
+  }
+
+  private handleRespawnRequest(client: Client): void {
+    const player = this.matchState.players[client.sessionId];
+    if (!player) {
+      return;
+    }
+
+    if (player.isAlive) {
+      return;
+    }
+
+    const now = Date.now();
+    const heroCombatConfig = resolveHeroCombatServerConfig(player.heroId);
+    const spawn = this.spawnService.getNextSpawnPoint();
+    const resolvedSpawn = resolveHorizontalPlayerCollision({
+      sessionId: player.sessionId,
+      desiredX: spawn.x,
+      desiredY: spawn.y,
+      desiredZ: spawn.z,
+      rotationY: 0,
+      players: this.matchState.players
+    });
+
+    resetHealth(player, heroCombatConfig.maxHealth);
+    resetUltimate(player, heroCombatConfig.ultimateMax);
+    initializeStamina(player, now);
+    initializeGuardState(player, now);
+    player.isAttacking = false;
+    player.attackComboIndex = 0;
+    player.lastAttackAt = 0;
+    player.isBlocking = false;
+    player.blockStartedAt = 0;
+    player.isSprinting = false;
+    player.stunUntil = 0;
+    player.x = resolvedSpawn.x;
+    player.y = spawn.y;
+    player.z = resolvedSpawn.z;
+    player.rotationY = 0;
+
+    this.stateDirty = true;
+    this.broadcastCombatState(player);
+    this.broadcast(MATCH_PLAYER_MOVED_EVENT, {
+      sessionId: player.sessionId,
+      x: player.x,
+      y: player.y,
+      z: player.z,
+      rotationY: player.rotationY
+    });
   }
 
   private tickUltimateChargeForTesting(): void {
@@ -441,7 +681,7 @@ export class GlobalMatchRoom extends Room {
     this.sprintInputsBySessionId.set(client.sessionId, normalizedInput);
   }
 
-  private tickSprintStamina(): void {
+  private tickSprintAndCombat(): void {
     const now = Date.now();
     const deltaTime = Math.min(
       MATCH_MAX_SPRINT_DELTA_SECONDS,
@@ -473,7 +713,29 @@ export class GlobalMatchRoom extends Room {
       }
     });
 
-    if (didChangeSprintOrStamina) {
+    const combatSnapshots = new Map<string, PlayerCombatSnapshot>();
+    Object.values(this.matchState.players).forEach((player) => {
+      combatSnapshots.set(player.sessionId, snapshotCombatState(player));
+    });
+
+    const didChangeCombat = tickCombatState(this.matchState.players, deltaTime, now);
+
+    if (didChangeCombat) {
+      Object.values(this.matchState.players).forEach((player) => {
+        const previous = combatSnapshots.get(player.sessionId);
+        if (!previous) {
+          return;
+        }
+
+        if (!didCombatStateChange(previous, player)) {
+          return;
+        }
+
+        this.broadcastCombatState(player);
+      });
+    }
+
+    if (didChangeSprintOrStamina || didChangeCombat) {
       this.stateDirty = true;
     }
   }
