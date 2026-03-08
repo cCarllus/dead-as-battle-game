@@ -2,6 +2,9 @@
 import { Client, Room } from "@colyseus/sdk";
 import { resolveServerEndpoint } from "../config/server-endpoint";
 import type {
+  MatchAttackStartedEventPayload,
+  MatchBlockEndedEventPayload,
+  MatchBlockStartedEventPayload,
   MatchCombatBlockPayload,
   MatchCombatGuardBreakPayload,
   MatchCombatHitPayload,
@@ -9,6 +12,7 @@ import type {
   MatchCombatStatePayload,
   MatchCombatUltimatePayload,
   MatchPlayerMovedPayload,
+  MatchPlayerRespawnedEventPayload,
   MatchPlayerJoinedPayload,
   MatchPlayerLeftPayload,
   MatchPlayerState,
@@ -277,6 +281,81 @@ function normalizeMovedPayload(payload: unknown): MatchPlayerMovedPayload | null
   }
 
   return { sessionId, x, y, z, rotationY };
+}
+
+function normalizeAttackStartedPayload(payload: unknown): MatchAttackStartedEventPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchAttackStartedEventPayload>;
+  const sessionId = normalizeText(candidate.sessionId);
+  const attackComboIndex = normalizeNumber(candidate.attackComboIndex);
+  const startedAt = normalizeNumber(candidate.startedAt);
+  if (!sessionId || attackComboIndex === null || startedAt === null) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    attackComboIndex: Math.max(1, Math.min(3, Math.floor(attackComboIndex))),
+    startedAt
+  };
+}
+
+function normalizeBlockStartedPayload(payload: unknown): MatchBlockStartedEventPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchBlockStartedEventPayload>;
+  const sessionId = normalizeText(candidate.sessionId);
+  const blockStartedAt = normalizeNumber(candidate.blockStartedAt);
+  if (!sessionId || blockStartedAt === null) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    blockStartedAt
+  };
+}
+
+function normalizeBlockEndedPayload(payload: unknown): MatchBlockEndedEventPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchBlockEndedEventPayload>;
+  const sessionId = normalizeText(candidate.sessionId);
+  const blockEndedAt = normalizeNumber(candidate.blockEndedAt);
+  if (!sessionId || blockEndedAt === null) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    blockEndedAt
+  };
+}
+
+function normalizeRespawnedPayload(payload: unknown): MatchPlayerRespawnedEventPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchPlayerRespawnedEventPayload>;
+  const player = normalizePlayer(candidate.player);
+  const respawnedAt = normalizeNumber(candidate.respawnedAt);
+
+  if (!player || respawnedAt === null) {
+    return null;
+  }
+
+  return {
+    player,
+    respawnedAt
+  };
 }
 
 function normalizeCombatHitPayload(payload: unknown): MatchCombatHitPayload | null {
@@ -734,6 +813,116 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
 
       playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
       emitPlayerUpdated(updatedPlayer);
+      emitPlayersChanged();
+    });
+
+    connectedRoom.onMessage(MATCH_ATTACK_START_EVENT, (payload: unknown) => {
+      const attackStartedPayload = normalizeAttackStartedPayload(payload);
+      if (!attackStartedPayload) {
+        return;
+      }
+
+      const existingPlayer = playersBySessionId.get(attackStartedPayload.sessionId);
+      if (!existingPlayer) {
+        return;
+      }
+
+      const updatedPlayer: MatchPlayerState = {
+        ...existingPlayer,
+        isAttacking: true,
+        attackComboIndex: attackStartedPayload.attackComboIndex,
+        lastAttackAt: attackStartedPayload.startedAt,
+        isBlocking: false,
+        blockStartedAt: 0
+      };
+
+      const didChange =
+        existingPlayer.isAttacking !== updatedPlayer.isAttacking ||
+        existingPlayer.attackComboIndex !== updatedPlayer.attackComboIndex ||
+        existingPlayer.lastAttackAt !== updatedPlayer.lastAttackAt ||
+        existingPlayer.isBlocking !== updatedPlayer.isBlocking ||
+        existingPlayer.blockStartedAt !== updatedPlayer.blockStartedAt;
+      if (!didChange) {
+        return;
+      }
+
+      playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
+      emitPlayerUpdated(updatedPlayer);
+      emitPlayersChanged();
+    });
+
+    connectedRoom.onMessage(MATCH_BLOCK_START_EVENT, (payload: unknown) => {
+      const blockStartedPayload = normalizeBlockStartedPayload(payload);
+      if (!blockStartedPayload) {
+        return;
+      }
+
+      const existingPlayer = playersBySessionId.get(blockStartedPayload.sessionId);
+      if (!existingPlayer) {
+        return;
+      }
+
+      const updatedPlayer: MatchPlayerState = {
+        ...existingPlayer,
+        isBlocking: true,
+        blockStartedAt: blockStartedPayload.blockStartedAt
+      };
+
+      const didChange =
+        existingPlayer.isBlocking !== updatedPlayer.isBlocking ||
+        existingPlayer.blockStartedAt !== updatedPlayer.blockStartedAt;
+      if (!didChange) {
+        return;
+      }
+
+      playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
+      emitPlayerUpdated(updatedPlayer);
+      emitPlayersChanged();
+    });
+
+    connectedRoom.onMessage(MATCH_BLOCK_END_EVENT, (payload: unknown) => {
+      const blockEndedPayload = normalizeBlockEndedPayload(payload);
+      if (!blockEndedPayload) {
+        return;
+      }
+
+      const existingPlayer = playersBySessionId.get(blockEndedPayload.sessionId);
+      if (!existingPlayer) {
+        return;
+      }
+
+      const updatedPlayer: MatchPlayerState = {
+        ...existingPlayer,
+        isBlocking: false,
+        blockStartedAt: 0
+      };
+
+      const didChange =
+        existingPlayer.isBlocking !== updatedPlayer.isBlocking ||
+        existingPlayer.blockStartedAt !== updatedPlayer.blockStartedAt;
+      if (!didChange) {
+        return;
+      }
+
+      playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
+      emitPlayerUpdated(updatedPlayer);
+      emitPlayersChanged();
+    });
+
+    connectedRoom.onMessage(MATCH_PLAYER_RESPAWN_EVENT, (payload: unknown) => {
+      const respawnedPayload = normalizeRespawnedPayload(payload);
+      if (!respawnedPayload) {
+        return;
+      }
+
+      const existingPlayer = playersBySessionId.get(respawnedPayload.player.sessionId);
+      playersBySessionId.set(respawnedPayload.player.sessionId, respawnedPayload.player);
+
+      if (existingPlayer) {
+        emitPlayerUpdated(respawnedPayload.player);
+      } else {
+        emitPlayerAdded(respawnedPayload.player);
+      }
       emitPlayersChanged();
     });
 

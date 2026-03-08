@@ -9,6 +9,9 @@ import { createPlayerFactory } from "./player-factory";
 
 const LOCAL_SERVER_RECONCILE_DISTANCE_SQUARED = 0.0025;
 const LOCAL_SERVER_RECONCILE_ROTATION_DELTA = 0.08;
+const LOCAL_SERVER_RECONCILE_SOFT_FACTOR = 0.32;
+const LOCAL_SERVER_RECONCILE_HARD_SNAP_DISTANCE_SQUARED = 1;
+const LOCAL_SERVER_RECONCILE_HARD_SNAP_ROTATION_DELTA = Math.PI * 0.75;
 const ENABLE_MATCH_VIEW_DEBUG_LOGS = false;
 
 function logMatchView(event: string, payload: Record<string, unknown>): void {
@@ -118,6 +121,18 @@ function squaredDistance(
   return dx * dx + dy * dy + dz * dz;
 }
 
+function normalizeAngleRadians(angle: number): number {
+  const tau = Math.PI * 2;
+  let normalized = angle % tau;
+  if (normalized > Math.PI) {
+    normalized -= tau;
+  }
+  if (normalized < -Math.PI) {
+    normalized += tau;
+  }
+  return normalized;
+}
+
 export type PlayerViewManager = {
   syncPlayers: (players: MatchPlayerState[]) => void;
   addPlayer: (player: MatchPlayerState) => void;
@@ -225,13 +240,30 @@ export function createPlayerViewManager(options: CreatePlayerViewManagerOptions)
 
     if (player.sessionId === options.localSessionId) {
       const localTransform = view.getTransform();
+      const normalizedRotationDelta = normalizeAngleRadians(player.rotationY - localTransform.rotationY);
       const shouldReconcileFromServer =
         squaredDistance(localTransform, player) >= LOCAL_SERVER_RECONCILE_DISTANCE_SQUARED ||
-        Math.abs(localTransform.rotationY - player.rotationY) >= LOCAL_SERVER_RECONCILE_ROTATION_DELTA;
+        Math.abs(normalizedRotationDelta) >= LOCAL_SERVER_RECONCILE_ROTATION_DELTA;
 
       if (!shouldReconcileFromServer) {
         return;
       }
+
+      const shouldSnapHard =
+        squaredDistance(localTransform, player) >= LOCAL_SERVER_RECONCILE_HARD_SNAP_DISTANCE_SQUARED ||
+        Math.abs(normalizedRotationDelta) >= LOCAL_SERVER_RECONCILE_HARD_SNAP_ROTATION_DELTA;
+      const reconciledPlayerState: MatchPlayerState = shouldSnapHard
+        ? player
+        : {
+            ...player,
+            x: localTransform.x + (player.x - localTransform.x) * LOCAL_SERVER_RECONCILE_SOFT_FACTOR,
+            y: localTransform.y + (player.y - localTransform.y) * LOCAL_SERVER_RECONCILE_SOFT_FACTOR,
+            z: localTransform.z + (player.z - localTransform.z) * LOCAL_SERVER_RECONCILE_SOFT_FACTOR,
+            rotationY:
+              localTransform.rotationY + normalizedRotationDelta * LOCAL_SERVER_RECONCILE_SOFT_FACTOR
+          };
+      view.updateFromState(reconciledPlayerState);
+      return;
     }
 
     view.updateFromState(player);

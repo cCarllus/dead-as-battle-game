@@ -59,6 +59,27 @@ export type MatchPlayerMovedPayload = {
   rotationY: number;
 };
 
+export type MatchAttackStartedEventPayload = {
+  sessionId: string;
+  attackComboIndex: number;
+  startedAt: number;
+};
+
+export type MatchBlockStartedEventPayload = {
+  sessionId: string;
+  blockStartedAt: number;
+};
+
+export type MatchBlockEndedEventPayload = {
+  sessionId: string;
+  blockEndedAt: number;
+};
+
+export type MatchPlayerRespawnedEventPayload = {
+  player: MatchPlayerState;
+  respawnedAt: number;
+};
+
 export type MatchCombatHitPayload = {
   attackerSessionId: string;
   targetSessionId: string;

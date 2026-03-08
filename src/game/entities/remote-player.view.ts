@@ -22,9 +22,10 @@ const REMOTE_IDLE_TIMEOUT_MS = 480;
 const JUMP_ANIMATION_GRACE_MS = 260;
 const SPRINT_ANIMATION_GRACE_MS = 180;
 const ATTACK_ANIMATION_GRACE_MS = 240;
-const REMOTE_POSITION_LERP_FACTOR = 0.16;
-const REMOTE_ROTATION_LERP_FACTOR = 0.2;
+const REMOTE_POSITION_SMOOTH_TIME_MS = 95;
+const REMOTE_ROTATION_SMOOTH_TIME_MS = 80;
 const REMOTE_SNAP_DISTANCE_SQUARED = 36;
+const REMOTE_MAX_TICK_DELTA_MS = 200;
 
 export type PlayerViewRole = "local" | "teammate" | "enemy";
 
@@ -49,6 +50,18 @@ export type RemotePlayerView = {
 
 function lerp(from: number, to: number, factor: number): number {
   return from + (to - from) * factor;
+}
+
+function resolveExponentialLerpFactor(deltaMs: number, smoothTimeMs: number): number {
+  if (deltaMs <= 0) {
+    return 0;
+  }
+
+  if (smoothTimeMs <= 0) {
+    return 1;
+  }
+
+  return 1 - Math.exp(-deltaMs / smoothTimeMs);
 }
 
 function normalizeAngleRadians(angle: number): number {
@@ -190,6 +203,7 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
   let attackAnimationGraceUntilMs = 0;
   let lastAttackComboIndex: 1 | 2 | 3 = 1;
   let remoteTargetTransform = toTransform(options.player);
+  let lastTickAtMs = Date.now();
 
   const updateFromState = (
     player: MatchPlayerState,
@@ -320,6 +334,11 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
         return;
       }
 
+      const deltaMs = Math.max(1, Math.min(REMOTE_MAX_TICK_DELTA_MS, nowMs - lastTickAtMs));
+      lastTickAtMs = nowMs;
+      const positionLerpFactor = resolveExponentialLerpFactor(deltaMs, REMOTE_POSITION_SMOOTH_TIME_MS);
+      const rotationLerpFactor = resolveExponentialLerpFactor(deltaMs, REMOTE_ROTATION_SMOOTH_TIME_MS);
+
       const currentTransform = entity.getTransform();
       const dx = remoteTargetTransform.x - currentTransform.x;
       const dy = remoteTargetTransform.y - currentTransform.y;
@@ -332,10 +351,10 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
         entity.setTransform(remoteTargetTransform);
       } else if (distanceSquared > 0.000001 || Math.abs(deltaRotation) > 0.0005) {
         entity.setTransform({
-          x: lerp(currentTransform.x, remoteTargetTransform.x, REMOTE_POSITION_LERP_FACTOR),
-          y: lerp(currentTransform.y, remoteTargetTransform.y, REMOTE_POSITION_LERP_FACTOR),
-          z: lerp(currentTransform.z, remoteTargetTransform.z, REMOTE_POSITION_LERP_FACTOR),
-          rotationY: currentTransform.rotationY + deltaRotation * REMOTE_ROTATION_LERP_FACTOR
+          x: lerp(currentTransform.x, remoteTargetTransform.x, positionLerpFactor),
+          y: lerp(currentTransform.y, remoteTargetTransform.y, positionLerpFactor),
+          z: lerp(currentTransform.z, remoteTargetTransform.z, positionLerpFactor),
+          rotationY: currentTransform.rotationY + deltaRotation * rotationLerpFactor
         });
       }
 
