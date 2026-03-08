@@ -22,8 +22,8 @@ import { createPointerLockSystem } from "../systems/pointer-lock.system";
 import { GLOBAL_MATCH_MAP_URL, loadGlobalMatchMap } from "../systems/map-loader.system";
 
 const CAMERA_RADIUS = 6.9;
-const CAMERA_MIN_BETA = 0.72;
-const CAMERA_MAX_BETA = 1.42;
+const CAMERA_MIN_BETA = 0.05;
+const CAMERA_MAX_BETA = Math.PI - 0.05;
 const CAMERA_MOUSE_SENSITIVITY = 0.0022;
 const CAMERA_TARGET_VERTICAL_OFFSET = 1.72;
 const CAMERA_TARGET_LATERAL_OFFSET = 0.92;
@@ -68,8 +68,6 @@ export type GlobalMatchSceneHandle = {
   exitPointerLock: () => void;
   isPointerLocked: () => boolean;
   onPointerLockChanged: (listener: (locked: boolean) => void) => () => void;
-  triggerLocalUltimateAnimation: () => void;
-  triggerPlayerUltimateAnimation: (sessionId: string) => void;
   triggerPlayerUltimateEffect: (payload: Pick<MatchCombatUltimatePayload, "sessionId" | "characterId" | "durationMs">) => void;
   getPlayerScreenPosition: (sessionId: string) => { x: number; y: number } | null;
   dispose: () => void;
@@ -245,7 +243,6 @@ export async function createGlobalMatchScene(
   let lastSprintInputSyncAtMs = 0;
   let lastSentSprintIntent: { isShiftPressed: boolean; isForwardPressed: boolean } | null = null;
   let isLocalVisualHiddenForCamera = false;
-  let localUltimateRequested = false;
   let localPredictedComboChainIndex: 0 | 1 | 2 | 3 = 0;
   let localPredictedActiveAttackComboIndex: 0 | 1 | 2 | 3 = 0;
   let localPredictedLastAttackAtMs = 0;
@@ -308,15 +305,6 @@ export async function createGlobalMatchScene(
 
   const setTeamMemberUserIds = (userIds: string[]): void => {
     playerViewManager.setTeamMemberUserIds(userIds);
-  };
-
-  const triggerLocalUltimateAnimation = (): void => {
-    const localPlayerState = playerViewManager.getLocalPlayerState();
-    if (!localPlayerState || !localPlayerState.isAlive) {
-      return;
-    }
-
-    localUltimateRequested = true;
   };
 
   const setFlyModeEnabled = (enabled: boolean): void => {
@@ -600,17 +588,17 @@ export async function createGlobalMatchScene(
 
     if (!inputEnabled || deltaSeconds <= 0) {
       const idleAnimationState: AnimationGameplayState = {
+        isDead: !(localPlayerState?.isAlive ?? true),
         isMoving: false,
         movementDirection: "none",
         isSprinting: false,
         isJumping: false,
-        isUltimateActive: localUltimateRequested,
+        isUltimateActive: !!localPlayerState?.isUsingUltimate,
         isBlocking: effectiveBlocking,
         attackComboIndex: activeAttackComboIndex,
         isHitReacting: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
       };
       playerViewManager.updateLocalPlayerTransform(localView.getTransform(), idleAnimationState);
-      localUltimateRequested = false;
       return;
     }
 
@@ -632,7 +620,7 @@ export async function createGlobalMatchScene(
     const isPredictedMoving = predictedMovementDirection !== "none";
     const isPredictedSprinting =
       canRequestSprintIntent && inputState.descend && inputState.forward && isPredictedMoving;
-    const isUltimatePredictedActive = localUltimateRequested || !!localPlayerState?.isUsingUltimate;
+    const isUltimatePredictedActive = !!localPlayerState?.isUsingUltimate;
 
     let movementVector = new Vector3(
       forward.x * forwardAxis + right.x * sideAxis,
@@ -661,6 +649,7 @@ export async function createGlobalMatchScene(
       localVerticalVelocity = 0;
       wasJumpPressed = inputState.jump;
       const predictedAnimationState: AnimationGameplayState = {
+        isDead: !(localPlayerState?.isAlive ?? true),
         isMoving: isPredictedMoving,
         movementDirection: predictedMovementDirection,
         isSprinting: false,
@@ -671,7 +660,6 @@ export async function createGlobalMatchScene(
         isHitReacting: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
       };
       playerViewManager.updateLocalPlayerTransform(transform, predictedAnimationState);
-      localUltimateRequested = false;
       maybeEmitLocalMovement(transform);
       return;
     }
@@ -699,6 +687,7 @@ export async function createGlobalMatchScene(
 
     wasJumpPressed = inputState.jump;
     const predictedAnimationState: AnimationGameplayState = {
+      isDead: !(localPlayerState?.isAlive ?? true),
       isMoving: isPredictedMoving,
       movementDirection: predictedMovementDirection,
       isSprinting: isPredictedSprinting,
@@ -712,7 +701,6 @@ export async function createGlobalMatchScene(
       isHitReacting: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
     };
     playerViewManager.updateLocalPlayerTransform(transform, predictedAnimationState);
-    localUltimateRequested = false;
     maybeEmitLocalMovement(transform);
   };
 
@@ -803,10 +791,6 @@ export async function createGlobalMatchScene(
       return () => {
         pointerLockChangeListeners.delete(listener);
       };
-    },
-    triggerLocalUltimateAnimation,
-    triggerPlayerUltimateAnimation: (sessionId) => {
-      playerViewManager.playPlayerAnimationCommand(sessionId, "ultimate");
     },
     triggerPlayerUltimateEffect: (payload) => {
       effectManager.playUltimateEffect({

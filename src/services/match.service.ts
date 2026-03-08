@@ -1,6 +1,7 @@
 // Responsável por sincronizar estado autoritativo de jogadores da global_match e expor eventos por sessionId.
 import { Client, Room } from "@colyseus/sdk";
 import { resolveServerEndpoint } from "../config/server-endpoint";
+import { CLIENT_MATCH_EVENTS } from "./match-events";
 import type {
   MatchAttackStartedEventPayload,
   MatchBlockEndedEventPayload,
@@ -20,24 +21,6 @@ import type {
 } from "../models/match-player.model";
 
 export const GLOBAL_MATCH_ROOM_NAME = "global_match";
-const MATCH_SNAPSHOT_REQUEST_EVENT = "match:snapshot:request";
-const MATCH_SNAPSHOT_EVENT = "match:snapshot";
-const MATCH_PLAYER_JOINED_EVENT = "match:player:joined";
-const MATCH_PLAYER_LEFT_EVENT = "match:player:left";
-const MATCH_PLAYER_MOVED_EVENT = "match:player:moved";
-const MATCH_PLAYER_MOVE_EVENT = "player_move";
-const MATCH_PLAYER_SPRINT_INTENT_EVENT = "player:sprint:intent";
-const MATCH_ULTIMATE_ACTIVATE_EVENT = "ultimate:activate";
-const MATCH_ATTACK_START_EVENT = "attack:start";
-const MATCH_BLOCK_START_EVENT = "block:start";
-const MATCH_BLOCK_END_EVENT = "block:end";
-const MATCH_PLAYER_RESPAWN_EVENT = "player:respawn";
-const MATCH_COMBAT_HIT_EVENT = "combat:hit";
-const MATCH_COMBAT_BLOCK_EVENT = "combat:block";
-const MATCH_COMBAT_GUARD_BREAK_EVENT = "combat:guardBreak";
-const MATCH_COMBAT_KILL_EVENT = "combat:kill";
-const MATCH_COMBAT_ULTIMATE_EVENT = "combat:ultimate";
-const MATCH_COMBAT_STATE_EVENT = "combat:state";
 const DEFAULT_MAX_HEALTH = 1000;
 const DEFAULT_ULTIMATE_MAX = 100;
 const DEFAULT_MAX_STAMINA = 100;
@@ -762,11 +745,11 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
   };
 
   const bindRoomEvents = (connectedRoom: Room): void => {
-    connectedRoom.onMessage(MATCH_SNAPSHOT_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.snapshot, (payload: unknown) => {
       applySnapshot(normalizeSnapshot(payload));
     });
 
-    connectedRoom.onMessage(MATCH_PLAYER_JOINED_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.playerJoined, (payload: unknown) => {
       const joinedPlayer = normalizeJoinedPayload(payload);
       if (!joinedPlayer) {
         return;
@@ -777,7 +760,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitPlayersChanged();
     });
 
-    connectedRoom.onMessage(MATCH_PLAYER_LEFT_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.playerLeft, (payload: unknown) => {
       const sessionId = normalizeLeftPayload(payload);
       if (!sessionId) {
         return;
@@ -792,7 +775,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitPlayersChanged();
     });
 
-    connectedRoom.onMessage(MATCH_PLAYER_MOVED_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.playerMoved, (payload: unknown) => {
       const movedPlayer = normalizeMovedPayload(payload);
       if (!movedPlayer) {
         return;
@@ -811,12 +794,21 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         rotationY: movedPlayer.rotationY
       };
 
+      const didChange =
+        existingPlayer.x !== updatedPlayer.x ||
+        existingPlayer.y !== updatedPlayer.y ||
+        existingPlayer.z !== updatedPlayer.z ||
+        existingPlayer.rotationY !== updatedPlayer.rotationY;
+      if (!didChange) {
+        return;
+      }
+
       playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
       emitPlayerUpdated(updatedPlayer);
       emitPlayersChanged();
     });
 
-    connectedRoom.onMessage(MATCH_ATTACK_START_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.attackStart, (payload: unknown) => {
       const attackStartedPayload = normalizeAttackStartedPayload(payload);
       if (!attackStartedPayload) {
         return;
@@ -851,7 +843,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitPlayersChanged();
     });
 
-    connectedRoom.onMessage(MATCH_BLOCK_START_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.blockStart, (payload: unknown) => {
       const blockStartedPayload = normalizeBlockStartedPayload(payload);
       if (!blockStartedPayload) {
         return;
@@ -880,7 +872,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitPlayersChanged();
     });
 
-    connectedRoom.onMessage(MATCH_BLOCK_END_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.blockEnd, (payload: unknown) => {
       const blockEndedPayload = normalizeBlockEndedPayload(payload);
       if (!blockEndedPayload) {
         return;
@@ -909,7 +901,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitPlayersChanged();
     });
 
-    connectedRoom.onMessage(MATCH_PLAYER_RESPAWN_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.playerRespawn, (payload: unknown) => {
       const respawnedPayload = normalizeRespawnedPayload(payload);
       if (!respawnedPayload) {
         return;
@@ -926,7 +918,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitPlayersChanged();
     });
 
-    connectedRoom.onMessage(MATCH_COMBAT_HIT_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.combatHit, (payload: unknown) => {
       const hitPayload = normalizeCombatHitPayload(payload);
       if (!hitPayload) {
         return;
@@ -935,7 +927,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitCombatHit(hitPayload);
     });
 
-    connectedRoom.onMessage(MATCH_COMBAT_BLOCK_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.combatBlock, (payload: unknown) => {
       const blockPayload = normalizeCombatBlockPayload(payload);
       if (!blockPayload) {
         return;
@@ -944,7 +936,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitCombatBlock(blockPayload);
     });
 
-    connectedRoom.onMessage(MATCH_COMBAT_GUARD_BREAK_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.combatGuardBreak, (payload: unknown) => {
       const guardBreakPayload = normalizeCombatGuardBreakPayload(payload);
       if (!guardBreakPayload) {
         return;
@@ -953,7 +945,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitCombatGuardBreak(guardBreakPayload);
     });
 
-    connectedRoom.onMessage(MATCH_COMBAT_KILL_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.combatKill, (payload: unknown) => {
       const killPayload = normalizeCombatKillPayload(payload);
       if (!killPayload) {
         return;
@@ -979,7 +971,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitPlayersChanged();
     });
 
-    connectedRoom.onMessage(MATCH_COMBAT_ULTIMATE_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.combatUltimate, (payload: unknown) => {
       const ultimatePayload = normalizeCombatUltimatePayload(payload);
       if (!ultimatePayload) {
         return;
@@ -1002,7 +994,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitCombatUltimate(ultimatePayload);
     });
 
-    connectedRoom.onMessage(MATCH_COMBAT_STATE_EVENT, (payload: unknown) => {
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.combatState, (payload: unknown) => {
       const combatStatePayload = normalizeCombatStatePayload(payload);
       if (!combatStatePayload) {
         return;
@@ -1029,6 +1021,24 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         y: combatStatePayload.y,
         z: combatStatePayload.z
       };
+
+      const didChange =
+        existingPlayer.isAttacking !== updatedPlayer.isAttacking ||
+        existingPlayer.attackComboIndex !== updatedPlayer.attackComboIndex ||
+        existingPlayer.lastAttackAt !== updatedPlayer.lastAttackAt ||
+        existingPlayer.isBlocking !== updatedPlayer.isBlocking ||
+        existingPlayer.blockStartedAt !== updatedPlayer.blockStartedAt ||
+        existingPlayer.maxGuard !== updatedPlayer.maxGuard ||
+        existingPlayer.currentGuard !== updatedPlayer.currentGuard ||
+        existingPlayer.isGuardBroken !== updatedPlayer.isGuardBroken ||
+        existingPlayer.stunUntil !== updatedPlayer.stunUntil ||
+        existingPlayer.lastGuardDamagedAt !== updatedPlayer.lastGuardDamagedAt ||
+        existingPlayer.x !== updatedPlayer.x ||
+        existingPlayer.y !== updatedPlayer.y ||
+        existingPlayer.z !== updatedPlayer.z;
+      if (!didChange) {
+        return;
+      }
 
       playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
       emitCombatState(combatStatePayload);
@@ -1095,7 +1105,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         room = connectedRoom;
         connectedIdentity = identity;
         bindRoomEvents(connectedRoom);
-        connectedRoom.send(MATCH_SNAPSHOT_REQUEST_EVENT);
+        connectedRoom.send(CLIENT_MATCH_EVENTS.snapshotRequest);
       })();
 
       try {
@@ -1201,7 +1211,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         return;
       }
 
-      room.send(MATCH_PLAYER_MOVE_EVENT, {
+      room.send(CLIENT_MATCH_EVENTS.playerMoveInput, {
         x: movement.x,
         y: movement.y,
         z: movement.z,
@@ -1213,7 +1223,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         return;
       }
 
-      room.send(MATCH_PLAYER_SPRINT_INTENT_EVENT, {
+      room.send(CLIENT_MATCH_EVENTS.sprintIntent, {
         isShiftPressed: intent.isShiftPressed,
         isForwardPressed: intent.isForwardPressed
       });
@@ -1223,35 +1233,35 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         return;
       }
 
-      room.send(MATCH_ULTIMATE_ACTIVATE_EVENT, {});
+      room.send(CLIENT_MATCH_EVENTS.ultimateActivate, {});
     },
     sendAttackStart: () => {
       if (!room) {
         return;
       }
 
-      room.send(MATCH_ATTACK_START_EVENT, {});
+      room.send(CLIENT_MATCH_EVENTS.attackStart, {});
     },
     sendBlockStart: () => {
       if (!room) {
         return;
       }
 
-      room.send(MATCH_BLOCK_START_EVENT, {});
+      room.send(CLIENT_MATCH_EVENTS.blockStart, {});
     },
     sendBlockEnd: () => {
       if (!room) {
         return;
       }
 
-      room.send(MATCH_BLOCK_END_EVENT, {});
+      room.send(CLIENT_MATCH_EVENTS.blockEnd, {});
     },
     sendRespawnRequest: () => {
       if (!room) {
         return;
       }
 
-      room.send(MATCH_PLAYER_RESPAWN_EVENT, {});
+      room.send(CLIENT_MATCH_EVENTS.playerRespawn, {});
     }
   };
 }

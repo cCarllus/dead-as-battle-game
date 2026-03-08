@@ -389,6 +389,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     },
     setAnimationGameplayState: (nextState) => {
       animationGameplayState = {
+        isDead: nextState.isDead,
         isMoving: nextState.isMoving,
         movementDirection: nextState.movementDirection,
         isSprinting: nextState.isSprinting,

@@ -4,6 +4,7 @@ import type { AnimationCommand } from "./animation-command";
 export type MovementDirection = "none" | "forward" | "backward" | "left" | "right";
 
 export type AnimationGameplayState = {
+  isDead: boolean;
   isMoving: boolean;
   movementDirection: MovementDirection;
   isSprinting: boolean;
@@ -16,6 +17,7 @@ export type AnimationGameplayState = {
 
 export function createDefaultAnimationGameplayState(): AnimationGameplayState {
   return {
+    isDead: false,
     isMoving: false,
     movementDirection: "none",
     isSprinting: false,
@@ -42,6 +44,10 @@ function resolveAttackCommand(attackComboIndex: 1 | 2 | 3): AnimationCommand {
 export function resolveAnimationCommandFromGameplay(
   gameplayState: AnimationGameplayState
 ): AnimationCommand {
+  if (gameplayState.isDead) {
+    return "death";
+  }
+
   if (gameplayState.isUltimateActive) {
     return "ultimate";
   }

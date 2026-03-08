@@ -236,7 +236,7 @@ export function mountChampionPreview(container: HTMLElement, options: ChampionPr
 
         modelFrame = normalizeModel(modelRoot);
         frameCamera(camera, engine, modelFrame);
-        playAnimationGroups(result.animationGroups, "ForwardRight_Run_Fight");
+        playAnimationGroups(result.animationGroups, "Left_Jab_from_Guard");
 
         if (fallbackIcon && !isDisposed) {
           fallbackIcon.style.display = "none";

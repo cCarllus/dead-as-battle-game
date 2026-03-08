@@ -7,6 +7,7 @@ export const ANIMATION_COMMANDS = [
   "walkRight",
   "run",
   "jump",
+  "death",
   "ultimate",
   "attack1",
   "attack2",

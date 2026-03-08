@@ -29,7 +29,7 @@ import { createRegenerationSystem, type RegenerationSystem } from "../systems/re
 const DEFAULT_HERO_ID = "user";
 const MAX_NICKNAME_LENGTH = 24;
 const SIMULATION_TICK_MS = 50;
-const SNAPSHOT_SYNC_INTERVAL_MS = 50;
+const SNAPSHOT_SYNC_INTERVAL_MS = 120;
 const MAX_TICK_DELTA_SECONDS = 0.2;
 
 function normalizeText(value: unknown): string | null {

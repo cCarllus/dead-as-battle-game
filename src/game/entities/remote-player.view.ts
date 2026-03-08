@@ -127,7 +127,10 @@ function resolveAnimationGameplayState(options: {
   isUltimateActive: boolean;
 }): AnimationGameplayState {
   if (!options.isAlive) {
-    return createDefaultAnimationGameplayState();
+    return {
+      ...createDefaultAnimationGameplayState(),
+      isDead: true
+    };
   }
 
   const deltaX = options.currentPosition.x - options.previousPosition.x;
@@ -156,6 +159,7 @@ function resolveAnimationGameplayState(options: {
   const isHitReacting = options.isStunned && !isBlocking && options.attackComboIndex === 0;
 
   return {
+    isDead: false,
     isMoving,
     movementDirection,
     isSprinting: options.isSprinting,
@@ -237,6 +241,7 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
       ? animationGameplayState
       : animationOverride
         ? {
+            isDead: animationOverride.isDead,
             isMoving: animationOverride.isMoving,
             movementDirection: animationOverride.movementDirection,
             isSprinting: animationOverride.isSprinting,
@@ -369,6 +374,7 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
       }
 
       animationGameplayState = {
+        isDead: false,
         isMoving: false,
         movementDirection: "none",
         isSprinting: false,

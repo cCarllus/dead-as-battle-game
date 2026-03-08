@@ -65,6 +65,38 @@ function collectInstantiatedRootNodes(rootNodes: readonly Node[]): TransformNode
   });
 }
 
+function isPositionAnimationTargetProperty(targetProperty: string): boolean {
+  const normalized = targetProperty.trim().toLowerCase();
+  return normalized === "position" || normalized.startsWith("position.");
+}
+
+function stripRootMotionFromAnimationGroups(
+  animationGroups: readonly AnimationGroup[],
+  skinRootNodes: readonly TransformNode[]
+): void {
+  const blockedTargetIds = new Set<number>();
+  skinRootNodes.forEach((rootNode) => {
+    blockedTargetIds.add(rootNode.uniqueId);
+  });
+
+  animationGroups.forEach((group) => {
+    const filtered = group.targetedAnimations.filter((targetedAnimation) => {
+      const targetUniqueId = (targetedAnimation.target as { uniqueId?: unknown } | undefined)?.uniqueId;
+      if (typeof targetUniqueId !== "number" || !blockedTargetIds.has(targetUniqueId)) {
+        return true;
+      }
+
+      const targetProperty = targetedAnimation.animation?.targetProperty;
+      if (typeof targetProperty !== "string") {
+        return true;
+      }
+
+      return !isPositionAnimationTargetProperty(targetProperty);
+    });
+    group.targetedAnimations.splice(0, group.targetedAnimations.length, ...filtered);
+  });
+}
+
 export type HeroVisualLoadResult = {
   rootNodes: TransformNode[];
   animationGroups: AnimationGroup[];
@@ -113,6 +145,8 @@ export async function loadHeroVisualAssets(options: LoadHeroVisualOptions): Prom
   });
 
   const animationGroups = instantiated.animationGroups.slice();
+  // Remove root motion positional tracks so movement stays authoritative on gameplayRoot.
+  stripRootMotionFromAnimationGroups(animationGroups, skinRootNodes);
   animationGroups.forEach((group) => {
     group.stop();
     group.reset();

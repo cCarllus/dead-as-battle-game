@@ -35,32 +35,47 @@ function shouldLoopCommand(command: AnimationCommand, animationConfig: HeroAnima
 }
 
 const DEFAULT_BLENDING_DURATION_SECONDS = 0.18;
-const NON_RESTARTABLE_SAME_COMMANDS: readonly AnimationCommand[] = ["ultimate", "jump"];
+const NON_RESTARTABLE_SAME_COMMANDS: readonly AnimationCommand[] = ["ultimate", "jump", "death"];
 const JUMP_START_TRIM_RATIO = 0.35;
+
+function resolvePlaybackSpeedRatio(command: AnimationCommand): number {
+  switch (command) {
+    case "attack1":
+    case "attack2":
+    case "attack3":
+      return 2.00;
+    default:
+      return 1;
+  }
+}
 
 function startGroupForCommand(
   group: AnimationGroup,
   command: AnimationCommand,
   shouldLoop: boolean
 ): void {
+  const speedRatio = resolvePlaybackSpeedRatio(command);
+
   if (command !== "jump") {
-    group.start(shouldLoop);
+    group.start(shouldLoop, speedRatio);
     return;
   }
 
   const fromFrame = group.from;
   const toFrame = group.to;
   if (!Number.isFinite(fromFrame) || !Number.isFinite(toFrame) || toFrame <= fromFrame) {
-    group.start(shouldLoop);
+    group.start(shouldLoop, speedRatio);
     return;
   }
 
   const trimmedFromFrame = fromFrame + (toFrame - fromFrame) * JUMP_START_TRIM_RATIO;
-  group.start(shouldLoop, 1, trimmedFromFrame, toFrame, false);
+  group.start(shouldLoop, speedRatio, trimmedFromFrame, toFrame, false);
 }
 
 function resolveCommandPriority(command: AnimationCommand): number {
   switch (command) {
+    case "death":
+      return 8;
     case "ultimate":
       return 7;
     case "attack1":
@@ -84,10 +99,6 @@ function resolveCommandPriority(command: AnimationCommand): number {
     default:
       return 0;
   }
-}
-
-function isComboAttackCommand(command: AnimationCommand): boolean {
-  return command === "attack1" || command === "attack2" || command === "attack3";
 }
 
 export function createAnimationController(options: CreateAnimationControllerOptions): AnimationController {
@@ -126,6 +137,13 @@ export function createAnimationController(options: CreateAnimationControllerOpti
     const mappedGroupName = options.animationConfig.commandToGroupName[command];
     if (mappedGroupName) {
       return mappedGroupName;
+    }
+
+    if (command === "death") {
+      const hitFallback = options.animationConfig.commandToGroupName.hit;
+      if (hitFallback) {
+        return hitFallback;
+      }
     }
 
     if (!warnedMissingMappings.has(command)) {
@@ -204,14 +222,10 @@ export function createAnimationController(options: CreateAnimationControllerOpti
       const currentIsLooping = shouldLoopCommand(currentPlaybackCommand, options.animationConfig);
 
       if (!currentIsLooping && currentGroup.isPlaying) {
-        const canOverrideComboAttack =
-          isComboAttackCommand(currentPlaybackCommand) &&
-          isComboAttackCommand(requestedCommand) &&
-          currentPlaybackCommand !== requestedCommand;
         const canOverrideByPriority =
           resolveCommandPriority(requestedCommand) > resolveCommandPriority(currentPlaybackCommand);
 
-        if (!canOverrideByPriority && !canOverrideComboAttack) {
+        if (!canOverrideByPriority) {
           return;
         }
       }
