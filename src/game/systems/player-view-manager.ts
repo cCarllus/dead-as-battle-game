@@ -71,6 +71,8 @@ function didPlayerStateChange(previous: MatchPlayerState | undefined, next: Matc
     previous.y !== next.y ||
     previous.z !== next.z ||
     previous.rotationY !== next.rotationY ||
+    previous.isSprinting !== next.isSprinting ||
+    previous.isAlive !== next.isAlive ||
     previous.nickname !== next.nickname ||
     previous.heroId !== next.heroId ||
     previous.joinedAt !== next.joinedAt ||
@@ -95,6 +97,7 @@ export type PlayerViewManager = {
   removePlayer: (sessionId: string) => void;
   setTeamMemberUserIds: (userIds: string[]) => void;
   updateLocalPlayerTransform: (transform: { x: number; y: number; z: number; rotationY: number }) => void;
+  tick: (nowMs: number) => void;
   getLocalPlayerView: () => LocalPlayerView | null;
   getLocalPlayerState: () => MatchPlayerState | null;
   dispose: () => void;
@@ -353,6 +356,11 @@ export function createPlayerViewManager(options: CreatePlayerViewManagerOptions)
         y: transform.y,
         z: transform.z,
         rotationY: transform.rotationY
+      });
+    },
+    tick: (nowMs) => {
+      playerViewsBySessionId.forEach((view) => {
+        view.tick(nowMs);
       });
     },
     getLocalPlayerView,

@@ -4,7 +4,7 @@ export type HeroRuntimeCalibration = {
   normalizedOffsetY: number;
 };
 
-const STORAGE_KEY = "dab:hero-runtime-calibration:v1";
+const STORAGE_KEY = "dab:hero-runtime-calibration:v2";
 const calibrationByHeroId = new Map<string, HeroRuntimeCalibration>();
 
 function canUseStorage(): boolean {
@@ -85,4 +85,3 @@ export function setHeroRuntimeCalibration(heroId: string, calibration: HeroRunti
   });
   persistToStorage();
 }
-

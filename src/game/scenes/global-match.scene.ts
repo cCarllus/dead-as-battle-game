@@ -457,6 +457,7 @@ export async function createGlobalMatchScene(
     applyMouseLook();
     const deltaSeconds = Math.min(MAX_FRAME_DELTA_SECONDS, engine.getDeltaTime() / 1000);
     applyLocalMovement(deltaSeconds);
+    playerViewManager.tick(Date.now());
 
     const localView = playerViewManager.getLocalPlayerView();
     if (localView) {
