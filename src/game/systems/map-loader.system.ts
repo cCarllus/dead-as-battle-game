@@ -1,5 +1,5 @@
 // Responsável por carregar o mapa da arena multiplayer e fornecer fallback visual em caso de falha.
-import { Color3, MeshBuilder, Scene, SceneLoader, StandardMaterial } from "@babylonjs/core";
+import { Color3, MeshBuilder, Scene, SceneLoader, StandardMaterial, type AbstractMesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 
 export const GLOBAL_MATCH_MAP_URL =
@@ -17,7 +17,12 @@ function splitModelPath(modelUrl: string): { rootUrl: string; fileName: string }
   };
 }
 
-function createFallbackArena(scene: Scene): { dispose: () => void } {
+export type LoadedMapHandle = {
+  meshes: AbstractMesh[];
+  dispose: () => void;
+};
+
+function createFallbackArena(scene: Scene): LoadedMapHandle {
   const material = new StandardMaterial("globalMatchFallbackGroundMaterial", scene);
   material.diffuseColor = new Color3(0.06, 0.12, 0.2);
   material.emissiveColor = new Color3(0.02, 0.06, 0.12);
@@ -34,8 +39,11 @@ function createFallbackArena(scene: Scene): { dispose: () => void } {
   );
 
   ground.material = material;
+  ground.checkCollisions = true;
+  ground.isPickable = true;
 
   return {
+    meshes: [ground],
     dispose: () => {
       ground.dispose();
       material.dispose();
@@ -43,15 +51,25 @@ function createFallbackArena(scene: Scene): { dispose: () => void } {
   };
 }
 
-export async function loadGlobalMatchMap(scene: Scene, mapUrl: string): Promise<{ dispose: () => void }> {
+export async function loadGlobalMatchMap(scene: Scene, mapUrl: string): Promise<LoadedMapHandle> {
   const { rootUrl, fileName } = splitModelPath(mapUrl);
 
   try {
     const result = await SceneLoader.ImportMeshAsync("", rootUrl, fileName, scene);
 
-    const rootMeshes = result.meshes.filter((mesh) => !mesh.parent);
+    const loadedMeshes = result.meshes.filter((mesh): mesh is AbstractMesh => {
+      return !mesh.isDisposed() && !!mesh.getIndices();
+    });
+
+    loadedMeshes.forEach((mesh) => {
+      mesh.checkCollisions = true;
+      mesh.isPickable = true;
+    });
+
+    const rootMeshes = loadedMeshes.filter((mesh) => !mesh.parent);
 
     return {
+      meshes: loadedMeshes,
       dispose: () => {
         rootMeshes.forEach((mesh) => {
           mesh.dispose();

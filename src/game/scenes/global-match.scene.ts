@@ -1,39 +1,29 @@
-// Responsável por orquestrar a cena da partida global usando estado autoritativo do servidor e PlayerViewManager.
+// Responsável por orquestrar a cena da partida global com arquitetura modular de gameplay (movimento, câmera, colisão, iluminação).
 import {
-  ArcRotateCamera,
   Color4,
   Engine,
-  HemisphericLight,
   Matrix,
   Scene,
-  TransformNode,
-  Vector3
+  Vector3,
+  type AbstractMesh,
+  type ArcRotateCamera,
+  type TransformNode
 } from "@babylonjs/core";
 import type { MatchCombatUltimatePayload, MatchPlayerState } from "../../models/match-player.model";
-import type {
-  AnimationGameplayState,
-  MovementDirection
-} from "../animation/animation-state";
 import { createEffectManager } from "../effects/effect-manager";
+import { createCameraController } from "../controllers/camera.controller";
+import { DEFAULT_PLAYER_PHYSICS_CONFIG, MAX_FRAME_DELTA_SECONDS } from "../physics/player-physics";
+import { createAnimationStateSystem } from "../systems/animation-state.system";
+import { createCollisionSystem, type CollisionSystem } from "../systems/collision.system";
 import { createCombatInputSystem } from "../systems/combat-input.system";
-import { createPlayerViewManager } from "../systems/player-view-manager";
-import { createMovementInputSystem } from "../systems/movement-input.system";
-import { createPointerLockSystem } from "../systems/pointer-lock.system";
+import { createGroundedSystem } from "../systems/grounded.system";
+import { createLightingSystem } from "../systems/lighting.system";
 import { GLOBAL_MATCH_MAP_URL, loadGlobalMatchMap } from "../systems/map-loader.system";
+import { createMovementInputSystem } from "../systems/movement-input.system";
+import { createMovementSystem, type MovementSystem } from "../systems/movement.system";
+import { createPlayerViewManager } from "../systems/player-view-manager";
+import { createPointerLockSystem } from "../systems/pointer-lock.system";
 
-const CAMERA_RADIUS = 6.9;
-const CAMERA_MIN_BETA = 0.05;
-const CAMERA_MAX_BETA = Math.PI - 0.05;
-const CAMERA_MOUSE_SENSITIVITY = 0.0022;
-const CAMERA_TARGET_VERTICAL_OFFSET = 1.72;
-const CAMERA_TARGET_LATERAL_OFFSET = 0.92;
-const LOCAL_WALK_SPEED = 5.4;
-const LOCAL_RUN_SPEED_MULTIPLIER = 2.3;
-const LOCAL_JUMP_VELOCITY = 7.6;
-const LOCAL_FLY_VERTICAL_SPEED = 5.8;
-const LOCAL_GRAVITY = 22;
-const MAX_FRAME_DELTA_SECONDS = 0.05;
-const GROUND_EPSILON = 0.0001;
 const LOCAL_MOVEMENT_SYNC_INTERVAL_MS = 50;
 const LOCAL_MOVEMENT_SYNC_THRESHOLD = 0.015;
 const LOCAL_SPRINT_INPUT_SYNC_INTERVAL_MS = 50;
@@ -73,19 +63,11 @@ export type GlobalMatchSceneHandle = {
   dispose: () => void;
 };
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function resolveGroundForward(camera: ArcRotateCamera): Vector3 {
-  const forward = new Vector3(-Math.cos(camera.alpha), 0, -Math.sin(camera.alpha));
-
-  if (forward.lengthSquared() <= 0.0001) {
-    return new Vector3(0, 0, 1);
-  }
-
-  return forward.normalize();
-}
+type LocalGameplayRuntime = {
+  collisionSystem: CollisionSystem;
+  movementSystem: MovementSystem;
+  ownerCollisionBodyId: number;
+};
 
 function positionDistanceSquared(
   left: { x: number; y: number; z: number },
@@ -95,34 +77,6 @@ function positionDistanceSquared(
   const dy = left.y - right.y;
   const dz = left.z - right.z;
   return dx * dx + dy * dy + dz * dz;
-}
-
-function resolveMovementDirectionFromAxes(forwardAxis: number, sideAxis: number): MovementDirection {
-  if (forwardAxis === 0 && sideAxis === 0) {
-    return "none";
-  }
-
-  if (Math.abs(forwardAxis) >= Math.abs(sideAxis)) {
-    return forwardAxis >= 0 ? "forward" : "backward";
-  }
-
-  return sideAxis >= 0 ? "right" : "left";
-}
-
-function resolveOverShoulderTargetPosition(
-  transform: { x: number; y: number; z: number },
-  cameraAlpha: number
-): { x: number; y: number; z: number } {
-  const forwardX = -Math.cos(cameraAlpha);
-  const forwardZ = -Math.sin(cameraAlpha);
-  const rightX = forwardZ;
-  const rightZ = -forwardX;
-
-  return {
-    x: transform.x + rightX * CAMERA_TARGET_LATERAL_OFFSET,
-    y: transform.y + CAMERA_TARGET_VERTICAL_OFFSET,
-    z: transform.z + rightZ * CAMERA_TARGET_LATERAL_OFFSET
-  };
 }
 
 function shouldHideLocalVisualForCamera(
@@ -175,6 +129,15 @@ function resolveProjectedPoint(
   };
 }
 
+function resolveSafeAttackComboIndex(value: number): 0 | 1 | 2 | 3 {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  const clamped = Math.max(1, Math.min(3, Math.floor(value)));
+  return clamped as 1 | 2 | 3;
+}
+
 export async function createGlobalMatchScene(
   options: GlobalMatchSceneOptions
 ): Promise<GlobalMatchSceneHandle> {
@@ -187,41 +150,26 @@ export async function createGlobalMatchScene(
   const scene = new Scene(engine);
   scene.clearColor = new Color4(0.015, 0.03, 0.06, 1);
 
-  const camera = new ArcRotateCamera(
-    "globalMatchCamera",
-    -Math.PI / 2,
-    1.02,
-    CAMERA_RADIUS,
-    new Vector3(0, 1.2, 0),
-    scene
-  );
-
-  camera.inputs.clear();
-  camera.radius = CAMERA_RADIUS;
-  camera.lowerRadiusLimit = CAMERA_RADIUS;
-  camera.upperRadiusLimit = CAMERA_RADIUS;
-  camera.lowerBetaLimit = CAMERA_MIN_BETA;
-  camera.upperBetaLimit = CAMERA_MAX_BETA;
-
-  const keyLight = new HemisphericLight("globalMatchKeyLight", new Vector3(0.25, 1, -0.15), scene);
-  keyLight.intensity = 1.06;
-
-  const fillLight = new HemisphericLight("globalMatchFillLight", new Vector3(-0.2, -0.4, 0.32), scene);
-  fillLight.intensity = 0.24;
-  const cameraTargetNode = new TransformNode("globalMatchCameraTarget", scene);
-  camera.lockedTarget = cameraTargetNode;
+  const cameraController = createCameraController({ scene });
+  const camera = cameraController.camera;
+  const lightingSystem = createLightingSystem({ scene });
 
   const mapHandle = await loadGlobalMatchMap(scene, GLOBAL_MATCH_MAP_URL);
+  const mapMeshIds = new Set<number>(mapHandle.meshes.map((mesh) => mesh.uniqueId));
+  lightingSystem.setMapMeshes(mapHandle.meshes);
+
   const playerViewManager = createPlayerViewManager({
     scene,
     localSessionId: options.localSessionId
   });
+
   const effectManager = createEffectManager({
     scene,
     resolvePlayerEffectAnchor: (sessionId) => {
       return playerViewManager.getPlayerEffectAnchor(sessionId);
     }
   });
+
   const movementInput = createMovementInputSystem();
   let inputEnabled = true;
   const pointerLockSystem = createPointerLockSystem({
@@ -232,17 +180,14 @@ export async function createGlobalMatchScene(
 
   let flyModeEnabled = false;
   let pointerLocked = pointerLockSystem.isLocked();
-  let localVerticalVelocity = 0;
-  let localGroundY = 0;
-  let hasLocalGroundReference = false;
-  let wasJumpPressed = false;
-  let accumulatedMouseDeltaX = 0;
-  let accumulatedMouseDeltaY = 0;
   let lastMovementSyncAtMs = 0;
   let lastSyncedLocalPosition: { x: number; y: number; z: number; rotationY: number } | null = null;
   let lastSprintInputSyncAtMs = 0;
   let lastSentSprintIntent: { isShiftPressed: boolean; isForwardPressed: boolean } | null = null;
   let isLocalVisualHiddenForCamera = false;
+
+  let localGameplayRuntime: LocalGameplayRuntime | null = null;
+
   let localPredictedComboChainIndex: 0 | 1 | 2 | 3 = 0;
   let localPredictedActiveAttackComboIndex: 0 | 1 | 2 | 3 = 0;
   let localPredictedLastAttackAtMs = 0;
@@ -261,44 +206,85 @@ export async function createGlobalMatchScene(
     localPredictedBlockStartedAtMs = 0;
   };
 
+  const disposeLocalGameplayRuntime = (): void => {
+    if (!localGameplayRuntime) {
+      return;
+    }
+
+    localGameplayRuntime.collisionSystem.dispose();
+    localGameplayRuntime = null;
+  };
+
+  const ensureLocalGameplayRuntime = (): LocalGameplayRuntime | null => {
+    const localView = playerViewManager.getLocalPlayerView();
+    if (!localView) {
+      disposeLocalGameplayRuntime();
+      return null;
+    }
+
+    if (
+      localGameplayRuntime &&
+      localGameplayRuntime.ownerCollisionBodyId === localView.collisionBody.uniqueId
+    ) {
+      return localGameplayRuntime;
+    }
+
+    disposeLocalGameplayRuntime();
+
+    const collisionSystem = createCollisionSystem({
+      scene,
+      gameplayRoot: localView.gameplayRoot,
+      collisionBody: localView.collisionBody
+    });
+
+    collisionSystem.configureStaticMeshes(mapHandle.meshes);
+
+    const groundedSystem = createGroundedSystem({
+      scene,
+      physicsConfig: DEFAULT_PLAYER_PHYSICS_CONFIG,
+      isGroundMesh: (mesh: AbstractMesh) => {
+        return mapMeshIds.has(mesh.uniqueId);
+      }
+    });
+
+    const animationStateSystem = createAnimationStateSystem();
+    const movementSystem = createMovementSystem({
+      physicsConfig: DEFAULT_PLAYER_PHYSICS_CONFIG,
+      collisionSystem,
+      groundedSystem,
+      animationStateSystem
+    });
+
+    localGameplayRuntime = {
+      collisionSystem,
+      movementSystem,
+      ownerCollisionBodyId: localView.collisionBody.uniqueId
+    };
+
+    return localGameplayRuntime;
+  };
+
   const setPlayers = (players: MatchPlayerState[]): void => {
     playerViewManager.syncPlayers(players);
-
-    const localState = playerViewManager.getLocalPlayerState();
-    if (localState && !hasLocalGroundReference) {
-      localGroundY = localState.y;
-      hasLocalGroundReference = true;
-    }
+    ensureLocalGameplayRuntime();
   };
 
   const addPlayer = (player: MatchPlayerState): void => {
     playerViewManager.addPlayer(player);
-
-    if (player.sessionId !== options.localSessionId || hasLocalGroundReference) {
-      return;
-    }
-
-    localGroundY = player.y;
-    hasLocalGroundReference = true;
+    ensureLocalGameplayRuntime();
   };
 
   const updatePlayer = (player: MatchPlayerState): void => {
     playerViewManager.updatePlayer(player);
-
-    if (player.sessionId !== options.localSessionId || hasLocalGroundReference) {
-      return;
-    }
-
-    localGroundY = player.y;
-    hasLocalGroundReference = true;
+    ensureLocalGameplayRuntime();
   };
 
   const removePlayer = (sessionId: string): void => {
     effectManager.stopEffectsForPlayer(sessionId);
     playerViewManager.removePlayer(sessionId);
+
     if (sessionId === options.localSessionId) {
-      hasLocalGroundReference = false;
-      localVerticalVelocity = 0;
+      disposeLocalGameplayRuntime();
       resetPredictedCombatState();
     }
   };
@@ -313,8 +299,6 @@ export async function createGlobalMatchScene(
     }
 
     flyModeEnabled = enabled;
-    localVerticalVelocity = 0;
-    wasJumpPressed = movementInput.getState().jump;
   };
 
   const toggleFlyMode = (): boolean => {
@@ -335,8 +319,7 @@ export async function createGlobalMatchScene(
       return;
     }
 
-    accumulatedMouseDeltaX += event.movementX;
-    accumulatedMouseDeltaY += event.movementY;
+    cameraController.addPointerDelta(event.movementX, event.movementY);
   };
 
   const canUseCombatInput = (): boolean => {
@@ -446,8 +429,8 @@ export async function createGlobalMatchScene(
     combatInput.setEnabled(enabled);
 
     if (!enabled) {
-      wasJumpPressed = false;
       resetPredictedCombatState();
+      localGameplayRuntime?.movementSystem.reset();
       exitPointerLock();
     }
   };
@@ -507,12 +490,12 @@ export async function createGlobalMatchScene(
   };
 
   const applyLocalMovement = (deltaSeconds: number): void => {
-    const nowMs = Date.now();
+    const runtime = ensureLocalGameplayRuntime();
     const inputState = movementInput.getState();
     const localPlayerState = playerViewManager.getLocalPlayerState();
     const localView = playerViewManager.getLocalPlayerView();
 
-    if (!localView) {
+    if (!runtime || !localView) {
       maybeEmitLocalSprintIntent({
         isShiftPressed: false,
         isForwardPressed: false
@@ -520,6 +503,7 @@ export async function createGlobalMatchScene(
       return;
     }
 
+    const nowMs = Date.now();
     const isLocallyStunned =
       !!localPlayerState &&
       (localPlayerState.isGuardBroken || nowMs < localPlayerState.stunUntil || !localPlayerState.isAlive);
@@ -563,7 +547,7 @@ export async function createGlobalMatchScene(
 
     const serverAttackComboIndex =
       localPlayerState && localPlayerState.isAttacking
-        ? (Math.max(1, Math.min(3, localPlayerState.attackComboIndex)) as 1 | 2 | 3)
+        ? resolveSafeAttackComboIndex(localPlayerState.attackComboIndex)
         : 0;
     const activeAttackComboIndex =
       localPredictedActiveAttackComboIndex > 0
@@ -586,153 +570,38 @@ export async function createGlobalMatchScene(
       isForwardPressed: canRequestSprintIntent ? inputState.forward : false
     });
 
-    if (!inputEnabled || deltaSeconds <= 0) {
-      const idleAnimationState: AnimationGameplayState = {
-        isDead: !(localPlayerState?.isAlive ?? true),
-        isMoving: false,
-        movementDirection: "none",
-        isSprinting: false,
-        isJumping: false,
-        isUltimateActive: !!localPlayerState?.isUsingUltimate,
-        isBlocking: effectiveBlocking,
-        attackComboIndex: activeAttackComboIndex,
-        isHitReacting: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
-      };
-      playerViewManager.updateLocalPlayerTransform(localView.getTransform(), idleAnimationState);
-      return;
-    }
-
-    const transform = localView.getTransform();
-
-    if (!hasLocalGroundReference) {
-      localGroundY = transform.y;
-      hasLocalGroundReference = true;
-    }
-
-    const forward = resolveGroundForward(camera);
-    const right = new Vector3(forward.z, 0, -forward.x);
-    const aimYaw = Math.atan2(forward.x, forward.z);
-
-    const forwardAxis = isLocallyStunned ? 0 : (inputState.forward ? 1 : 0) - (inputState.backward ? 1 : 0);
-    const sideAxis = isLocallyStunned ? 0 : (inputState.right ? 1 : 0) - (inputState.left ? 1 : 0);
-
-    const predictedMovementDirection = resolveMovementDirectionFromAxes(forwardAxis, sideAxis);
-    const isPredictedMoving = predictedMovementDirection !== "none";
-    const isPredictedSprinting =
-      canRequestSprintIntent && inputState.descend && inputState.forward && isPredictedMoving;
-    const isUltimatePredictedActive = !!localPlayerState?.isUsingUltimate;
-
-    let movementVector = new Vector3(
-      forward.x * forwardAxis + right.x * sideAxis,
-      0,
-      forward.z * forwardAxis + right.z * sideAxis
-    );
-    const localMoveSpeed =
-      !flyModeEnabled && (isPredictedSprinting || (localPlayerState?.isSprinting ?? false))
-        ? LOCAL_WALK_SPEED * LOCAL_RUN_SPEED_MULTIPLIER
-        : LOCAL_WALK_SPEED;
-
-    if (movementVector.lengthSquared() > 0.0001) {
-      movementVector = movementVector.normalize();
-      transform.x += movementVector.x * localMoveSpeed * deltaSeconds;
-      transform.z += movementVector.z * localMoveSpeed * deltaSeconds;
-    }
-
-    transform.rotationY = aimYaw;
-
-    if (flyModeEnabled) {
-      const verticalAxis = isLocallyStunned ? 0 : (inputState.jump ? 1 : 0) - (inputState.descend ? 1 : 0);
-      if (verticalAxis !== 0) {
-        transform.y += verticalAxis * LOCAL_FLY_VERTICAL_SPEED * deltaSeconds;
-      }
-
-      localVerticalVelocity = 0;
-      wasJumpPressed = inputState.jump;
-      const predictedAnimationState: AnimationGameplayState = {
-        isDead: !(localPlayerState?.isAlive ?? true),
-        isMoving: isPredictedMoving,
-        movementDirection: predictedMovementDirection,
-        isSprinting: false,
-        isJumping: false,
-        isUltimateActive: isUltimatePredictedActive,
-        isBlocking: effectiveBlocking,
-        attackComboIndex: activeAttackComboIndex,
-        isHitReacting: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
-      };
-      playerViewManager.updateLocalPlayerTransform(transform, predictedAnimationState);
-      maybeEmitLocalMovement(transform);
-      return;
-    }
-
-    const isGrounded = transform.y <= localGroundY + GROUND_EPSILON;
-    if (isGrounded && localVerticalVelocity < 0) {
-      localVerticalVelocity = 0;
-      transform.y = localGroundY;
-    }
-
-    const didPressJump = !isLocallyStunned && inputState.jump && !wasJumpPressed;
-    if (didPressJump && isGrounded) {
-      localVerticalVelocity = LOCAL_JUMP_VELOCITY;
-    }
-
-    if (!isGrounded || localVerticalVelocity > 0) {
-      localVerticalVelocity -= LOCAL_GRAVITY * deltaSeconds;
-      transform.y += localVerticalVelocity * deltaSeconds;
-
-      if (transform.y <= localGroundY) {
-        transform.y = localGroundY;
-        localVerticalVelocity = 0;
-      }
-    }
-
-    wasJumpPressed = inputState.jump;
-    const predictedAnimationState: AnimationGameplayState = {
-      isDead: !(localPlayerState?.isAlive ?? true),
-      isMoving: isPredictedMoving,
-      movementDirection: predictedMovementDirection,
-      isSprinting: isPredictedSprinting,
-      isJumping:
-        transform.y > localGroundY + GROUND_EPSILON ||
-        localVerticalVelocity > 0.01 ||
-        didPressJump,
-      isUltimateActive: isUltimatePredictedActive,
+    const frameOutput = runtime.movementSystem.step({
+      nowMs,
+      deltaSeconds,
+      currentTransform: localView.getTransform(),
+      inputState,
+      cameraForward: cameraController.getGroundForward(),
+      isInputEnabled: inputEnabled,
+      isFlyModeEnabled: flyModeEnabled,
+      canMove: !isLocallyStunned,
+      canSprint: canRequestSprintIntent,
+      isAlive: localPlayerState?.isAlive ?? true,
+      isUltimateActive: !!localPlayerState?.isUsingUltimate,
       isBlocking: effectiveBlocking,
       attackComboIndex: activeAttackComboIndex,
-      isHitReacting: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
-    };
-    playerViewManager.updateLocalPlayerTransform(transform, predictedAnimationState);
-    maybeEmitLocalMovement(transform);
-  };
+      isStunned: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
+    });
 
-  const applyMouseLook = (): void => {
-    if (!pointerLocked || !inputEnabled) {
-      accumulatedMouseDeltaX = 0;
-      accumulatedMouseDeltaY = 0;
-      return;
-    }
+    playerViewManager.updateLocalPlayerTransform(frameOutput.transform, frameOutput.animationState);
+    maybeEmitLocalMovement(frameOutput.transform);
 
-    if (accumulatedMouseDeltaX === 0 && accumulatedMouseDeltaY === 0) {
-      return;
-    }
-
-    camera.alpha -= accumulatedMouseDeltaX * CAMERA_MOUSE_SENSITIVITY;
-    camera.beta = clamp(
-      camera.beta - accumulatedMouseDeltaY * CAMERA_MOUSE_SENSITIVITY,
-      CAMERA_MIN_BETA,
-      CAMERA_MAX_BETA
-    );
-
-    accumulatedMouseDeltaX = 0;
-    accumulatedMouseDeltaY = 0;
+    cameraController.tick({
+      deltaSeconds,
+      playerTransform: frameOutput.transform,
+      isPointerLocked: pointerLocked,
+      isInputEnabled: inputEnabled,
+      isSprinting: frameOutput.isSprinting,
+      didLand: frameOutput.didLand
+    });
   };
 
   const disposePointerLockChange = pointerLockSystem.onLockChange((locked) => {
     pointerLocked = locked;
-    if (!locked) {
-      accumulatedMouseDeltaX = 0;
-      accumulatedMouseDeltaY = 0;
-    }
-
     pointerLockChangeListeners.forEach((listener) => {
       listener(locked);
     });
@@ -743,16 +612,15 @@ export async function createGlobalMatchScene(
   setPlayers(options.initialPlayers ?? []);
 
   engine.runRenderLoop(() => {
-    applyMouseLook();
     const deltaSeconds = Math.min(MAX_FRAME_DELTA_SECONDS, engine.getDeltaTime() / 1000);
+
+    cameraController.syncLook(pointerLocked, inputEnabled);
     applyLocalMovement(deltaSeconds);
     playerViewManager.tick(Date.now());
+    lightingSystem.syncPlayerShadowCasters(playerViewManager.getPlayerVisualRoots());
 
     const localView = playerViewManager.getLocalPlayerView();
     if (localView) {
-      const cameraTarget = resolveOverShoulderTargetPosition(localView.getTransform(), camera.alpha);
-      cameraTargetNode.position.set(cameraTarget.x, cameraTarget.y, cameraTarget.z);
-
       const shouldHideVisual = shouldHideLocalVisualForCamera(localView.visualRoot, camera.globalPosition);
       if (shouldHideVisual !== isLocalVisualHiddenForCamera) {
         localView.visualRoot.getChildMeshes(false).forEach((mesh) => {
@@ -815,19 +683,22 @@ export async function createGlobalMatchScene(
     dispose: () => {
       window.removeEventListener("resize", onWindowResize);
       document.removeEventListener("mousemove", onMouseMove);
+
       setInputEnabled(false);
       disposePointerLockChange();
       pointerLockChangeListeners.clear();
       pointerLockSystem.dispose();
       combatInput.dispose();
-
       movementInput.dispose();
+
       effectManager.dispose();
       playerViewManager.dispose();
+      disposeLocalGameplayRuntime();
 
+      lightingSystem.dispose();
       mapHandle.dispose();
-      camera.lockedTarget = null;
-      cameraTargetNode.dispose();
+      cameraController.dispose();
+
       scene.dispose();
       engine.stopRenderLoop();
       engine.dispose();

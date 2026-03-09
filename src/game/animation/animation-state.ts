@@ -1,5 +1,6 @@
 // Responsável por transformar estado de movimento/gameplay em comandos padronizados de animação.
 import type { AnimationCommand } from "./animation-command";
+import type { LocomotionAnimationState } from "./movement-animation-state-machine";
 
 export type MovementDirection = "none" | "forward" | "backward" | "left" | "right";
 
@@ -13,6 +14,7 @@ export type AnimationGameplayState = {
   isBlocking: boolean;
   attackComboIndex: 0 | 1 | 2 | 3;
   isHitReacting: boolean;
+  locomotionState?: LocomotionAnimationState;
 };
 
 export function createDefaultAnimationGameplayState(): AnimationGameplayState {
@@ -25,7 +27,8 @@ export function createDefaultAnimationGameplayState(): AnimationGameplayState {
     isUltimateActive: false,
     isBlocking: false,
     attackComboIndex: 0,
-    isHitReacting: false
+    isHitReacting: false,
+    locomotionState: "idle"
   };
 }
 
@@ -62,6 +65,24 @@ export function resolveAnimationCommandFromGameplay(
 
   if (gameplayState.isHitReacting) {
     return "hit";
+  }
+
+  if (gameplayState.locomotionState) {
+    switch (gameplayState.locomotionState) {
+      case "jumpStart":
+        return "jumpStart";
+      case "inAir":
+        return "inAir";
+      case "land":
+        return "land";
+      case "run":
+        return "run";
+      case "walk":
+        return "walk";
+      case "idle":
+      default:
+        return "idle";
+    }
   }
 
   if (gameplayState.isJumping) {

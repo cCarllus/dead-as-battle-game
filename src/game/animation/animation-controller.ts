@@ -35,7 +35,14 @@ function shouldLoopCommand(command: AnimationCommand, animationConfig: HeroAnima
 }
 
 const DEFAULT_BLENDING_DURATION_SECONDS = 0.18;
-const NON_RESTARTABLE_SAME_COMMANDS: readonly AnimationCommand[] = ["ultimate", "jump", "death"];
+const NON_RESTARTABLE_SAME_COMMANDS: readonly AnimationCommand[] = [
+  "ultimate",
+  "jump",
+  "jumpStart",
+  "inAir",
+  "land",
+  "death"
+];
 const JUMP_START_TRIM_RATIO = 0.35;
 
 function resolvePlaybackSpeedRatio(command: AnimationCommand): number {
@@ -56,7 +63,7 @@ function startGroupForCommand(
 ): void {
   const speedRatio = resolvePlaybackSpeedRatio(command);
 
-  if (command !== "jump") {
+  if (command !== "jump" && command !== "jumpStart") {
     group.start(shouldLoop, speedRatio);
     return;
   }
@@ -87,6 +94,9 @@ function resolveCommandPriority(command: AnimationCommand): number {
     case "block":
       return 4;
     case "jump":
+    case "jumpStart":
+    case "inAir":
+    case "land":
       return 3;
     case "run":
       return 2;
@@ -143,6 +153,13 @@ export function createAnimationController(options: CreateAnimationControllerOpti
       const hitFallback = options.animationConfig.commandToGroupName.hit;
       if (hitFallback) {
         return hitFallback;
+      }
+    }
+
+    if (command === "jumpStart" || command === "inAir" || command === "land") {
+      const jumpFallback = options.animationConfig.commandToGroupName.jump;
+      if (jumpFallback) {
+        return jumpFallback;
       }
     }
 

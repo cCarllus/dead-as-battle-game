@@ -1,5 +1,5 @@
 // Responsável por manter PlayerViews em Map<sessionId, PlayerView> e aplicar sync de rede apenas no gameplayRoot.
-import type { Scene } from "@babylonjs/core";
+import type { AbstractMesh, Scene, TransformNode } from "@babylonjs/core";
 import type { MatchPlayerState } from "../../models/match-player.model";
 import type { AnimationGameplayState } from "../animation/animation-state";
 import type { AnimationCommand } from "../animation/animation-command";
@@ -151,6 +151,8 @@ export type PlayerViewManager = {
     gameplayRoot: RemotePlayerView["gameplayRoot"];
     visualRoot: RemotePlayerView["visualRoot"];
   } | null;
+  getPlayerVisualRoots: () => TransformNode[];
+  getPlayerCollisionBodies: () => AbstractMesh[];
   playPlayerAnimationCommand: (sessionId: string, command: AnimationCommand) => void;
   dispose: () => void;
 };
@@ -452,6 +454,12 @@ export function createPlayerViewManager(options: CreatePlayerViewManagerOptions)
         gameplayRoot: view.gameplayRoot,
         visualRoot: view.visualRoot
       };
+    },
+    getPlayerVisualRoots: () => {
+      return Array.from(playerViewsBySessionId.values()).map((view) => view.visualRoot);
+    },
+    getPlayerCollisionBodies: () => {
+      return Array.from(playerViewsBySessionId.values()).map((view) => view.collisionBody);
     },
     playPlayerAnimationCommand: (sessionId, command) => {
       const view = playerViewsBySessionId.get(sessionId);

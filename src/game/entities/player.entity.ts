@@ -397,7 +397,8 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
         isUltimateActive: nextState.isUltimateActive,
         isBlocking: nextState.isBlocking,
         attackComboIndex: nextState.attackComboIndex,
-        isHitReacting: nextState.isHitReacting
+        isHitReacting: nextState.isHitReacting,
+        locomotionState: nextState.locomotionState
       };
       syncAnimationFromGameplay();
     },
