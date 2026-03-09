@@ -2,6 +2,7 @@
 export type PlayerPhysicsConfig = {
   walkSpeed: number;
   runSpeed: number;
+  airControl: number;
   acceleration: number;
   deceleration: number;
   airAcceleration: number;
@@ -16,11 +17,14 @@ export type PlayerPhysicsConfig = {
   groundedSnapDistance: number;
   groundedStickDistance: number;
   groundedRayLength: number;
+  sprintBurstDurationMs: number;
+  sprintBurstSpeedMultiplier: number;
 };
 
 export const DEFAULT_PLAYER_PHYSICS_CONFIG: PlayerPhysicsConfig = {
   walkSpeed: 4.8,
   runSpeed: 8.9,
+  airControl: 0.3,
   acceleration: 30,
   deceleration: 34,
   airAcceleration: 14,
@@ -34,7 +38,9 @@ export const DEFAULT_PLAYER_PHYSICS_CONFIG: PlayerPhysicsConfig = {
   coyoteTimeMs: 120,
   groundedSnapDistance: 0.12,
   groundedStickDistance: 0.22,
-  groundedRayLength: 1.9
+  groundedRayLength: 1.9,
+  sprintBurstDurationMs: 180,
+  sprintBurstSpeedMultiplier: 1.12
 };
 
 export const MAX_FRAME_DELTA_SECONDS = 0.05;

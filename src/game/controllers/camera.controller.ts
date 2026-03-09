@@ -1,5 +1,7 @@
-// Responsável por controlar câmera third-person com follow suave, mouse-look e pequenos feedbacks de gameplay.
+// Responsável por controlar câmera third-person com smoothing, head bob, tilt, sprint feedback e camera shake.
 import { ArcRotateCamera, TransformNode, Vector3, type Scene } from "@babylonjs/core";
+import { createCameraShakeSystem, type CameraShakePreset } from "../camera/camera-shake";
+import { createHeadBobSystem } from "../camera/head-bob";
 
 export type CameraControllerFrameInput = {
   deltaSeconds: number;
@@ -7,7 +9,12 @@ export type CameraControllerFrameInput = {
   isPointerLocked: boolean;
   isInputEnabled: boolean;
   isSprinting: boolean;
-  didLand: boolean;
+  isSprintBurstActive: boolean;
+  speedFeedback: number;
+  isMoving: boolean;
+  isGrounded: boolean;
+  turnInput: number;
+  landingImpact: number;
 };
 
 export type CameraController = {
@@ -16,6 +23,7 @@ export type CameraController = {
   addPointerDelta: (deltaX: number, deltaY: number) => void;
   syncLook: (isPointerLocked: boolean, isInputEnabled: boolean) => void;
   tick: (input: CameraControllerFrameInput) => void;
+  triggerShake: (preset: CameraShakePreset, scale?: number) => void;
   getGroundForward: () => Vector3;
   dispose: () => void;
 };
@@ -36,12 +44,15 @@ const DEFAULT_MIN_BETA = 0.08;
 const DEFAULT_MAX_BETA = Math.PI - 0.08;
 const DEFAULT_TARGET_VERTICAL_OFFSET = 1.72;
 const DEFAULT_TARGET_LATERAL_OFFSET = 0.92;
-const TARGET_SMOOTH_TIME = 0.08;
+const TARGET_SMOOTH_TIME = 0.095;
 const FOV_SMOOTH_TIME = 0.11;
-const BASE_FOV = 0.88;
-const SPRINT_FOV = 0.96;
-const LANDING_PITCH_KICK = 0.04;
-const LANDING_RECOVERY_SPEED = 10;
+const BASE_FOV = (70 * Math.PI) / 180;
+const SPRINT_FOV = (82 * Math.PI) / 180;
+const BURST_FOV_KICK = (2.4 * Math.PI) / 180;
+const LANDING_DROP_BASE = 0.025;
+const LANDING_DROP_SCALE = 0.06;
+const LANDING_RECOVERY_SPEED = 7;
+const SPRINT_CAMERA_VIBRATION = 0.00085;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -105,9 +116,13 @@ export function createCameraController(options: CreateCameraControllerOptions): 
   const targetNode = new TransformNode("globalMatchCameraTarget", options.scene);
   camera.lockedTarget = targetNode;
 
+  const headBob = createHeadBobSystem();
+  const shake = createCameraShakeSystem();
+
   let accumulatedMouseDeltaX = 0;
   let accumulatedMouseDeltaY = 0;
-  let landingKick = 0;
+  let landingDrop = 0;
+  let elapsedSeconds = 0;
 
   return {
     camera,
@@ -126,14 +141,36 @@ export function createCameraController(options: CreateCameraControllerOptions): 
       accumulatedMouseDeltaY = 0;
     },
     tick: (input) => {
-      if (input.didLand) {
-        landingKick = LANDING_PITCH_KICK;
+      const safeDelta = Math.max(0, input.deltaSeconds);
+      elapsedSeconds += safeDelta;
+
+      if (input.landingImpact > 0) {
+        landingDrop += LANDING_DROP_BASE + LANDING_DROP_SCALE * input.landingImpact;
+        shake.triggerPreset("medium", 0.5 + input.landingImpact * 0.9);
       }
 
-      if (landingKick > 0) {
-        camera.beta = clamp(camera.beta + landingKick, minBeta, maxBeta);
-        landingKick = Math.max(0, landingKick - LANDING_RECOVERY_SPEED * input.deltaSeconds);
+      if (input.isSprintBurstActive) {
+        shake.triggerPreset("light", 0.55);
       }
+
+      landingDrop = Math.max(0, landingDrop - LANDING_RECOVERY_SPEED * safeDelta);
+
+      const bobOffset = headBob.update({
+        deltaSeconds: safeDelta,
+        isGrounded: input.isGrounded,
+        isMoving: input.isMoving,
+        isSprinting: input.isSprinting,
+        speedNormalized: input.speedFeedback
+      });
+
+      const shakeOffset = shake.sample(safeDelta);
+
+      const sprintVibration = input.isSprinting
+        ? Math.sin(elapsedSeconds * 40) * SPRINT_CAMERA_VIBRATION * input.speedFeedback
+        : 0;
+
+      camera.alpha += shakeOffset.yaw + sprintVibration * 0.5;
+      camera.beta = clamp(camera.beta + shakeOffset.pitch + sprintVibration, minBeta, maxBeta);
 
       const desiredTarget = resolveOverShoulderTargetPosition(
         input.playerTransform,
@@ -141,14 +178,21 @@ export function createCameraController(options: CreateCameraControllerOptions): 
         targetVerticalOffset,
         targetLateralOffset
       );
-      const targetLerpFactor = resolveExponentialLerpFactor(input.deltaSeconds, TARGET_SMOOTH_TIME);
+      const targetLerpFactor = resolveExponentialLerpFactor(safeDelta, TARGET_SMOOTH_TIME);
+      const targetY = desiredTarget.y + bobOffset - landingDrop;
+
       targetNode.position.x += (desiredTarget.x - targetNode.position.x) * targetLerpFactor;
-      targetNode.position.y += (desiredTarget.y - targetNode.position.y) * targetLerpFactor;
+      targetNode.position.y += (targetY - targetNode.position.y) * targetLerpFactor;
       targetNode.position.z += (desiredTarget.z - targetNode.position.z) * targetLerpFactor;
 
-      const desiredFov = input.isSprinting ? SPRINT_FOV : BASE_FOV;
-      const fovLerpFactor = resolveExponentialLerpFactor(input.deltaSeconds, FOV_SMOOTH_TIME);
+      const sprintFov = BASE_FOV + (SPRINT_FOV - BASE_FOV) * input.speedFeedback;
+      const burstKick = input.isSprintBurstActive ? BURST_FOV_KICK : 0;
+      const desiredFov = input.isSprinting ? sprintFov + burstKick : BASE_FOV;
+      const fovLerpFactor = resolveExponentialLerpFactor(safeDelta, FOV_SMOOTH_TIME);
       camera.fov += (desiredFov - camera.fov) * fovLerpFactor;
+    },
+    triggerShake: (preset, scale = 1) => {
+      shake.triggerPreset(preset, scale);
     },
     getGroundForward: () => {
       const forward = new Vector3(-Math.cos(camera.alpha), 0, -Math.sin(camera.alpha));
@@ -159,6 +203,8 @@ export function createCameraController(options: CreateCameraControllerOptions): 
       return forward.normalize();
     },
     dispose: () => {
+      headBob.reset();
+      shake.reset();
       camera.lockedTarget = null;
       targetNode.dispose();
     }

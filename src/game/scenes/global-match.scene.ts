@@ -10,8 +10,11 @@ import {
   type TransformNode
 } from "@babylonjs/core";
 import type { MatchCombatUltimatePayload, MatchPlayerState } from "../../models/match-player.model";
+import { createMotionLinesEffect } from "../effects/motion-lines";
+import { createWindParticlesSystem } from "../effects/wind-particles";
 import { createEffectManager } from "../effects/effect-manager";
 import { createCameraController } from "../controllers/camera.controller";
+import { createCharacterLeanSystem } from "../movement/character-lean";
 import { DEFAULT_PLAYER_PHYSICS_CONFIG, MAX_FRAME_DELTA_SECONDS } from "../physics/player-physics";
 import { createAnimationStateSystem } from "../systems/animation-state.system";
 import { createCollisionSystem, type CollisionSystem } from "../systems/collision.system";
@@ -153,6 +156,9 @@ export async function createGlobalMatchScene(
   const cameraController = createCameraController({ scene });
   const camera = cameraController.camera;
   const lightingSystem = createLightingSystem({ scene });
+  const windParticles = createWindParticlesSystem(scene);
+  const motionLines = createMotionLinesEffect(options.canvas);
+  const characterLean = createCharacterLeanSystem();
 
   const mapHandle = await loadGlobalMatchMap(scene, GLOBAL_MATCH_MAP_URL);
   const mapMeshIds = new Set<number>(mapHandle.meshes.map((mesh) => mesh.uniqueId));
@@ -431,6 +437,7 @@ export async function createGlobalMatchScene(
     if (!enabled) {
       resetPredictedCombatState();
       localGameplayRuntime?.movementSystem.reset();
+      characterLean.reset(playerViewManager.getLocalPlayerView()?.visualRoot ?? null);
       exitPointerLock();
     }
   };
@@ -556,11 +563,19 @@ export async function createGlobalMatchScene(
 
     const serverBlocking = !!localPlayerState?.isBlocking;
     const effectiveBlocking = (localPredictedBlockActive || serverBlocking) && activeAttackComboIndex === 0;
+    const hasSprintResource =
+      localPlayerState
+        ? localPlayerState.currentStamina > 0 &&
+          !localPlayerState.sprintBlocked &&
+          !localPlayerState.isGuardBroken &&
+          nowMs >= localPlayerState.stunUntil
+        : true;
 
     const canRequestSprintIntent =
       inputEnabled &&
       !flyModeEnabled &&
       (localPlayerState?.isAlive ?? true) &&
+      hasSprintResource &&
       !isLocallyStunned &&
       !effectiveBlocking &&
       activeAttackComboIndex === 0;
@@ -590,13 +605,51 @@ export async function createGlobalMatchScene(
     playerViewManager.updateLocalPlayerTransform(frameOutput.transform, frameOutput.animationState);
     maybeEmitLocalMovement(frameOutput.transform);
 
+    characterLean.update(localView.visualRoot, {
+      deltaSeconds,
+      isGrounded: frameOutput.isGrounded,
+      isSprinting: frameOutput.isSprinting,
+      lateralInput: frameOutput.lateralInput,
+      movementIntensity: frameOutput.speedFeedback
+    });
+
     cameraController.tick({
       deltaSeconds,
       playerTransform: frameOutput.transform,
       isPointerLocked: pointerLocked,
       isInputEnabled: inputEnabled,
       isSprinting: frameOutput.isSprinting,
-      didLand: frameOutput.didLand
+      isSprintBurstActive: frameOutput.isSprintBurstActive,
+      speedFeedback: frameOutput.speedFeedback,
+      isMoving: frameOutput.isMoving,
+      isGrounded: frameOutput.isGrounded,
+      turnInput: frameOutput.lateralInput,
+      landingImpact: frameOutput.landingImpact
+    });
+
+    if (frameOutput.didStartSprint) {
+      cameraController.triggerShake("light", 0.65);
+    }
+
+    windParticles.update({
+      speedFeedback: frameOutput.speedFeedback,
+      isSprinting: frameOutput.isSprinting,
+      isGrounded: frameOutput.isGrounded,
+      didLand: frameOutput.didLand,
+      landingImpact: frameOutput.landingImpact,
+      cameraPosition: camera.globalPosition.clone(),
+      cameraForward: cameraController.getGroundForward(),
+      playerPosition: {
+        x: frameOutput.transform.x,
+        y: frameOutput.transform.y,
+        z: frameOutput.transform.z
+      }
+    });
+
+    motionLines.update({
+      deltaSeconds,
+      enabled: frameOutput.isSprinting && frameOutput.speedFeedback > 0.45,
+      intensity: frameOutput.speedFeedback
     });
   };
 
@@ -694,8 +747,11 @@ export async function createGlobalMatchScene(
       effectManager.dispose();
       playerViewManager.dispose();
       disposeLocalGameplayRuntime();
+      characterLean.reset(null);
 
       lightingSystem.dispose();
+      windParticles.dispose();
+      motionLines.dispose();
       mapHandle.dispose();
       cameraController.dispose();
 

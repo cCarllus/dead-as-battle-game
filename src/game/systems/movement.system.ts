@@ -3,7 +3,9 @@ import { Vector3 } from "@babylonjs/core";
 import type { AnimationGameplayState, MovementDirection } from "../animation/animation-state";
 import { createMovementAnimationStateMachine } from "../animation/movement-animation-state-machine";
 import { createCharacterMotorController } from "../controllers/character-motor.controller";
+import { resolveLandingImpactFromAirTime } from "../effects/landing-impact";
 import { createJumpController } from "../controllers/jump.controller";
+import { createSprintSystem } from "../movement/sprint-system";
 import type { PlayerPhysicsConfig } from "../physics/player-physics";
 import type { AnimationStateSystem } from "./animation-state.system";
 import type { CollisionSystem } from "./collision.system";
@@ -47,6 +49,13 @@ export type MovementSystemFrameOutput = {
     isShiftPressed: boolean;
     isForwardPressed: boolean;
   };
+  speedFeedback: number;
+  lateralInput: number;
+  forwardInput: number;
+  didStartSprint: boolean;
+  isSprintBurstActive: boolean;
+  landingImpact: number;
+  airborneTimeMs: number;
 };
 
 export type MovementSystem = {
@@ -63,6 +72,7 @@ export type CreateMovementSystemOptions = {
 
 const UPWARD_GROUNDED_LOCKOUT_VELOCITY = 0.35;
 const MIN_AIRBORNE_TIME_FOR_LAND_MS = 80;
+const GROUND_CLEARANCE_Y = 0.02;
 
 function resolveMovementDirectionFromAxes(forwardAxis: number, sideAxis: number): MovementDirection {
   if (forwardAxis === 0 && sideAxis === 0) {
@@ -95,6 +105,10 @@ export function createMovementSystem(options: CreateMovementSystemOptions): Move
   const motorController = createCharacterMotorController(options.physicsConfig);
   const jumpController = createJumpController(options.physicsConfig);
   const locomotionStateMachine = createMovementAnimationStateMachine();
+  const sprintSystem = createSprintSystem({
+    burstDurationMs: options.physicsConfig.sprintBurstDurationMs,
+    burstMultiplier: options.physicsConfig.sprintBurstSpeedMultiplier
+  });
 
   let wasJumpPressed = false;
   let wasGrounded = false;
@@ -136,6 +150,10 @@ export function createMovementSystem(options: CreateMovementSystemOptions): Move
         input.inputState.descend &&
         input.inputState.forward &&
         movementDirection !== "none";
+      const sprintFeedback = sprintSystem.update({
+        nowMs: input.nowMs,
+        isSprinting: canUseSprint
+      });
 
       const motorOutput = motorController.step({
         deltaSeconds: input.deltaSeconds,
@@ -143,6 +161,7 @@ export function createMovementSystem(options: CreateMovementSystemOptions): Move
         currentRotationY: input.currentTransform.rotationY,
         isGrounded: groundedBeforeMove.isGrounded,
         wantsSprint: canUseSprint,
+        sprintBoostMultiplier: sprintFeedback.burstMultiplier,
         canMove: movementEnabled && !input.isFlyModeEnabled
       });
 
@@ -197,11 +216,15 @@ export function createMovementSystem(options: CreateMovementSystemOptions): Move
 
       let nextY = projectedNextY;
       if (!input.isFlyModeEnabled && groundedAfterMove.isGrounded && verticalVelocity <= 0.01) {
-        nextY = groundedAfterMove.groundY;
+        nextY = groundedAfterMove.groundY + GROUND_CLEARANCE_Y;
       }
 
+      let landingImpact = 0;
       if (groundedAfterMove.isGrounded) {
         didLand = !wasGrounded && airborneTimeMs >= MIN_AIRBORNE_TIME_FOR_LAND_MS;
+        if (didLand) {
+          landingImpact = resolveLandingImpactFromAirTime(airborneTimeMs);
+        }
         airborneTimeMs = 0;
       } else {
         airborneTimeMs += input.deltaSeconds * 1000;
@@ -244,12 +267,27 @@ export function createMovementSystem(options: CreateMovementSystemOptions): Move
         sprintIntent: {
           isShiftPressed: input.canSprint && input.inputState.descend,
           isForwardPressed: input.canSprint && input.inputState.forward
-        }
+        },
+        speedFeedback: Math.max(
+          0,
+          Math.min(
+            1,
+            motorOutput.speed /
+              (options.physicsConfig.runSpeed * (canUseSprint ? options.physicsConfig.sprintBurstSpeedMultiplier : 1))
+          )
+        ),
+        lateralInput: sideAxis,
+        forwardInput: forwardAxis,
+        didStartSprint: sprintFeedback.didStartSprint,
+        isSprintBurstActive: sprintFeedback.isBurstActive,
+        landingImpact,
+        airborneTimeMs
       };
     },
     reset: () => {
       motorController.reset();
       jumpController.reset();
+      sprintSystem.reset();
       locomotionStateMachine.reset();
       wasJumpPressed = false;
       wasGrounded = false;

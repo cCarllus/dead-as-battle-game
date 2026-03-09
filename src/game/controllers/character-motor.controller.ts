@@ -1,6 +1,7 @@
 // Responsável por aplicar aceleração/desaceleração e rotação suave ao movimento horizontal do jogador.
 import { Vector3 } from "@babylonjs/core";
 import type { PlayerPhysicsConfig } from "../physics/player-physics";
+import { resolveAirControlMultiplier } from "../movement/air-control";
 
 export type CharacterMotorFrameInput = {
   deltaSeconds: number;
@@ -8,6 +9,7 @@ export type CharacterMotorFrameInput = {
   currentRotationY: number;
   isGrounded: boolean;
   wantsSprint: boolean;
+  sprintBoostMultiplier?: number;
   canMove: boolean;
 };
 
@@ -59,14 +61,16 @@ export function createCharacterMotorController(config: PlayerPhysicsConfig): Cha
         ? input.desiredWorldDirection.normalizeToNew()
         : Vector3.Zero();
 
+      const sprintBoostMultiplier = input.sprintBoostMultiplier ?? 1;
       const targetSpeed = !input.canMove
         ? 0
         : input.wantsSprint
-          ? config.runSpeed
+          ? config.runSpeed * sprintBoostMultiplier
           : config.walkSpeed;
+      const controlMultiplier = resolveAirControlMultiplier(input.isGrounded, config.airControl);
 
-      const targetVelocityX = normalizedDirection.x * targetSpeed;
-      const targetVelocityZ = normalizedDirection.z * targetSpeed;
+      const targetVelocityX = normalizedDirection.x * targetSpeed * controlMultiplier;
+      const targetVelocityZ = normalizedDirection.z * targetSpeed * controlMultiplier;
 
       const acceleration = input.isGrounded ? config.acceleration : config.airAcceleration;
       const deceleration = input.isGrounded ? config.deceleration : config.airDeceleration;
