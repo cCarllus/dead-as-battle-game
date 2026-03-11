@@ -9,6 +9,7 @@ export type CollisionMoveResult = {
 
 export type CollisionSystem = {
   configureStaticMeshes: (meshes: AbstractMesh[]) => void;
+  setColliderHeight: (height: number, radius?: number) => void;
   moveAndSlide: (desiredDisplacement: Vector3) => CollisionMoveResult;
   dispose: () => void;
 };
@@ -20,12 +21,13 @@ export type CreateCollisionSystemOptions = {
 };
 
 const COLLISION_COMPARE_EPSILON = 0.00001;
+const DEFAULT_COLLIDER_RADIUS = 0.42;
 
 export function createCollisionSystem(options: CreateCollisionSystemOptions): CollisionSystem {
   options.scene.collisionsEnabled = true;
   options.collisionBody.checkCollisions = true;
   options.collisionBody.isPickable = false;
-  options.collisionBody.ellipsoid = new Vector3(0.42, 1.18, 0.42);
+  options.collisionBody.ellipsoid = new Vector3(DEFAULT_COLLIDER_RADIUS, 1.18, DEFAULT_COLLIDER_RADIUS);
   options.collisionBody.ellipsoidOffset = new Vector3(0, 1.18, 0);
 
   const configuredStaticMeshIds = new Set<number>();
@@ -44,6 +46,12 @@ export function createCollisionSystem(options: CreateCollisionSystemOptions): Co
         mesh.checkCollisions = true;
         mesh.isPickable = true;
       });
+    },
+    setColliderHeight: (height, radius = DEFAULT_COLLIDER_RADIUS) => {
+      const safeHeight = Math.max(radius * 2 + 0.1, height);
+      const halfHeight = safeHeight * 0.5 - radius;
+      options.collisionBody.ellipsoid = new Vector3(radius, halfHeight, radius);
+      options.collisionBody.ellipsoidOffset = new Vector3(0, halfHeight, 0);
     },
     moveAndSlide: (desiredDisplacement) => {
       const beforeLocalPosition = options.collisionBody.position.clone();

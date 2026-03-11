@@ -16,7 +16,9 @@ import type {
   MatchPlayerRespawnedEventPayload,
   MatchPlayerJoinedPayload,
   MatchPlayerLeftPayload,
+  MatchPlayerLocomotionState,
   MatchPlayerState,
+  MatchPlayerWallRunSide,
   MatchSnapshotPayload
 } from "../models/match-player.model";
 
@@ -26,6 +28,26 @@ const DEFAULT_ULTIMATE_MAX = 100;
 const DEFAULT_MAX_STAMINA = 100;
 const DEFAULT_MAX_GUARD = 100;
 const DEFAULT_SCORE_VALUE = 0;
+const VALID_LOCOMOTION_STATES = new Set<MatchPlayerLocomotionState>([
+  "Idle",
+  "Walk",
+  "Run",
+  "JumpStart",
+  "InAir",
+  "Fall",
+  "Land",
+  "Crouch",
+  "CrouchWalk",
+  "Slide",
+  "WallRun",
+  "DoubleJump",
+  "Attack",
+  "Block",
+  "Hit",
+  "Stunned",
+  "Dead"
+]);
+const VALID_WALL_RUN_SIDES = new Set<MatchPlayerWallRunSide>(["none", "left", "right"]);
 
 export type MatchIdentity = {
   userId: string;
@@ -55,7 +77,18 @@ export type MatchService = {
   onCombatUltimate: (callback: (payload: MatchCombatUltimatePayload) => void) => () => void;
   onCombatState: (callback: (payload: MatchCombatStatePayload) => void) => () => void;
   onError: (callback: (error: Error) => void) => () => void;
-  sendLocalMovement: (movement: { x: number; y: number; z: number; rotationY: number }) => void;
+  sendLocalMovement: (movement: {
+    x: number;
+    y: number;
+    z: number;
+    rotationY: number;
+    locomotionState: MatchPlayerLocomotionState;
+    isCrouching: boolean;
+    isSliding: boolean;
+    isWallRunning: boolean;
+    wallRunSide: MatchPlayerWallRunSide;
+    verticalVelocity: number;
+  }) => void;
   sendSprintIntent: (intent: { isShiftPressed: boolean; isForwardPressed: boolean }) => void;
   sendUltimateActivate: () => void;
   sendAttackStart: () => void;
@@ -91,6 +124,18 @@ function normalizeBoolean(value: unknown): boolean | null {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function normalizeLocomotionState(value: unknown): MatchPlayerLocomotionState {
+  return typeof value === "string" && VALID_LOCOMOTION_STATES.has(value as MatchPlayerLocomotionState)
+    ? (value as MatchPlayerLocomotionState)
+    : "Idle";
+}
+
+function normalizeWallRunSide(value: unknown): MatchPlayerWallRunSide {
+  return typeof value === "string" && VALID_WALL_RUN_SIDES.has(value as MatchPlayerWallRunSide)
+    ? (value as MatchPlayerWallRunSide)
+    : "none";
 }
 
 function normalizeIdentity(identity: MatchIdentity | null): MatchIdentity | null {
@@ -141,6 +186,12 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const maxStamina = normalizeNumber(candidate.maxStamina) ?? DEFAULT_MAX_STAMINA;
   const currentStamina = normalizeNumber(candidate.currentStamina) ?? maxStamina;
   const isSprinting = normalizeBoolean(candidate.isSprinting) ?? false;
+  const locomotionState = normalizeLocomotionState(candidate.locomotionState);
+  const isCrouching = normalizeBoolean(candidate.isCrouching) ?? false;
+  const isSliding = normalizeBoolean(candidate.isSliding) ?? false;
+  const isWallRunning = normalizeBoolean(candidate.isWallRunning) ?? false;
+  const wallRunSide = normalizeWallRunSide(candidate.wallRunSide);
+  const verticalVelocity = normalizeNumber(candidate.verticalVelocity) ?? 0;
   const sprintBlocked = normalizeBoolean(candidate.sprintBlocked) ?? currentStamina <= 0;
   const isAttacking = normalizeBoolean(candidate.isAttacking) ?? false;
   const attackComboIndex = normalizeNumber(candidate.attackComboIndex) ?? 0;
@@ -198,6 +249,12 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
     maxStamina: safeMaxStamina,
     currentStamina: safeCurrentStamina,
     isSprinting: safeIsSprinting,
+    locomotionState,
+    isCrouching: safeIsAlive ? isCrouching : false,
+    isSliding: safeIsAlive ? isSliding : false,
+    isWallRunning: safeIsAlive ? isWallRunning : false,
+    wallRunSide: safeIsAlive ? wallRunSide : "none",
+    verticalVelocity: safeIsAlive ? verticalVelocity : 0,
     sprintBlocked: safeSprintBlocked,
     lastSprintEndedAt,
     isAttacking: safeIsAlive ? isAttacking : false,
@@ -258,12 +315,30 @@ function normalizeMovedPayload(payload: unknown): MatchPlayerMovedPayload | null
   const y = normalizeNumber(candidate.y);
   const z = normalizeNumber(candidate.z);
   const rotationY = normalizeNumber(candidate.rotationY);
+  const locomotionState = normalizeLocomotionState(candidate.locomotionState);
+  const isCrouching = normalizeBoolean(candidate.isCrouching) ?? false;
+  const isSliding = normalizeBoolean(candidate.isSliding) ?? false;
+  const isWallRunning = normalizeBoolean(candidate.isWallRunning) ?? false;
+  const wallRunSide = normalizeWallRunSide(candidate.wallRunSide);
+  const verticalVelocity = normalizeNumber(candidate.verticalVelocity) ?? 0;
 
   if (!sessionId || x === null || y === null || z === null || rotationY === null) {
     return null;
   }
 
-  return { sessionId, x, y, z, rotationY };
+  return {
+    sessionId,
+    x,
+    y,
+    z,
+    rotationY,
+    locomotionState,
+    isCrouching,
+    isSliding,
+    isWallRunning,
+    wallRunSide,
+    verticalVelocity
+  };
 }
 
 function normalizeAttackStartedPayload(payload: unknown): MatchAttackStartedEventPayload | null {
@@ -569,6 +644,12 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     maxStamina: player.maxStamina,
     currentStamina: player.currentStamina,
     isSprinting: player.isSprinting,
+    locomotionState: player.locomotionState,
+    isCrouching: player.isCrouching,
+    isSliding: player.isSliding,
+    isWallRunning: player.isWallRunning,
+    wallRunSide: player.wallRunSide,
+    verticalVelocity: player.verticalVelocity,
     sprintBlocked: player.sprintBlocked,
     lastSprintEndedAt: player.lastSprintEndedAt,
     isAttacking: player.isAttacking,
@@ -791,14 +872,26 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         x: movedPlayer.x,
         y: movedPlayer.y,
         z: movedPlayer.z,
-        rotationY: movedPlayer.rotationY
+        rotationY: movedPlayer.rotationY,
+        locomotionState: movedPlayer.locomotionState,
+        isCrouching: movedPlayer.isCrouching,
+        isSliding: movedPlayer.isSliding,
+        isWallRunning: movedPlayer.isWallRunning,
+        wallRunSide: movedPlayer.wallRunSide,
+        verticalVelocity: movedPlayer.verticalVelocity
       };
 
       const didChange =
         existingPlayer.x !== updatedPlayer.x ||
         existingPlayer.y !== updatedPlayer.y ||
         existingPlayer.z !== updatedPlayer.z ||
-        existingPlayer.rotationY !== updatedPlayer.rotationY;
+        existingPlayer.rotationY !== updatedPlayer.rotationY ||
+        existingPlayer.locomotionState !== updatedPlayer.locomotionState ||
+        existingPlayer.isCrouching !== updatedPlayer.isCrouching ||
+        existingPlayer.isSliding !== updatedPlayer.isSliding ||
+        existingPlayer.isWallRunning !== updatedPlayer.isWallRunning ||
+        existingPlayer.wallRunSide !== updatedPlayer.wallRunSide ||
+        existingPlayer.verticalVelocity !== updatedPlayer.verticalVelocity;
       if (!didChange) {
         return;
       }
@@ -1215,7 +1308,13 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         x: movement.x,
         y: movement.y,
         z: movement.z,
-        rotationY: movement.rotationY
+        rotationY: movement.rotationY,
+        locomotionState: movement.locomotionState,
+        isCrouching: movement.isCrouching,
+        isSliding: movement.isSliding,
+        isWallRunning: movement.isWallRunning,
+        wallRunSide: movement.wallRunSide,
+        verticalVelocity: movement.verticalVelocity
       });
     },
     sendSprintIntent: (intent) => {

@@ -1,4 +1,25 @@
 // Responsável por tipar o estado de presença e combate dos jogadores dentro da sala de partida global.
+export type MatchPlayerLocomotionState =
+  | "Idle"
+  | "Walk"
+  | "Run"
+  | "JumpStart"
+  | "InAir"
+  | "Fall"
+  | "Land"
+  | "Crouch"
+  | "CrouchWalk"
+  | "Slide"
+  | "WallRun"
+  | "DoubleJump"
+  | "Attack"
+  | "Block"
+  | "Hit"
+  | "Stunned"
+  | "Dead";
+
+export type MatchPlayerWallRunSide = "none" | "left" | "right";
+
 export type MatchPlayerState = {
   sessionId: string;
   userId: string;
@@ -22,6 +43,12 @@ export type MatchPlayerState = {
   maxStamina: number;
   currentStamina: number;
   isSprinting: boolean;
+  locomotionState: MatchPlayerLocomotionState;
+  isCrouching: boolean;
+  isSliding: boolean;
+  isWallRunning: boolean;
+  wallRunSide: MatchPlayerWallRunSide;
+  verticalVelocity: number;
   sprintBlocked: boolean;
   lastSprintEndedAt: number;
   isAttacking: boolean;
@@ -52,11 +79,31 @@ export type MatchMovePayload = {
   y?: unknown;
   z?: unknown;
   rotationY?: unknown;
+  locomotionState?: unknown;
+  isCrouching?: unknown;
+  isSliding?: unknown;
+  isWallRunning?: unknown;
+  wallRunSide?: unknown;
+  verticalVelocity?: unknown;
 };
 
 export type MatchSprintIntentPayload = {
   isShiftPressed?: unknown;
   isForwardPressed?: unknown;
+};
+
+export type MatchPlayerMovedPayload = {
+  sessionId: string;
+  x: number;
+  y: number;
+  z: number;
+  rotationY: number;
+  locomotionState: MatchPlayerLocomotionState;
+  isCrouching: boolean;
+  isSliding: boolean;
+  isWallRunning: boolean;
+  wallRunSide: MatchPlayerWallRunSide;
+  verticalVelocity: number;
 };
 
 export type MatchUltimateActivatePayload = Record<string, never>;

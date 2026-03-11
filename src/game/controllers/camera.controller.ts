@@ -15,6 +15,10 @@ export type CameraControllerFrameInput = {
   isGrounded: boolean;
   turnInput: number;
   landingImpact: number;
+  targetOffsetY: number;
+  lateralOffset: number;
+  additionalFovRadians: number;
+  wallRunTiltRadians: number;
 };
 
 export type CameraController = {
@@ -46,8 +50,8 @@ const DEFAULT_TARGET_VERTICAL_OFFSET = 1.72;
 const DEFAULT_TARGET_LATERAL_OFFSET = 0.92;
 const TARGET_SMOOTH_TIME = 0.095;
 const FOV_SMOOTH_TIME = 0.11;
+const SCREEN_OFFSET_SMOOTH_TIME = 0.12;
 const BASE_FOV = (70 * Math.PI) / 180;
-const SPRINT_FOV = (82 * Math.PI) / 180;
 const BURST_FOV_KICK = (2.4 * Math.PI) / 180;
 const LANDING_DROP_BASE = 0.025;
 const LANDING_DROP_SCALE = 0.06;
@@ -175,8 +179,8 @@ export function createCameraController(options: CreateCameraControllerOptions): 
       const desiredTarget = resolveOverShoulderTargetPosition(
         input.playerTransform,
         camera.alpha,
-        targetVerticalOffset,
-        targetLateralOffset
+        targetVerticalOffset + input.targetOffsetY,
+        targetLateralOffset + input.lateralOffset
       );
       const targetLerpFactor = resolveExponentialLerpFactor(safeDelta, TARGET_SMOOTH_TIME);
       const targetY = desiredTarget.y + bobOffset - landingDrop;
@@ -185,11 +189,17 @@ export function createCameraController(options: CreateCameraControllerOptions): 
       targetNode.position.y += (targetY - targetNode.position.y) * targetLerpFactor;
       targetNode.position.z += (desiredTarget.z - targetNode.position.z) * targetLerpFactor;
 
-      const sprintFov = BASE_FOV + (SPRINT_FOV - BASE_FOV) * input.speedFeedback;
       const burstKick = input.isSprintBurstActive ? BURST_FOV_KICK : 0;
-      const desiredFov = input.isSprinting ? sprintFov + burstKick : BASE_FOV;
+      const locomotionFovBoost = input.additionalFovRadians * (input.isMoving ? Math.max(0.4, input.speedFeedback) : 1);
+      const desiredFov = BASE_FOV + locomotionFovBoost + burstKick;
       const fovLerpFactor = resolveExponentialLerpFactor(safeDelta, FOV_SMOOTH_TIME);
       camera.fov += (desiredFov - camera.fov) * fovLerpFactor;
+
+      const desiredScreenOffsetX = input.wallRunTiltRadians * 90;
+      const screenOffsetLerpFactor = resolveExponentialLerpFactor(safeDelta, SCREEN_OFFSET_SMOOTH_TIME);
+      camera.targetScreenOffset.x +=
+        (desiredScreenOffsetX - camera.targetScreenOffset.x) * screenOffsetLerpFactor;
+      camera.targetScreenOffset.y += (0 - camera.targetScreenOffset.y) * screenOffsetLerpFactor;
     },
     triggerShake: (preset, scale = 1) => {
       shake.triggerPreset(preset, scale);

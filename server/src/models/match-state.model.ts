@@ -33,6 +33,14 @@ export type MatchPlayerStructuredState = {
     ultimateStartedAt: number;
     ultimateEndsAt: number;
   };
+  locomotion: {
+    state: MatchPlayerState["locomotionState"];
+    isCrouching: boolean;
+    isSliding: boolean;
+    isWallRunning: boolean;
+    wallRunSide: MatchPlayerState["wallRunSide"];
+    verticalVelocity: number;
+  };
 };
 
 export function toStructuredPlayerState(player: MatchPlayerState): MatchPlayerStructuredState {
@@ -67,6 +75,14 @@ export function toStructuredPlayerState(player: MatchPlayerState): MatchPlayerSt
       isUltimateReady: player.isUltimateReady,
       ultimateStartedAt: player.ultimateStartedAt,
       ultimateEndsAt: player.ultimateEndsAt
+    },
+    locomotion: {
+      state: player.locomotionState,
+      isCrouching: player.isCrouching,
+      isSliding: player.isSliding,
+      isWallRunning: player.isWallRunning,
+      wallRunSide: player.wallRunSide,
+      verticalVelocity: player.verticalVelocity
     }
   };
 }
@@ -95,6 +111,12 @@ export function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     maxStamina: player.maxStamina,
     currentStamina: player.currentStamina,
     isSprinting: player.isSprinting,
+    locomotionState: player.locomotionState,
+    isCrouching: player.isCrouching,
+    isSliding: player.isSliding,
+    isWallRunning: player.isWallRunning,
+    wallRunSide: player.wallRunSide,
+    verticalVelocity: player.verticalVelocity,
     sprintBlocked: player.sprintBlocked,
     lastSprintEndedAt: player.lastSprintEndedAt,
     isAttacking: player.isAttacking,

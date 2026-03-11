@@ -1,5 +1,5 @@
 // Sistema de movimento autoritativo: processa input, sprint e atualização de transform por tick fixo.
-import type { MatchPlayerState } from "../models/match-player.model.js";
+import type { MatchPlayerMovedPayload, MatchPlayerState } from "../models/match-player.model.js";
 import type { PlayerMovementState } from "../services/movement-state.service.js";
 import {
   applyAuthoritativeMove,
@@ -9,13 +9,7 @@ import { updateSprintState, type SprintInputState } from "../services/stamina.se
 
 const ENABLE_MOVEMENT_LOGS = process.env.MATCH_LOG_MOVEMENT === "1";
 
-type PlayerMovedEvent = {
-  sessionId: string;
-  x: number;
-  y: number;
-  z: number;
-  rotationY: number;
-};
+type PlayerMovedEvent = MatchPlayerMovedPayload;
 
 export type MovementSystemResult = {
   didChangeState: boolean;
@@ -73,7 +67,7 @@ export function createMovementSystem(options: {
           now
         });
 
-        if (!moveResult.moved) {
+        if (!moveResult.moved && !moveResult.locomotionChanged) {
           return;
         }
 
@@ -82,7 +76,13 @@ export function createMovementSystem(options: {
           x: moveResult.x,
           y: moveResult.y,
           z: moveResult.z,
-          rotationY: moveResult.rotationY
+          rotationY: moveResult.rotationY,
+          locomotionState: player.locomotionState,
+          isCrouching: player.isCrouching,
+          isSliding: player.isSliding,
+          isWallRunning: player.isWallRunning,
+          wallRunSide: player.wallRunSide,
+          verticalVelocity: player.verticalVelocity
         });
         didChangeState = true;
 

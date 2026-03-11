@@ -1,4 +1,25 @@
 // Responsável por tipar payloads e estado de jogadores sincronizados na sala global_match.
+export type MatchPlayerLocomotionState =
+  | "Idle"
+  | "Walk"
+  | "Run"
+  | "JumpStart"
+  | "InAir"
+  | "Fall"
+  | "Land"
+  | "Crouch"
+  | "CrouchWalk"
+  | "Slide"
+  | "WallRun"
+  | "DoubleJump"
+  | "Attack"
+  | "Block"
+  | "Hit"
+  | "Stunned"
+  | "Dead";
+
+export type MatchPlayerWallRunSide = "none" | "left" | "right";
+
 export type MatchPlayerState = {
   sessionId: string;
   userId: string;
@@ -22,6 +43,12 @@ export type MatchPlayerState = {
   maxStamina: number;
   currentStamina: number;
   isSprinting: boolean;
+  locomotionState: MatchPlayerLocomotionState;
+  isCrouching: boolean;
+  isSliding: boolean;
+  isWallRunning: boolean;
+  wallRunSide: MatchPlayerWallRunSide;
+  verticalVelocity: number;
   sprintBlocked: boolean;
   lastSprintEndedAt: number;
   isAttacking: boolean;
@@ -57,6 +84,12 @@ export type MatchPlayerMovedPayload = {
   y: number;
   z: number;
   rotationY: number;
+  locomotionState: MatchPlayerLocomotionState;
+  isCrouching: boolean;
+  isSliding: boolean;
+  isWallRunning: boolean;
+  wallRunSide: MatchPlayerWallRunSide;
+  verticalVelocity: number;
 };
 
 export type MatchAttackStartedEventPayload = {

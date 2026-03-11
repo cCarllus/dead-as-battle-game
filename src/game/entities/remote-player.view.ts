@@ -3,6 +3,7 @@ import type { AbstractMesh, TransformNode } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { MatchPlayerState } from "../../models/match-player.model";
 import type { AnimationCommand } from "../animation/animation-command";
+import type { CharacterRuntimeConfig } from "../character/character-config";
 import {
   createDefaultAnimationGameplayState,
   type AnimationGameplayState,
@@ -33,7 +34,12 @@ export type RemotePlayerView = {
   sessionId: string;
   gameplayRoot: TransformNode;
   collisionBody: AbstractMesh;
+  groundCheck: TransformNode;
+  wallCheckLeft: TransformNode;
+  wallCheckRight: TransformNode;
   visualRoot: TransformNode;
+  audioRoot: TransformNode;
+  cameraTargetAnchor: TransformNode;
   nameplateNode: AbstractMesh;
   role: PlayerViewRole;
   nickname: string;
@@ -45,6 +51,7 @@ export type RemotePlayerView = {
   playAnimationCommand: (command: AnimationCommand) => void;
   getTransform: () => { x: number; y: number; z: number; rotationY: number };
   getCameraTarget: () => { x: number; y: number; z: number };
+  getRuntimeConfig: () => CharacterRuntimeConfig;
   dispose: () => void;
 };
 
@@ -121,6 +128,10 @@ function resolveAnimationGameplayState(options: {
   rotationY: number;
   isAlive: boolean;
   isSprinting: boolean;
+  locomotionState: MatchPlayerState["locomotionState"];
+  isCrouching: boolean;
+  isSliding: boolean;
+  isWallRunning: boolean;
   isBlocking: boolean;
   attackComboIndex: 0 | 1 | 2 | 3;
   isStunned: boolean;
@@ -129,7 +140,8 @@ function resolveAnimationGameplayState(options: {
   if (!options.isAlive) {
     return {
       ...createDefaultAnimationGameplayState(),
-      isDead: true
+      isDead: true,
+      locomotionState: "Dead"
     };
   }
 
@@ -141,7 +153,13 @@ function resolveAnimationGameplayState(options: {
   const movementThreshold = options.previousAnimationState.isMoving
     ? MOVEMENT_STOP_EPSILON_SQUARED
     : MOVEMENT_START_EPSILON_SQUARED;
-  const isMoving = horizontalDistance >= movementThreshold;
+  const replicatedMovingState =
+    options.locomotionState === "Walk" ||
+    options.locomotionState === "Run" ||
+    options.locomotionState === "CrouchWalk" ||
+    options.locomotionState === "Slide" ||
+    options.locomotionState === "WallRun";
+  const isMoving = replicatedMovingState || horizontalDistance >= movementThreshold;
 
   let movementDirection: MovementDirection = "none";
   if (isMoving) {
@@ -157,21 +175,25 @@ function resolveAnimationGameplayState(options: {
 
   const isBlocking = options.isBlocking && options.attackComboIndex === 0;
   const isHitReacting = options.isStunned && !isBlocking && options.attackComboIndex === 0;
-  const isJumping = Math.abs(deltaY) >= VERTICAL_MOVEMENT_EPSILON;
-  const locomotionState = isJumping
-    ? "inAir"
-    : !isMoving
-      ? "idle"
-      : options.isSprinting
-        ? "run"
-        : "walk";
+  const isJumping =
+    options.locomotionState === "JumpStart" ||
+    options.locomotionState === "InAir" ||
+    options.locomotionState === "Fall" ||
+    options.locomotionState === "DoubleJump" ||
+    options.locomotionState === "WallRun" ||
+    Math.abs(deltaY) >= VERTICAL_MOVEMENT_EPSILON;
+  const locomotionState = options.locomotionState;
 
   return {
     isDead: false,
     isMoving,
     movementDirection,
-    isSprinting: options.isSprinting,
+    isSprinting: options.isSprinting || locomotionState === "Run",
     isJumping,
+    isCrouching:
+      options.isCrouching || locomotionState === "Crouch" || locomotionState === "CrouchWalk",
+    isSliding: options.isSliding || locomotionState === "Slide",
+    isWallRunning: options.isWallRunning || locomotionState === "WallRun",
     isUltimateActive: options.isUltimateActive,
     isBlocking,
     attackComboIndex: options.attackComboIndex,
@@ -256,6 +278,9 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
             movementDirection: animationOverride.movementDirection,
             isSprinting: animationOverride.isSprinting,
             isJumping: animationOverride.isJumping,
+            isCrouching: animationOverride.isCrouching,
+            isSliding: animationOverride.isSliding,
+            isWallRunning: animationOverride.isWallRunning,
             isUltimateActive: animationOverride.isUltimateActive,
             isBlocking: animationOverride.isBlocking,
             attackComboIndex: animationOverride.attackComboIndex,
@@ -269,6 +294,10 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
             rotationY: transform.rotationY,
             isAlive: player.isAlive,
             isSprinting: player.isSprinting,
+            locomotionState: player.locomotionState,
+            isCrouching: player.isCrouching,
+            isSliding: player.isSliding,
+            isWallRunning: player.isWallRunning,
             isBlocking: player.isBlocking,
             attackComboIndex: serverAttackComboIndex,
             isStunned: serverIsStunned,
@@ -319,15 +348,21 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
         nextAnimationGameplayState.isJumping || nowMs < jumpAnimationGraceUntilMs;
       nextAnimationGameplayState.isSprinting =
         nextAnimationGameplayState.isSprinting || nowMs < sprintAnimationGraceUntilMs;
-      nextAnimationGameplayState.locomotionState = nextAnimationGameplayState.isJumping
-        ? "inAir"
-        : nowMs < landAnimationGraceUntilMs
-          ? "land"
-          : !nextAnimationGameplayState.isMoving
-            ? "idle"
-            : nextAnimationGameplayState.isSprinting
-              ? "run"
-              : "walk";
+      if (
+        !nextAnimationGameplayState.isCrouching &&
+        !nextAnimationGameplayState.isSliding &&
+        !nextAnimationGameplayState.isWallRunning
+      ) {
+        nextAnimationGameplayState.locomotionState = nextAnimationGameplayState.isJumping
+          ? "InAir"
+          : nowMs < landAnimationGraceUntilMs
+            ? "Land"
+            : !nextAnimationGameplayState.isMoving
+              ? "Idle"
+              : nextAnimationGameplayState.isSprinting
+                ? "Run"
+                : "Walk";
+      }
 
       if (nextAnimationGameplayState.isMoving) {
         lastMovementAtMs = nowMs;
@@ -351,7 +386,12 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
     sessionId: options.player.sessionId,
     gameplayRoot: entity.gameplayRoot,
     collisionBody: entity.collisionBody,
+    groundCheck: entity.groundCheck,
+    wallCheckLeft: entity.wallCheckLeft,
+    wallCheckRight: entity.wallCheckRight,
     visualRoot: entity.visualRoot,
+    audioRoot: entity.audioRoot,
+    cameraTargetAnchor: entity.cameraTargetAnchor,
     nameplateNode: entity.nameplateNode,
     role: options.role,
     nickname: options.player.nickname,
@@ -408,11 +448,14 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
         movementDirection: "none",
         isSprinting: false,
         isJumping: false,
+        isCrouching: false,
+        isSliding: false,
+        isWallRunning: false,
         isUltimateActive: false,
         isBlocking: false,
         attackComboIndex: 0,
         isHitReacting: false,
-        locomotionState: "idle"
+        locomotionState: "Idle"
       };
       entity.setAnimationGameplayState(animationGameplayState);
     },
@@ -429,6 +472,9 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
         y: target.y,
         z: target.z
       };
+    },
+    getRuntimeConfig: () => {
+      return entity.getRuntimeConfig();
     },
     dispose: () => {
       entity.dispose();

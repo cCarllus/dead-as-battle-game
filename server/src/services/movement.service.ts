@@ -1,5 +1,11 @@
-// Encapsula validação de input, reconciliação autoritativa e colisão horizontal entre jogadores.
-import type { MatchMovePayload, MatchPlayerState, MatchSprintIntentPayload } from "../models/match-player.model.js";
+// Encapsula validação de input, reconciliação autoritativa, hints de locomoção e colisão horizontal entre jogadores.
+import type {
+  MatchMovePayload,
+  MatchPlayerLocomotionState,
+  MatchPlayerState,
+  MatchPlayerWallRunSide,
+  MatchSprintIntentPayload
+} from "../models/match-player.model.js";
 import {
   applyAuthoritativeMovementValidation,
   initializePlayerMovementState,
@@ -35,19 +41,71 @@ export type NormalizedMoveIntent = {
   y: number;
   z: number;
   rotationY: number;
+  locomotionState: MatchPlayerLocomotionState;
+  isCrouching: boolean;
+  isSliding: boolean;
+  isWallRunning: boolean;
+  wallRunSide: MatchPlayerWallRunSide;
+  verticalVelocity: number;
 };
+
+const VALID_LOCOMOTION_STATES = new Set<MatchPlayerLocomotionState>([
+  "Idle",
+  "Walk",
+  "Run",
+  "JumpStart",
+  "InAir",
+  "Fall",
+  "Land",
+  "Crouch",
+  "CrouchWalk",
+  "Slide",
+  "WallRun",
+  "DoubleJump",
+  "Attack",
+  "Block",
+  "Hit",
+  "Stunned",
+  "Dead"
+]);
+
+const VALID_WALL_RUN_SIDES = new Set<MatchPlayerWallRunSide>(["none", "left", "right"]);
+
+function normalizeLocomotionState(value: unknown): MatchPlayerLocomotionState {
+  return typeof value === "string" && VALID_LOCOMOTION_STATES.has(value as MatchPlayerLocomotionState)
+    ? (value as MatchPlayerLocomotionState)
+    : "Idle";
+}
+
+function normalizeWallRunSide(value: unknown): MatchPlayerWallRunSide {
+  return typeof value === "string" && VALID_WALL_RUN_SIDES.has(value as MatchPlayerWallRunSide)
+    ? (value as MatchPlayerWallRunSide)
+    : "none";
+}
 
 export function normalizeMoveIntent(payload: MatchMovePayload | undefined): NormalizedMoveIntent | null {
   const x = normalizeNumber(payload?.x);
   const y = normalizeNumber(payload?.y);
   const z = normalizeNumber(payload?.z);
   const rotationY = normalizeNumber(payload?.rotationY);
+  const verticalVelocity = normalizeNumber(payload?.verticalVelocity) ?? 0;
 
   if (x === null || y === null || z === null || rotationY === null) {
     return null;
   }
 
-  return { x, y, z, rotationY };
+  return {
+    x,
+    y,
+    z,
+    rotationY,
+    locomotionState: normalizeLocomotionState(payload?.locomotionState),
+    isCrouching: normalizeBoolean(payload?.isCrouching) ?? false,
+    isSliding: normalizeBoolean(payload?.isSliding) ?? false,
+    isWallRunning: normalizeBoolean(payload?.isWallRunning) ?? false,
+    wallRunSide: normalizeWallRunSide(payload?.wallRunSide),
+    verticalVelocity
+  };
 }
 
 export function normalizeSprintIntent(payload: MatchSprintIntentPayload | undefined): SprintInputState | null {
@@ -144,6 +202,7 @@ export function applyAuthoritativeMove(options: {
   now: number;
 }): {
   moved: boolean;
+  locomotionChanged: boolean;
   x: number;
   y: number;
   z: number;
@@ -180,6 +239,14 @@ export function applyAuthoritativeMove(options: {
     options.player.z !== resolvedMove.z ||
     options.player.rotationY !== validatedMove.rotationY;
 
+  const locomotionChanged =
+    options.player.locomotionState !== options.moveIntent.locomotionState ||
+    options.player.isCrouching !== options.moveIntent.isCrouching ||
+    options.player.isSliding !== options.moveIntent.isSliding ||
+    options.player.isWallRunning !== options.moveIntent.isWallRunning ||
+    options.player.wallRunSide !== options.moveIntent.wallRunSide ||
+    options.player.verticalVelocity !== options.moveIntent.verticalVelocity;
+
   if (moved) {
     options.player.x = resolvedMove.x;
     options.player.y = validatedMove.y;
@@ -187,8 +254,18 @@ export function applyAuthoritativeMove(options: {
     options.player.rotationY = validatedMove.rotationY;
   }
 
+  if (moved || locomotionChanged) {
+    options.player.locomotionState = options.moveIntent.locomotionState;
+    options.player.isCrouching = options.moveIntent.isCrouching;
+    options.player.isSliding = options.moveIntent.isSliding;
+    options.player.isWallRunning = options.moveIntent.isWallRunning;
+    options.player.wallRunSide = options.moveIntent.wallRunSide;
+    options.player.verticalVelocity = options.moveIntent.verticalVelocity;
+  }
+
   return {
     moved,
+    locomotionChanged,
     x: options.player.x,
     y: options.player.y,
     z: options.player.z,

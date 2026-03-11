@@ -1,9 +1,9 @@
-// Responsável por carregar o mapa da arena multiplayer e fornecer fallback visual em caso de falha.
+// Responsável por carregar o mapa técnico de gameplay e manter fallback para arenas externas futuras.
 import { Color3, MeshBuilder, Scene, SceneLoader, StandardMaterial, type AbstractMesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
+import { createMovementTestMap } from "../environment/movement-test-map";
 
-export const GLOBAL_MATCH_MAP_URL =
-  "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/models/maps/lightcycle_arena_rev_02__tebg.glb";
+export const GLOBAL_MATCH_MAP_URL = "movement-test-map";
 
 function splitModelPath(modelUrl: string): { rootUrl: string; fileName: string } {
   const lastSlash = modelUrl.lastIndexOf("/");
@@ -52,6 +52,10 @@ function createFallbackArena(scene: Scene): LoadedMapHandle {
 }
 
 export async function loadGlobalMatchMap(scene: Scene, mapUrl: string): Promise<LoadedMapHandle> {
+  if (mapUrl === GLOBAL_MATCH_MAP_URL) {
+    return createMovementTestMap(scene);
+  }
+
   const { rootUrl, fileName } = splitModelPath(mapUrl);
 
   try {

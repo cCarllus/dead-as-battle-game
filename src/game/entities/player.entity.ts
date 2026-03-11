@@ -24,17 +24,14 @@ import {
   type AnimationGameplayState
 } from "../animation/animation-state";
 import { resolveHeroAnimationConfig } from "../animation/animation-registry";
+import { createCharacterRoot } from "../character/character-root";
+import type { CharacterRuntimeConfig } from "../character/character-config";
+import { resolveCharacterDefinition } from "../character/character-registry";
 import {
   resolveHeroVisualConfig,
   type HeroVisualConfig
 } from "../animation/hero-visual-config";
 import type { MatchPlayerState } from "../../models/match-player.model";
-
-const PLAYER_COLLISION_HEIGHT = 2.4;
-const PLAYER_COLLISION_RADIUS = 0.44;
-const CAMERA_TARGET_OFFSET_Y = 1.28;
-const NAMEPLATE_OFFSET_Y = PLAYER_COLLISION_HEIGHT + 0.52;
-const TARGET_VISUAL_HEIGHT = PLAYER_COLLISION_HEIGHT;
 
 type PlayerLabelHandle = {
   mesh: AbstractMesh;
@@ -69,7 +66,7 @@ function createPlayerLabel(scene: Scene, sessionId: string): PlayerLabelHandle {
   );
   plane.material = material;
   plane.billboardMode = AbstractMesh.BILLBOARDMODE_ALL;
-  plane.position = new Vector3(0, NAMEPLATE_OFFSET_Y, 0);
+  plane.position = Vector3.Zero();
   plane.isPickable = false;
 
   return {
@@ -129,7 +126,8 @@ function applyHeroVisualConfig(
 
 function calculateNormalizedCalibration(
   skinRootNodes: TransformNode[],
-  currentVisualScale: number
+  currentVisualScale: number,
+  targetVisualHeight: number
 ): { normalizedScale: number; normalizedOffsetY: number } | null {
   if (skinRootNodes.length === 0) {
     return null;
@@ -169,7 +167,7 @@ function calculateNormalizedCalibration(
     return null;
   }
 
-  const normalizedScale = TARGET_VISUAL_HEIGHT / unscaledHeight;
+  const normalizedScale = targetVisualHeight / unscaledHeight;
   if (!Number.isFinite(normalizedScale) || normalizedScale <= 0) {
     return null;
   }
@@ -184,11 +182,17 @@ export type MatchPlayerEntity = {
   sessionId: string;
   gameplayRoot: TransformNode;
   collisionBody: AbstractMesh;
+  groundCheck: TransformNode;
+  wallCheckLeft: TransformNode;
+  wallCheckRight: TransformNode;
   visualRoot: TransformNode;
+  audioRoot: TransformNode;
+  cameraTargetAnchor: TransformNode;
   nameplateNode: AbstractMesh;
   setTransform: (transform: { x: number; y: number; z: number; rotationY: number }) => void;
   getTransform: () => { x: number; y: number; z: number; rotationY: number };
   getCameraTarget: () => Vector3;
+  getRuntimeConfig: () => CharacterRuntimeConfig;
   setNickname: (nickname: string) => void;
   setVisualStyle: (style: PlayerVisualStyle) => void;
   setAnimationGameplayState: (state: AnimationGameplayState) => void;
@@ -212,37 +216,20 @@ export type PlayerVisualStyle = {
 };
 
 export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions): MatchPlayerEntity {
-  const gameplayRoot = new TransformNode(
-    `matchPlayerGameplayRoot_${options.player.sessionId}`,
-    options.scene
-  );
-  const visualRoot = new TransformNode(
-    `matchPlayerVisualRoot_${options.player.sessionId}`,
-    options.scene
-  );
-  visualRoot.parent = gameplayRoot;
-
-  const collisionMaterial = new StandardMaterial(
-    `matchPlayerCollisionMaterial_${options.player.sessionId}`,
-    options.scene
-  );
-
-  const collisionBody = MeshBuilder.CreateCapsule(
-    `matchPlayerCollisionBody_${options.player.sessionId}`,
-    {
-      height: PLAYER_COLLISION_HEIGHT,
-      radius: PLAYER_COLLISION_RADIUS,
-      tessellation: 18
-    },
-    options.scene
-  );
-  collisionBody.parent = gameplayRoot;
-  collisionBody.material = collisionMaterial;
-  collisionBody.isPickable = false;
+  let runtimeConfig = resolveCharacterDefinition(options.player.heroId).runtimeConfig;
+  const runtimeRig = createCharacterRoot({
+    scene: options.scene,
+    sessionId: options.player.sessionId,
+    runtimeConfig
+  });
+  const gameplayRoot = runtimeRig.characterRoot;
+  const visualRoot = runtimeRig.visualRoot;
+  const collisionBody = runtimeRig.collisionBody;
+  const collisionMaterial = collisionBody.material as StandardMaterial;
   collisionBody.isVisible = true;
 
   const label = createPlayerLabel(options.scene, options.player.sessionId);
-  label.mesh.parent = gameplayRoot;
+  label.mesh.parent = runtimeRig.nameplateAnchor;
 
   let isDisposed = false;
   let skinLoadVersion = 0;
@@ -279,6 +266,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   };
 
   const applyHeroSkin = (heroConfig: HeroVisualConfig): void => {
+    runtimeConfig = resolveCharacterDefinition(heroConfig.id).runtimeConfig;
     const cachedCalibration = getHeroRuntimeCalibration(heroConfig.id);
     applyHeroVisualConfig(visualRoot, heroConfig, cachedCalibration);
     skinLoadVersion += 1;
@@ -306,7 +294,8 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
 
         const runtimeCalibration = calculateNormalizedCalibration(
           loadedVisual.rootNodes,
-          visualRoot.scaling.x
+          visualRoot.scaling.x,
+          runtimeConfig.colliderHeight
         );
         const effectiveCalibration = runtimeCalibration ?? cachedCalibration;
         if (runtimeCalibration) {
@@ -354,7 +343,12 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     sessionId: options.player.sessionId,
     gameplayRoot,
     collisionBody,
+    groundCheck: runtimeRig.groundCheck,
+    wallCheckLeft: runtimeRig.wallCheckLeft,
+    wallCheckRight: runtimeRig.wallCheckRight,
     visualRoot,
+    audioRoot: runtimeRig.audioRoot,
+    cameraTargetAnchor: runtimeRig.cameraTargetAnchor,
     nameplateNode: label.mesh,
     setTransform: (transform) => {
       gameplayRoot.position.set(transform.x, transform.y, transform.z);
@@ -369,11 +363,13 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       };
     },
     getCameraTarget: () => {
-      return new Vector3(
-        gameplayRoot.position.x,
-        gameplayRoot.position.y + CAMERA_TARGET_OFFSET_Y,
-        gameplayRoot.position.z
-      );
+      return runtimeRig.cameraTargetAnchor.getAbsolutePosition().clone();
+    },
+    getRuntimeConfig: () => {
+      return {
+        ...runtimeConfig,
+        locomotion: { ...runtimeConfig.locomotion }
+      };
     },
     setNickname: (nextNickname) => {
       nickname = nextNickname;
@@ -394,6 +390,9 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
         movementDirection: nextState.movementDirection,
         isSprinting: nextState.isSprinting,
         isJumping: nextState.isJumping,
+        isCrouching: nextState.isCrouching,
+        isSliding: nextState.isSliding,
+        isWallRunning: nextState.isWallRunning,
         isUltimateActive: nextState.isUltimateActive,
         isBlocking: nextState.isBlocking,
         attackComboIndex: nextState.attackComboIndex,
@@ -416,7 +415,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       isDisposed = true;
       skinLoadVersion += 1;
       disposeSkinHandle();
-      gameplayRoot.dispose(false, true);
+      runtimeRig.dispose();
     }
   };
 }

@@ -63,6 +63,12 @@ function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     maxStamina: player.maxStamina,
     currentStamina: player.currentStamina,
     isSprinting: player.isSprinting,
+    locomotionState: player.locomotionState,
+    isCrouching: player.isCrouching,
+    isSliding: player.isSliding,
+    isWallRunning: player.isWallRunning,
+    wallRunSide: player.wallRunSide,
+    verticalVelocity: player.verticalVelocity,
     sprintBlocked: player.sprintBlocked,
     lastSprintEndedAt: player.lastSprintEndedAt,
     isAttacking: player.isAttacking,
@@ -90,6 +96,12 @@ function didPlayerStateChange(previous: MatchPlayerState | undefined, next: Matc
     previous.z !== next.z ||
     previous.rotationY !== next.rotationY ||
     previous.isSprinting !== next.isSprinting ||
+    previous.locomotionState !== next.locomotionState ||
+    previous.isCrouching !== next.isCrouching ||
+    previous.isSliding !== next.isSliding ||
+    previous.isWallRunning !== next.isWallRunning ||
+    previous.wallRunSide !== next.wallRunSide ||
+    previous.verticalVelocity !== next.verticalVelocity ||
     previous.isAttacking !== next.isAttacking ||
     previous.attackComboIndex !== next.attackComboIndex ||
     previous.lastAttackAt !== next.lastAttackAt ||

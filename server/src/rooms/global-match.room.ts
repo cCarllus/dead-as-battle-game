@@ -218,7 +218,13 @@ export class GlobalMatchRoom extends Room {
         x: player.x,
         y: player.y,
         z: player.z,
-        rotationY: player.rotationY
+        rotationY: player.rotationY,
+        locomotionState: player.locomotionState,
+        isCrouching: player.isCrouching,
+        isSliding: player.isSliding,
+        isWallRunning: player.isWallRunning,
+        wallRunSide: player.wallRunSide,
+        verticalVelocity: player.verticalVelocity
       });
     });
     combatStatePlayersBySessionId.forEach((player) => {
@@ -332,6 +338,12 @@ export class GlobalMatchRoom extends Room {
       maxStamina: 0,
       currentStamina: 0,
       isSprinting: false,
+      locomotionState: "Idle",
+      isCrouching: false,
+      isSliding: false,
+      isWallRunning: false,
+      wallRunSide: "none",
+      verticalVelocity: 0,
       sprintBlocked: false,
       lastSprintEndedAt: now,
       isAttacking: false,
@@ -364,12 +376,24 @@ export class GlobalMatchRoom extends Room {
         x: player.x,
         y: player.y,
         z: player.z,
-        rotationY: player.rotationY
+        rotationY: player.rotationY,
+        locomotionState: player.locomotionState,
+        isCrouching: player.isCrouching,
+        isSliding: player.isSliding,
+        isWallRunning: player.isWallRunning,
+        wallRunSide: player.wallRunSide,
+        verticalVelocity: player.verticalVelocity
       }) ?? {
         x: player.x,
         y: player.y,
         z: player.z,
-        rotationY: player.rotationY
+        rotationY: player.rotationY,
+        locomotionState: player.locomotionState,
+        isCrouching: player.isCrouching,
+        isSliding: player.isSliding,
+        isWallRunning: player.isWallRunning,
+        wallRunSide: player.wallRunSide,
+        verticalVelocity: player.verticalVelocity
       }
     );
 

@@ -52,6 +52,12 @@ export function respawnPlayer(options: {
   player.isBlocking = false;
   player.blockStartedAt = 0;
   player.isSprinting = false;
+  player.locomotionState = "Idle";
+  player.isCrouching = false;
+  player.isSliding = false;
+  player.isWallRunning = false;
+  player.wallRunSide = "none";
+  player.verticalVelocity = 0;
   player.stunUntil = 0;
   player.isUsingUltimate = false;
   player.ultimateStartedAt = 0;

@@ -9,21 +9,31 @@ import {
   type ArcRotateCamera,
   type TransformNode
 } from "@babylonjs/core";
-import type { MatchCombatUltimatePayload, MatchPlayerState } from "../../models/match-player.model";
+import type {
+  MatchCombatUltimatePayload,
+  MatchPlayerLocomotionState,
+  MatchPlayerState,
+  MatchPlayerWallRunSide
+} from "../../models/match-player.model";
+import { createCharacterAudioController, type CharacterAudioController } from "../audio/character-audio-controller";
+import { resolveLocomotionCameraHooks } from "../camera/locomotion-camera-hooks";
 import { createMotionLinesEffect } from "../effects/motion-lines";
 import { createWindParticlesSystem } from "../effects/wind-particles";
 import { createEffectManager } from "../effects/effect-manager";
 import { createCameraController } from "../controllers/camera.controller";
+import {
+  createCharacterLocomotionSystem,
+  type CharacterLocomotionSystem
+} from "../locomotion/character-locomotion-system";
+import { createGroundedSystem } from "../locomotion/grounded-system";
+import { createWallCheckSystem } from "../locomotion/wall-check-system";
 import { createCharacterLeanSystem } from "../movement/character-lean";
-import { DEFAULT_PLAYER_PHYSICS_CONFIG, MAX_FRAME_DELTA_SECONDS } from "../physics/player-physics";
-import { createAnimationStateSystem } from "../systems/animation-state.system";
+import { MAX_FRAME_DELTA_SECONDS } from "../physics/player-physics";
 import { createCollisionSystem, type CollisionSystem } from "../systems/collision.system";
 import { createCombatInputSystem } from "../systems/combat-input.system";
-import { createGroundedSystem } from "../systems/grounded.system";
 import { createLightingSystem } from "../systems/lighting.system";
 import { GLOBAL_MATCH_MAP_URL, loadGlobalMatchMap } from "../systems/map-loader.system";
 import { createMovementInputSystem } from "../systems/movement-input.system";
-import { createMovementSystem, type MovementSystem } from "../systems/movement.system";
 import { createPlayerViewManager } from "../systems/player-view-manager";
 import { createPointerLockSystem } from "../systems/pointer-lock.system";
 
@@ -40,7 +50,18 @@ export type GlobalMatchSceneOptions = {
   canvas: HTMLCanvasElement;
   localSessionId: string;
   initialPlayers?: MatchPlayerState[];
-  onLocalPlayerMoved?: (position: { x: number; y: number; z: number; rotationY: number }) => void;
+  onLocalPlayerMoved?: (position: {
+    x: number;
+    y: number;
+    z: number;
+    rotationY: number;
+    locomotionState: MatchPlayerLocomotionState;
+    isCrouching: boolean;
+    isSliding: boolean;
+    isWallRunning: boolean;
+    wallRunSide: MatchPlayerWallRunSide;
+    verticalVelocity: number;
+  }) => void;
   onLocalSprintIntentChanged?: (intent: { isShiftPressed: boolean; isForwardPressed: boolean }) => void;
   onLocalAttackRequested?: () => void;
   onLocalBlockStartRequested?: () => void;
@@ -68,8 +89,10 @@ export type GlobalMatchSceneHandle = {
 
 type LocalGameplayRuntime = {
   collisionSystem: CollisionSystem;
-  movementSystem: MovementSystem;
+  locomotionSystem: CharacterLocomotionSystem;
+  audioController: CharacterAudioController;
   ownerCollisionBodyId: number;
+  ownerHeroId: string;
 };
 
 function positionDistanceSquared(
@@ -187,7 +210,18 @@ export async function createGlobalMatchScene(
   let flyModeEnabled = false;
   let pointerLocked = pointerLockSystem.isLocked();
   let lastMovementSyncAtMs = 0;
-  let lastSyncedLocalPosition: { x: number; y: number; z: number; rotationY: number } | null = null;
+  let lastSyncedLocalMovement: {
+    x: number;
+    y: number;
+    z: number;
+    rotationY: number;
+    locomotionState: MatchPlayerLocomotionState;
+    isCrouching: boolean;
+    isSliding: boolean;
+    isWallRunning: boolean;
+    wallRunSide: MatchPlayerWallRunSide;
+    verticalVelocity: number;
+  } | null = null;
   let lastSprintInputSyncAtMs = 0;
   let lastSentSprintIntent: { isShiftPressed: boolean; isForwardPressed: boolean } | null = null;
   let isLocalVisualHiddenForCamera = false;
@@ -217,6 +251,7 @@ export async function createGlobalMatchScene(
       return;
     }
 
+    localGameplayRuntime.audioController.dispose();
     localGameplayRuntime.collisionSystem.dispose();
     localGameplayRuntime = null;
   };
@@ -230,7 +265,8 @@ export async function createGlobalMatchScene(
 
     if (
       localGameplayRuntime &&
-      localGameplayRuntime.ownerCollisionBodyId === localView.collisionBody.uniqueId
+      localGameplayRuntime.ownerCollisionBodyId === localView.collisionBody.uniqueId &&
+      localGameplayRuntime.ownerHeroId === localView.heroId
     ) {
       return localGameplayRuntime;
     }
@@ -244,27 +280,40 @@ export async function createGlobalMatchScene(
     });
 
     collisionSystem.configureStaticMeshes(mapHandle.meshes);
+    const runtimeConfig = localView.getRuntimeConfig();
 
     const groundedSystem = createGroundedSystem({
       scene,
-      physicsConfig: DEFAULT_PLAYER_PHYSICS_CONFIG,
+      runtimeConfig,
       isGroundMesh: (mesh: AbstractMesh) => {
         return mapMeshIds.has(mesh.uniqueId);
       }
     });
 
-    const animationStateSystem = createAnimationStateSystem();
-    const movementSystem = createMovementSystem({
-      physicsConfig: DEFAULT_PLAYER_PHYSICS_CONFIG,
+    const wallCheckSystem = createWallCheckSystem({
+      scene,
+      runtimeConfig,
+      wallCheckLeft: localView.wallCheckLeft,
+      wallCheckRight: localView.wallCheckRight,
+      isWallMesh: (mesh: AbstractMesh) => {
+        return mapMeshIds.has(mesh.uniqueId);
+      }
+    });
+
+    const locomotionSystem = createCharacterLocomotionSystem({
+      runtimeConfig,
       collisionSystem,
       groundedSystem,
-      animationStateSystem
+      wallCheckSystem
     });
+    const audioController = createCharacterAudioController();
 
     localGameplayRuntime = {
       collisionSystem,
-      movementSystem,
-      ownerCollisionBodyId: localView.collisionBody.uniqueId
+      locomotionSystem,
+      audioController,
+      ownerCollisionBodyId: localView.collisionBody.uniqueId,
+      ownerHeroId: localView.heroId
     };
 
     return localGameplayRuntime;
@@ -436,13 +485,24 @@ export async function createGlobalMatchScene(
 
     if (!enabled) {
       resetPredictedCombatState();
-      localGameplayRuntime?.movementSystem.reset();
+      localGameplayRuntime?.locomotionSystem.reset();
       characterLean.reset(playerViewManager.getLocalPlayerView()?.visualRoot ?? null);
       exitPointerLock();
     }
   };
 
-  const maybeEmitLocalMovement = (transform: { x: number; y: number; z: number; rotationY: number }): void => {
+  const maybeEmitLocalMovement = (movement: {
+    x: number;
+    y: number;
+    z: number;
+    rotationY: number;
+    locomotionState: MatchPlayerLocomotionState;
+    isCrouching: boolean;
+    isSliding: boolean;
+    isWallRunning: boolean;
+    wallRunSide: MatchPlayerWallRunSide;
+    verticalVelocity: number;
+  }): void => {
     if (!options.onLocalPlayerMoved) {
       return;
     }
@@ -450,23 +510,26 @@ export async function createGlobalMatchScene(
     const nowMs = Date.now();
     const elapsedMs = nowMs - lastMovementSyncAtMs;
 
-    const movedEnough =
-      !lastSyncedLocalPosition ||
-      positionDistanceSquared(transform, lastSyncedLocalPosition) >=
+    const didTransformChange =
+      !lastSyncedLocalMovement ||
+      positionDistanceSquared(movement, lastSyncedLocalMovement) >=
         LOCAL_MOVEMENT_SYNC_THRESHOLD * LOCAL_MOVEMENT_SYNC_THRESHOLD ||
-      Math.abs(transform.rotationY - lastSyncedLocalPosition.rotationY) >= 0.01;
+      Math.abs(movement.rotationY - lastSyncedLocalMovement.rotationY) >= 0.01;
+    const didLocomotionChange =
+      !lastSyncedLocalMovement ||
+      lastSyncedLocalMovement.locomotionState !== movement.locomotionState ||
+      lastSyncedLocalMovement.isCrouching !== movement.isCrouching ||
+      lastSyncedLocalMovement.isSliding !== movement.isSliding ||
+      lastSyncedLocalMovement.isWallRunning !== movement.isWallRunning ||
+      lastSyncedLocalMovement.wallRunSide !== movement.wallRunSide ||
+      Math.abs(lastSyncedLocalMovement.verticalVelocity - movement.verticalVelocity) >= 0.15;
 
-    if (!movedEnough || elapsedMs < LOCAL_MOVEMENT_SYNC_INTERVAL_MS) {
+    if ((!didTransformChange && !didLocomotionChange) || elapsedMs < LOCAL_MOVEMENT_SYNC_INTERVAL_MS) {
       return;
     }
 
-    options.onLocalPlayerMoved(transform);
-    lastSyncedLocalPosition = {
-      x: transform.x,
-      y: transform.y,
-      z: transform.z,
-      rotationY: transform.rotationY
-    };
+    options.onLocalPlayerMoved(movement);
+    lastSyncedLocalMovement = { ...movement };
     lastMovementSyncAtMs = nowMs;
   };
 
@@ -580,12 +643,7 @@ export async function createGlobalMatchScene(
       !effectiveBlocking &&
       activeAttackComboIndex === 0;
 
-    maybeEmitLocalSprintIntent({
-      isShiftPressed: canRequestSprintIntent ? inputState.descend : false,
-      isForwardPressed: canRequestSprintIntent ? inputState.forward : false
-    });
-
-    const frameOutput = runtime.movementSystem.step({
+    const frameOutput = runtime.locomotionSystem.step({
       nowMs,
       deltaSeconds,
       currentTransform: localView.getTransform(),
@@ -593,17 +651,28 @@ export async function createGlobalMatchScene(
       cameraForward: cameraController.getGroundForward(),
       isInputEnabled: inputEnabled,
       isFlyModeEnabled: flyModeEnabled,
-      canMove: !isLocallyStunned,
       canSprint: canRequestSprintIntent,
-      isAlive: localPlayerState?.isAlive ?? true,
-      isUltimateActive: !!localPlayerState?.isUsingUltimate,
-      isBlocking: effectiveBlocking,
-      attackComboIndex: activeAttackComboIndex,
-      isStunned: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
+      combat: {
+        isAlive: localPlayerState?.isAlive ?? true,
+        isUltimateActive: !!localPlayerState?.isUsingUltimate,
+        isBlocking: effectiveBlocking,
+        attackComboIndex: activeAttackComboIndex,
+        isStunned: isLocallyStunned && !effectiveBlocking && activeAttackComboIndex === 0
+      }
     });
 
+    runtime.audioController.sync(frameOutput.snapshot);
     playerViewManager.updateLocalPlayerTransform(frameOutput.transform, frameOutput.animationState);
-    maybeEmitLocalMovement(frameOutput.transform);
+    maybeEmitLocalMovement({
+      ...frameOutput.transform,
+      locomotionState: frameOutput.snapshot.state,
+      isCrouching: frameOutput.snapshot.isCrouching,
+      isSliding: frameOutput.snapshot.isSliding,
+      isWallRunning: frameOutput.snapshot.isWallRunning,
+      wallRunSide: frameOutput.snapshot.wallRunSide,
+      verticalVelocity: frameOutput.snapshot.verticalVelocity
+    });
+    maybeEmitLocalSprintIntent(frameOutput.snapshot.sprintIntent);
 
     characterLean.update(localView.visualRoot, {
       deltaSeconds,
@@ -613,6 +682,7 @@ export async function createGlobalMatchScene(
       movementIntensity: frameOutput.speedFeedback
     });
 
+    const cameraHooks = resolveLocomotionCameraHooks(frameOutput.snapshot);
     cameraController.tick({
       deltaSeconds,
       playerTransform: frameOutput.transform,
@@ -624,7 +694,11 @@ export async function createGlobalMatchScene(
       isMoving: frameOutput.isMoving,
       isGrounded: frameOutput.isGrounded,
       turnInput: frameOutput.lateralInput,
-      landingImpact: frameOutput.landingImpact
+      landingImpact: frameOutput.landingImpact,
+      targetOffsetY: cameraHooks.targetOffsetY,
+      lateralOffset: cameraHooks.lateralOffset,
+      additionalFovRadians: cameraHooks.additionalFovRadians,
+      wallRunTiltRadians: cameraHooks.wallRunTiltRadians
     });
 
     if (frameOutput.didStartSprint) {

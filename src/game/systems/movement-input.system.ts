@@ -1,10 +1,12 @@
-// Responsável por rastrear estados de entrada WASD + Space/Shift para movimentação local do personagem.
+// Responsável por rastrear entrada local de locomoção com suporte a sprint, crouch e fly descend.
 export type MovementInputState = {
   forward: boolean;
   left: boolean;
   backward: boolean;
   right: boolean;
   jump: boolean;
+  sprint: boolean;
+  crouch: boolean;
   descend: boolean;
 };
 
@@ -20,8 +22,12 @@ const KEY_TO_DIRECTION: Record<string, keyof MovementInputState> = {
   KeyS: "backward",
   KeyD: "right",
   Space: "jump",
-  ShiftLeft: "descend",
-  ShiftRight: "descend"
+  ShiftLeft: "sprint",
+  ShiftRight: "sprint",
+  ControlLeft: "crouch",
+  ControlRight: "crouch",
+  KeyC: "crouch",
+  KeyQ: "descend"
 };
 
 function createInitialState(): MovementInputState {
@@ -31,6 +37,8 @@ function createInitialState(): MovementInputState {
     backward: false,
     right: false,
     jump: false,
+    sprint: false,
+    crouch: false,
     descend: false
   };
 }
@@ -42,6 +50,8 @@ function cloneState(state: MovementInputState): MovementInputState {
     backward: state.backward,
     right: state.right,
     jump: state.jump,
+    sprint: state.sprint,
+    crouch: state.crouch,
     descend: state.descend
   };
 }
