@@ -1,9 +1,9 @@
-// Responsável por compor biblioteca compartilhada e overrides específicos de herói em um mapa único de comandos.
+// Responsável por normalizar config de animação por herói sem misturar biblioteca shared ao fallback embutido.
 import { LOOPED_ANIMATION_COMMANDS, type AnimationCommand } from "./animation-command";
-import { SHARED_LOCOMOTION_ANIMATION_LIBRARY } from "./shared-animation-library";
+import { DEFAULT_SHARED_EMBEDDED_GROUP_NAMES } from "./shared-animation-library";
 import type { HeroAnimationConfig } from "./animation-types";
 
-export function createAnimationConfigWithOverrides(baseConfig: HeroAnimationConfig): HeroAnimationConfig {
+export function normalizeHeroAnimationConfig(baseConfig: HeroAnimationConfig): HeroAnimationConfig {
   const mergedLoopedCommands = new Set<AnimationCommand>([
     ...LOOPED_ANIMATION_COMMANDS,
     ...(baseConfig.loopedCommands ?? [])
@@ -11,11 +11,14 @@ export function createAnimationConfigWithOverrides(baseConfig: HeroAnimationConf
 
   return {
     heroId: baseConfig.heroId,
-    commandToGroupName: {
-      ...SHARED_LOCOMOTION_ANIMATION_LIBRARY,
-      ...baseConfig.commandToGroupName
+    embeddedCommandToGroupName: {
+      ...DEFAULT_SHARED_EMBEDDED_GROUP_NAMES,
+      ...baseConfig.embeddedCommandToGroupName
     },
-    loopedCommands: Array.from(mergedLoopedCommands)
+    overrideAssetByCommand: {
+      ...(baseConfig.overrideAssetByCommand ?? {})
+    },
+    loopedCommands: Array.from(mergedLoopedCommands),
+    allowEmbeddedFallback: baseConfig.allowEmbeddedFallback ?? true
   };
 }
-

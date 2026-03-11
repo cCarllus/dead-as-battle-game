@@ -1,4 +1,4 @@
-// Responsável por carregar o modelo GLB do herói e expor seus AnimationGroups embutidos.
+// Responsável por carregar visual do herói e compor o bundle final de animações via shared library, overrides e fallback embutido.
 import {
   type AnimationGroup,
   AssetContainer,
@@ -8,6 +8,10 @@ import {
   TransformNode
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
+import { createAnimationBindingTargetResolver } from "./animation-binding";
+import { loadHeroAnimationOverrides } from "./hero-animation-overrides";
+import { loadSharedAnimationLibrary } from "./shared-animation-library";
+import type { AnimationCommandGroupMap, HeroAnimationConfig } from "./animation-types";
 
 const heroModelContainerCache = new WeakMap<Scene, Map<string, Promise<AssetContainer>>>();
 
@@ -97,9 +101,25 @@ function stripRootMotionFromAnimationGroups(
   });
 }
 
+function stopAndResetGroups(animationGroups: readonly AnimationGroup[]): void {
+  animationGroups.forEach((group) => {
+    group.stop();
+    group.reset();
+  });
+}
+
+function disposeBoundGroups(groupMap: AnimationCommandGroupMap): void {
+  Object.values(groupMap).forEach((group) => {
+    group?.stop();
+    group?.dispose();
+  });
+}
+
 export type HeroVisualLoadResult = {
   rootNodes: TransformNode[];
-  animationGroups: AnimationGroup[];
+  embeddedAnimationGroups: AnimationGroup[];
+  sharedAnimationGroupsByCommand: AnimationCommandGroupMap;
+  overrideAnimationGroupsByCommand: AnimationCommandGroupMap;
   dispose: () => void;
 };
 
@@ -110,9 +130,12 @@ export type LoadHeroVisualOptions = {
   heroId: string;
   sessionId: string;
   loadVersion: number;
+  animationConfig: HeroAnimationConfig;
+  animationOverrideBaseUrl: string | null;
 };
 
 export async function loadHeroVisualAssets(options: LoadHeroVisualOptions): Promise<HeroVisualLoadResult> {
+  const loggerPrefix = `[animation][hero:${options.heroId}][player:${options.sessionId}]`;
   const modelContainer = await loadHeroModelContainer(options.scene, options.modelUrl);
 
   const instantiated = modelContainer.instantiateModelsToScene(
@@ -124,14 +147,10 @@ export async function loadHeroVisualAssets(options: LoadHeroVisualOptions): Prom
   const skinRootNodes = collectInstantiatedRootNodes(instantiated.rootNodes);
   if (skinRootNodes.length === 0) {
     instantiated.dispose();
-    throw new Error(
-      `[animation][hero:${options.heroId}][player:${options.sessionId}] Loaded model has no root nodes.`
-    );
+    throw new Error(`${loggerPrefix} Loaded visual model has no root nodes.`);
   }
 
   skinRootNodes.forEach((rootNode) => {
-    // Mantém transform de import (incluindo conversão glTF -> Babylon) e
-    // aplica apenas o parent visual para herdar yaw/scale do herói.
     rootNode.parent = options.visualRoot;
 
     options.scene.stopAnimation(rootNode);
@@ -144,24 +163,46 @@ export async function loadHeroVisualAssets(options: LoadHeroVisualOptions): Prom
     });
   });
 
-  const animationGroups = instantiated.animationGroups.slice();
-  // Remove root motion positional tracks so movement stays authoritative on gameplayRoot.
-  stripRootMotionFromAnimationGroups(animationGroups, skinRootNodes);
-  animationGroups.forEach((group) => {
-    group.stop();
-    group.reset();
+  const embeddedAnimationGroups = instantiated.animationGroups.slice();
+  stripRootMotionFromAnimationGroups(embeddedAnimationGroups, skinRootNodes);
+  stopAndResetGroups(embeddedAnimationGroups);
+
+  const binding = createAnimationBindingTargetResolver({
+    rootNodes: skinRootNodes,
+    sessionId: options.sessionId,
+    loadVersion: options.loadVersion
   });
 
-  if (animationGroups.length === 0) {
+  const [sharedAnimationGroupsByCommand, overrideAnimationGroupsByCommand] = await Promise.all([
+    loadSharedAnimationLibrary({
+      scene: options.scene,
+      binding,
+      loggerPrefix
+    }),
+    loadHeroAnimationOverrides({
+      scene: options.scene,
+      heroId: options.heroId,
+      animationConfig: options.animationConfig,
+      animationOverrideBaseUrl: options.animationOverrideBaseUrl,
+      binding,
+      loggerPrefix
+    })
+  ]);
+
+  if (embeddedAnimationGroups.length > 0) {
     console.warn(
-      `[animation][hero:${options.heroId}][player:${options.sessionId}] No animation groups found in '${options.modelUrl}'.`
+      `${loggerPrefix} Using embedded AnimationGroups only as migration fallback. Shared/override assets should become the primary source.`
     );
   }
 
   return {
     rootNodes: skinRootNodes,
-    animationGroups,
+    embeddedAnimationGroups,
+    sharedAnimationGroupsByCommand,
+    overrideAnimationGroupsByCommand,
     dispose: () => {
+      disposeBoundGroups(sharedAnimationGroupsByCommand);
+      disposeBoundGroups(overrideAnimationGroupsByCommand);
       instantiated.dispose();
     }
   };

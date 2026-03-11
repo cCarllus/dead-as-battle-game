@@ -1,7 +1,15 @@
-// Responsável por definir a biblioteca compartilhada de animações-base usada por personagens humanoides.
-import type { HeroAnimationCommandMap } from "./animation-types";
+// Responsável por definir e carregar a biblioteca compartilhada de animações-base a partir de GLBs externos.
+import type { Scene } from "@babylonjs/core";
+import type { AnimationCommand } from "./animation-command";
+import {
+  loadBoundAnimationCommandFromAsset,
+  type AnimationBindingTargetResolver
+} from "./animation-binding";
+import type { AnimationAssetCommandMap, AnimationCommandGroupMap } from "./animation-types";
 
-export const SHARED_LOCOMOTION_ANIMATION_LIBRARY: Readonly<HeroAnimationCommandMap> = {
+export const SHARED_ANIMATION_BASE_URL = "public/local/animations/shared";
+
+export const DEFAULT_SHARED_EMBEDDED_GROUP_NAMES: Readonly<Record<AnimationCommand, string>> = {
   idle: "idle",
   walk: "walk",
   walkBack: "walk_back",
@@ -35,3 +43,72 @@ export const SHARED_LOCOMOTION_ANIMATION_LIBRARY: Readonly<HeroAnimationCommandM
   hit: "hit"
 };
 
+export const SHARED_ANIMATION_ASSET_BY_COMMAND: Readonly<AnimationAssetCommandMap> = {
+  idle: "idle.glb",
+
+  walk: "walk.glb",
+  walkBack: "walk.glb",
+  walkLeft: "walk.glb",
+  walkRight: "walk.glb",
+
+  run: "run.glb",
+  runBack: "run.glb",
+  runLeft: "run.glb",
+  runRight: "run.glb",
+  runStop: "run_stop.glb",
+
+  jump: "jump.glb",
+  jumpStart: "jump.glb",
+
+  inAir: "jump_loop.glb",
+  fallLoop: "fall-loop.glb",
+  land: "jump_land.glb",
+  crouchIdle: "crouch_idle.glb",
+  crouchWalk: "crouch_walk.glb",
+
+  slideStart: "slide.glb",
+  slideLoop: "slide.glb",
+  slideEnd: "slide.glb",
+
+  wallRun: "wall_run.glb", // Reutiliza a animação de wall run para o wall run em qualquer direção, mas poderia ser animações distintas para cada direção (ex: wall_run_left.glb, wall_run_right.glb).
+  doubleJump: "jump.glb", // Reutiliza a animação de jump para o double jump, mas poderia ser uma animação distinta.
+
+
+  turnLeft: "turn_left.glb",
+  turnRight: "turn_right.glb"
+};
+
+export type LoadSharedAnimationLibraryOptions = {
+  scene: Scene;
+  binding: AnimationBindingTargetResolver;
+  loggerPrefix?: string;
+};
+
+export async function loadSharedAnimationLibrary(
+  options: LoadSharedAnimationLibraryOptions
+): Promise<AnimationCommandGroupMap> {
+  const entries = await Promise.all(
+    Object.entries(SHARED_ANIMATION_ASSET_BY_COMMAND).map(async ([command, assetDefinition]) => {
+      const group = await loadBoundAnimationCommandFromAsset({
+        scene: options.scene,
+        command: command as AnimationCommand,
+        assetDefinition,
+        baseUrl: SHARED_ANIMATION_BASE_URL,
+        binding: options.binding,
+        loggerPrefix: options.loggerPrefix,
+        sourceLabel: "shared"
+      });
+
+      return [command as AnimationCommand, group] as const;
+    })
+  );
+
+  return entries.reduce<AnimationCommandGroupMap>((commandMap, [command, group]) => {
+    if (!group) {
+      return commandMap;
+    }
+
+    commandMap[command] = group;
+    return commandMap;
+  }, {});
+}

@@ -1,4 +1,4 @@
-// Responsável por reproduzir AnimationGroups usando comandos padrão e mapeamento específico de herói.
+// Responsável por reproduzir AnimationGroups com prioridade override -> shared -> embedded fallback.
 import type { AnimationGroup } from "@babylonjs/core";
 import {
   LOOPED_ANIMATION_COMMANDS,
@@ -8,10 +8,12 @@ import {
   type AnimationGameplayState,
   resolveAnimationCommandFromGameplay
 } from "./animation-state";
-import type { HeroAnimationConfig } from "./animation-types";
+import type { AnimationCommandGroupMap, HeroAnimationConfig } from "./animation-types";
 
 export type CreateAnimationControllerOptions = {
-  animationGroups: AnimationGroup[];
+  overrideAnimationGroupsByCommand: AnimationCommandGroupMap;
+  sharedAnimationGroupsByCommand: AnimationCommandGroupMap;
+  embeddedAnimationGroups: AnimationGroup[];
   animationConfig: HeroAnimationConfig;
   loggerPrefix?: string;
   blendingDurationSeconds?: number;
@@ -24,6 +26,8 @@ export type AnimationController = {
   getCurrentCommand: () => AnimationCommand | null;
   dispose: () => void;
 };
+
+type AnimationSource = "override" | "shared" | "embedded";
 
 function normalizeNameForMatch(groupName: string): string {
   return groupName.trim().toLowerCase().replace(/[_\s]+/g, "-");
@@ -42,7 +46,8 @@ const NON_RESTARTABLE_SAME_COMMANDS: readonly AnimationCommand[] = [
   "inAir",
   "land",
   "death"
-];
+] as const;
+const DIRECT_SOURCE_PRIORITY: readonly AnimationSource[] = ["override", "shared"] as const;
 const JUMP_START_TRIM_RATIO = 0.35;
 
 function resolvePlaybackSpeedRatio(command: AnimationCommand): number {
@@ -50,7 +55,7 @@ function resolvePlaybackSpeedRatio(command: AnimationCommand): number {
     case "attack1":
     case "attack2":
     case "attack3":
-      return 2.00;
+      return 2.0;
     default:
       return 1;
   }
@@ -111,16 +116,30 @@ function resolveCommandPriority(command: AnimationCommand): number {
   }
 }
 
+function resolveAliasCommands(command: AnimationCommand): AnimationCommand[] {
+  switch (command) {
+    case "death":
+      return ["hit"];
+    case "jumpStart":
+    case "inAir":
+    case "land":
+      return ["jump"];
+    default:
+      return [];
+  }
+}
+
 export function createAnimationController(options: CreateAnimationControllerOptions): AnimationController {
   const warnedMissingMappings = new Set<AnimationCommand>();
   const warnedMissingGroups = new Set<string>();
+  const warnedEmbeddedFallbackUsage = new Set<string>();
 
   const blendingDurationSeconds =
     typeof options.blendingDurationSeconds === "number" && options.blendingDurationSeconds >= 0
       ? options.blendingDurationSeconds
       : DEFAULT_BLENDING_DURATION_SECONDS;
 
-  const normalizedGroups = options.animationGroups.map((group) => {
+  const normalizedEmbeddedGroups = options.embeddedAnimationGroups.map((group) => {
     group.stop();
     group.reset();
     group.enableBlending = blendingDurationSeconds > 0;
@@ -132,32 +151,38 @@ export function createAnimationController(options: CreateAnimationControllerOpti
     };
   });
 
-  const findGroupByMappedName = (mappedGroupName: string): AnimationGroup | null => {
+  const applyBlendingConfig = (group: AnimationGroup): AnimationGroup => {
+    group.enableBlending = blendingDurationSeconds > 0;
+    group.blendingSpeed = blendingDurationSeconds > 0 ? 1 / Math.max(blendingDurationSeconds, 0.0001) : 0;
+    return group;
+  };
+
+  const findEmbeddedGroupByMappedName = (mappedGroupName: string): AnimationGroup | null => {
     const normalizedMappedName = normalizeNameForMatch(mappedGroupName);
-    const exactMatch = normalizedGroups.find(({ normalizedName }) => normalizedName === normalizedMappedName);
+    const exactMatch = normalizedEmbeddedGroups.find(({ normalizedName }) => normalizedName === normalizedMappedName);
     if (exactMatch) {
       return exactMatch.group;
     }
 
-    const partialMatch = normalizedGroups.find(({ normalizedName }) => normalizedName.includes(normalizedMappedName));
+    const partialMatch = normalizedEmbeddedGroups.find(({ normalizedName }) => normalizedName.includes(normalizedMappedName));
     return partialMatch?.group ?? null;
   };
 
-  const resolveMappedName = (command: AnimationCommand): string | null => {
-    const mappedGroupName = options.animationConfig.commandToGroupName[command];
+  const resolveEmbeddedMappedName = (command: AnimationCommand): string | null => {
+    const mappedGroupName = options.animationConfig.embeddedCommandToGroupName[command];
     if (mappedGroupName) {
       return mappedGroupName;
     }
 
     if (command === "death") {
-      const hitFallback = options.animationConfig.commandToGroupName.hit;
+      const hitFallback = options.animationConfig.embeddedCommandToGroupName.hit;
       if (hitFallback) {
         return hitFallback;
       }
     }
 
     if (command === "jumpStart" || command === "inAir" || command === "land") {
-      const jumpFallback = options.animationConfig.commandToGroupName.jump;
+      const jumpFallback = options.animationConfig.embeddedCommandToGroupName.jump;
       if (jumpFallback) {
         return jumpFallback;
       }
@@ -166,11 +191,83 @@ export function createAnimationController(options: CreateAnimationControllerOpti
     if (!warnedMissingMappings.has(command)) {
       warnedMissingMappings.add(command);
       const prefix = options.loggerPrefix ? `${options.loggerPrefix} ` : "";
-      console.warn(`${prefix}Command '${command}' is not mapped for hero '${options.animationConfig.heroId}'.`);
+      console.warn(`${prefix}Command '${command}' is not mapped for embedded fallback on hero '${options.animationConfig.heroId}'.`);
     }
 
     if (command !== "idle") {
-      return options.animationConfig.commandToGroupName.idle ?? null;
+      return options.animationConfig.embeddedCommandToGroupName.idle ?? null;
+    }
+
+    return null;
+  };
+
+  const resolveDirectSourceGroup = (
+    command: AnimationCommand
+  ): { playbackCommand: AnimationCommand; group: AnimationGroup; source: AnimationSource } | null => {
+    const candidateCommands = [command, ...resolveAliasCommands(command)];
+
+    for (const source of DIRECT_SOURCE_PRIORITY) {
+      const groupMap =
+        source === "override"
+          ? options.overrideAnimationGroupsByCommand
+          : options.sharedAnimationGroupsByCommand;
+
+      for (const candidateCommand of candidateCommands) {
+        const group = groupMap[candidateCommand];
+        if (!group) {
+          continue;
+        }
+
+        return {
+          playbackCommand: candidateCommand,
+          group: applyBlendingConfig(group),
+          source
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const resolveEmbeddedFallbackGroup = (
+    command: AnimationCommand
+  ): { playbackCommand: AnimationCommand; group: AnimationGroup; source: AnimationSource } | null => {
+    if (!options.animationConfig.allowEmbeddedFallback) {
+      return null;
+    }
+
+    const candidateCommands = [command, ...resolveAliasCommands(command)];
+    for (const candidateCommand of candidateCommands) {
+      const mappedName = resolveEmbeddedMappedName(candidateCommand);
+      if (!mappedName) {
+        continue;
+      }
+
+      const group = findEmbeddedGroupByMappedName(mappedName);
+      if (!group) {
+        const missingKey = `${candidateCommand}:${mappedName}`;
+        if (!warnedMissingGroups.has(missingKey)) {
+          warnedMissingGroups.add(missingKey);
+          const prefix = options.loggerPrefix ? `${options.loggerPrefix} ` : "";
+          console.warn(
+            `${prefix}Embedded fallback group '${mappedName}' for command '${candidateCommand}' was not found in hero GLB.`
+          );
+        }
+        continue;
+      }
+
+      const fallbackKey = `${options.animationConfig.heroId}:${candidateCommand}`;
+      if (!warnedEmbeddedFallbackUsage.has(fallbackKey)) {
+        warnedEmbeddedFallbackUsage.add(fallbackKey);
+        const prefix = options.loggerPrefix ? `${options.loggerPrefix} ` : "";
+        console.warn(`${prefix}Using embedded animation fallback for command '${candidateCommand}'.`);
+      }
+
+      return {
+        playbackCommand: candidateCommand,
+        group,
+        source: "embedded"
+      };
     }
 
     return null;
@@ -178,38 +275,19 @@ export function createAnimationController(options: CreateAnimationControllerOpti
 
   const resolvePlayableAnimation = (
     requestedCommand: AnimationCommand
-  ): { playbackCommand: AnimationCommand; group: AnimationGroup } | null => {
-    const mappedName = resolveMappedName(requestedCommand);
-    if (mappedName) {
-      const requestedGroup = findGroupByMappedName(mappedName);
-      if (requestedGroup) {
-        return {
-          playbackCommand: requestedCommand,
-          group: requestedGroup
-        };
-      }
+  ): { playbackCommand: AnimationCommand; group: AnimationGroup; source: AnimationSource } | null => {
+    const directPlayableAnimation = resolveDirectSourceGroup(requestedCommand);
+    if (directPlayableAnimation) {
+      return directPlayableAnimation;
+    }
 
-      const missingKey = `${requestedCommand}:${mappedName}`;
-      if (!warnedMissingGroups.has(missingKey)) {
-        warnedMissingGroups.add(missingKey);
-        const prefix = options.loggerPrefix ? `${options.loggerPrefix} ` : "";
-        console.warn(
-          `${prefix}Mapped animation group '${mappedName}' for command '${requestedCommand}' was not found in GLB.`
-        );
-      }
+    const embeddedFallbackAnimation = resolveEmbeddedFallbackGroup(requestedCommand);
+    if (embeddedFallbackAnimation) {
+      return embeddedFallbackAnimation;
     }
 
     if (requestedCommand !== "idle") {
-      const idleName = options.animationConfig.commandToGroupName.idle;
-      if (idleName) {
-        const idleGroup = findGroupByMappedName(idleName);
-        if (idleGroup) {
-          return {
-            playbackCommand: "idle",
-            group: idleGroup
-          };
-        }
-      }
+      return resolveDirectSourceGroup("idle") ?? resolveEmbeddedFallbackGroup("idle");
     }
 
     return null;
@@ -302,6 +380,7 @@ export function createAnimationController(options: CreateAnimationControllerOpti
       currentPlaybackCommand = null;
       warnedMissingMappings.clear();
       warnedMissingGroups.clear();
+      warnedEmbeddedFallbackUsage.clear();
     }
   };
 }

@@ -8,6 +8,7 @@ export type ChampionCatalogItem = {
   isDefault: boolean;
   universeName: string;
   modelUrl: string | null;
+  animationOverrideBaseUrl?: string | null;
   cardImageUrl: string;
   splashImageUrl: string;
   selectAudioUrl: string;

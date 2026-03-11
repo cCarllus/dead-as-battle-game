@@ -9,6 +9,7 @@ import type { ChampionId } from "../../models/champion.model";
 export type HeroVisualConfig = {
   id: string;
   modelUrl: string | null;
+  animationOverrideBaseUrl: string | null;
   visualScale: number;
   visualOffset: {
     x: number;
@@ -64,6 +65,7 @@ export function resolveHeroVisualConfig(heroId: string): HeroVisualConfig {
   return {
     id: champion.id,
     modelUrl: champion.modelUrl,
+    animationOverrideBaseUrl: champion.animationOverrideBaseUrl ?? null,
     visualScale: visualSetup.visualScale,
     visualOffset: {
       x: visualSetup.visualOffset.x,

@@ -267,6 +267,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
 
   const applyHeroSkin = (heroConfig: HeroVisualConfig): void => {
     runtimeConfig = resolveCharacterDefinition(heroConfig.id).runtimeConfig;
+    const animationConfig = resolveHeroAnimationConfig(heroConfig.id);
     const cachedCalibration = getHeroRuntimeCalibration(heroConfig.id);
     applyHeroVisualConfig(visualRoot, heroConfig, cachedCalibration);
     skinLoadVersion += 1;
@@ -284,7 +285,9 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       modelUrl: heroConfig.modelUrl,
       heroId: heroConfig.id,
       sessionId: options.player.sessionId,
-      loadVersion: currentLoadVersion
+      loadVersion: currentLoadVersion,
+      animationConfig,
+      animationOverrideBaseUrl: heroConfig.animationOverrideBaseUrl
     })
       .then((loadedVisual) => {
         if (isDisposed || currentLoadVersion !== skinLoadVersion) {
@@ -309,10 +312,14 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
         }
 
         const animationController =
-          loadedVisual.animationGroups.length > 0
+          loadedVisual.embeddedAnimationGroups.length > 0 ||
+          Object.keys(loadedVisual.sharedAnimationGroupsByCommand).length > 0 ||
+          Object.keys(loadedVisual.overrideAnimationGroupsByCommand).length > 0
             ? createAnimationController({
-                animationGroups: loadedVisual.animationGroups,
-                animationConfig: resolveHeroAnimationConfig(heroConfig.id),
+                embeddedAnimationGroups: loadedVisual.embeddedAnimationGroups,
+                sharedAnimationGroupsByCommand: loadedVisual.sharedAnimationGroupsByCommand,
+                overrideAnimationGroupsByCommand: loadedVisual.overrideAnimationGroupsByCommand,
+                animationConfig,
                 loggerPrefix: `[animation][hero:${heroConfig.id}][player:${options.player.sessionId}]`
               })
             : null;
