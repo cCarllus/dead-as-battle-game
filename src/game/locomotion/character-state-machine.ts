@@ -1,4 +1,4 @@
-// Responsável por consolidar sinais de movimento/combate em um estado explícito e legível de personagem.
+// Responsável por consolidar sinais de movimento/combate em um estado explícito com run stop e landing por impacto.
 import type { CharacterLocomotionState } from "./locomotion-state";
 
 export type CharacterStateMachineInput = {
@@ -12,10 +12,10 @@ export type CharacterStateMachineInput = {
   isSprinting: boolean;
   isCrouching: boolean;
   isSliding: boolean;
-  isWallRunning: boolean;
   didGroundJump: boolean;
   didDoubleJump: boolean;
   didLand: boolean;
+  landingImpact: number;
   verticalVelocity: number;
 };
 
@@ -27,14 +27,18 @@ export type CharacterStateMachine = {
 const JUMP_START_HOLD_MS = 140;
 const DOUBLE_JUMP_HOLD_MS = 180;
 const LAND_HOLD_MS = 130;
+const RUN_STOP_HOLD_MS = 140;
 const HIT_HOLD_MS = 220;
+const LAND_ANIMATION_MIN_IMPACT = 0.32;
 
 export function createCharacterStateMachine(): CharacterStateMachine {
   let jumpStartUntilMs = 0;
   let doubleJumpUntilMs = 0;
   let landUntilMs = 0;
+  let runStopUntilMs = 0;
   let stunnedStartedAtMs = 0;
   let wasStunned = false;
+  let lastResolvedState: CharacterLocomotionState = "Idle";
 
   return {
     resolve: (input) => {
@@ -56,61 +60,88 @@ export function createCharacterStateMachine(): CharacterStateMachine {
       }
 
       if (input.didLand) {
-        landUntilMs = input.nowMs + LAND_HOLD_MS;
+        landUntilMs =
+          input.landingImpact >= LAND_ANIMATION_MIN_IMPACT
+            ? input.nowMs + LAND_HOLD_MS
+            : 0;
+      }
+
+      const shouldTriggerRunStop =
+        lastResolvedState === "Run" &&
+        input.isGrounded &&
+        !input.isMoving &&
+        !input.isCrouching &&
+        !input.isSliding;
+      if (shouldTriggerRunStop) {
+        runStopUntilMs = input.nowMs + RUN_STOP_HOLD_MS;
       }
 
       if (input.isStunned) {
-        return input.nowMs - stunnedStartedAtMs < HIT_HOLD_MS ? "Hit" : "Stunned";
+        lastResolvedState = input.nowMs - stunnedStartedAtMs < HIT_HOLD_MS ? "Hit" : "Stunned";
+        return lastResolvedState;
       }
 
       if (input.isAttacking) {
-        return "Attack";
+        lastResolvedState = "Attack";
+        return lastResolvedState;
       }
 
       if (input.isBlocking) {
-        return "Block";
+        lastResolvedState = "Block";
+        return lastResolvedState;
       }
 
       if (input.isSliding) {
-        return "Slide";
-      }
-
-      if (input.isWallRunning) {
-        return "WallRun";
+        lastResolvedState = "Slide";
+        return lastResolvedState;
       }
 
       if (input.nowMs < doubleJumpUntilMs) {
-        return "DoubleJump";
+        lastResolvedState = "DoubleJump";
+        return lastResolvedState;
       }
 
       if (!input.isGrounded && input.nowMs < jumpStartUntilMs) {
-        return "JumpStart";
+        lastResolvedState = "JumpStart";
+        return lastResolvedState;
       }
 
       if (!input.isGrounded) {
-        return input.verticalVelocity < -0.4 ? "Fall" : "InAir";
+        lastResolvedState = "InAir";
+        return lastResolvedState;
       }
 
       if (input.nowMs < landUntilMs) {
-        return "Land";
+        lastResolvedState = "Land";
+        return lastResolvedState;
       }
 
       if (input.isCrouching) {
-        return input.isMoving ? "CrouchWalk" : "Crouch";
+        lastResolvedState = input.isMoving ? "CrouchWalk" : "Crouch";
+        return lastResolvedState;
       }
 
       if (input.isMoving) {
-        return input.isSprinting ? "Run" : "Walk";
+        lastResolvedState = input.isSprinting ? "Run" : "Walk";
+        return lastResolvedState;
       }
 
-      return "Idle";
+      if (input.nowMs < runStopUntilMs) {
+        lastResolvedState = "RunStop";
+        return lastResolvedState;
+      }
+
+      lastResolvedState = "Idle";
+      return lastResolvedState;
     },
     reset: () => {
       jumpStartUntilMs = 0;
       doubleJumpUntilMs = 0;
       landUntilMs = 0;
+      runStopUntilMs = 0;
       stunnedStartedAtMs = 0;
       wasStunned = false;
+      lastResolvedState = "Idle";
     }
   };
 }

@@ -28,7 +28,7 @@ export const UNIVERSE_CHAMPION_CATALOG: readonly ChampionCatalogItem[] = [
     priceCoins: 1000,
     isDefault: false,
     universeName: "Jujutsu Kaisen",
-    modelUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/models/champions/sukuna/sukuna.glb",
+    modelUrl: "public/local/models/heroes/sukuna/venom.glb",
     animationOverrideBaseUrl: "public/local/animations/heroes/sukuna",
     cardImageUrl: "https://imgs.search.brave.com/4xKnueO8sbGhJzX-a3xpjeXEV_9S-XH6Aa2iVyP_83Q/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9jZG4u/d2FsbHBhcGVyc2Fm/YXJpLmNvbS84NC84/L1ptdXM1Ny5qcGc",
     splashImageUrl: "https://wallpapercave.com/wp/wp9146052.jpg",

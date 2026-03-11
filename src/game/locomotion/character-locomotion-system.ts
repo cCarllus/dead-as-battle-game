@@ -1,4 +1,4 @@
-// Responsável por orquestrar motor, salto, crouch, slide, wall run, câmera e áudio em um pipeline único de personagem.
+// Responsável por orquestrar motor, salto, crouch, slide, câmera e áudio em um pipeline único de personagem.
 import { Vector3 } from "@babylonjs/core";
 import type { AnimationGameplayState } from "../animation/animation-state";
 import { resolveAnimationGameplayState } from "../animation/animation-state-machine";
@@ -18,8 +18,6 @@ import type {
   MovementDirection
 } from "./locomotion-state";
 import { createSlideSystem } from "./slide-system";
-import type { WallCheckSystem } from "./wall-check-system";
-import { createWallRunSystem } from "./wall-run-system";
 
 export type CharacterLocomotionFrameInput = {
   nowMs: number;
@@ -58,7 +56,6 @@ export type CreateCharacterLocomotionSystemOptions = {
   runtimeConfig: CharacterRuntimeConfig;
   collisionSystem: CollisionSystem;
   groundedSystem: GroundedSystem;
-  wallCheckSystem: WallCheckSystem;
 };
 
 function resolveMovementDirectionFromAxes(forwardAxis: number, sideAxis: number): MovementDirection {
@@ -106,7 +103,6 @@ export function createCharacterLocomotionSystem(
   const doubleJumpSystem = createDoubleJumpSystem();
   const crouchSystem = createCrouchSystem();
   const slideSystem = createSlideSystem();
-  const wallRunSystem = createWallRunSystem();
   const stateMachine = createCharacterStateMachine();
 
   let wasJumpPressed = false;
@@ -182,24 +178,6 @@ export function createCharacterLocomotionSystem(
         cooldownMs: locomotionConfig.slideCooldownMs
       });
 
-      const wallCheck = options.wallCheckSystem.detect({
-        rotationY: input.currentTransform.rotationY,
-        desiredDirection: hasDirectionalIntent ? desiredDirection.clone() : fallbackForward
-      });
-
-      const wallRunOutput = wallRunSystem.step({
-        nowMs: input.nowMs,
-        isGrounded: groundedBefore.isGrounded,
-        hasForwardIntent: forwardInput > 0,
-        canWallRun: movementEnabled && !slideOutput.isSliding && !input.inputState.crouch,
-        desiredDirection: hasDirectionalIntent ? desiredDirection.clone() : fallbackForward,
-        verticalVelocity: jumpSystem.getVerticalVelocity(),
-        wallCheck,
-        durationMs: locomotionConfig.wallRunDurationMs,
-        gravityScale: locomotionConfig.wallRunGravityMultiplier,
-        minEntryFallSpeed: locomotionConfig.wallRunMinEntryFallSpeed
-      });
-
       let didGroundJump = false;
       let didDoubleJump = false;
 
@@ -210,7 +188,6 @@ export function createCharacterLocomotionSystem(
         } else if (
           jumpPressedEdge &&
           !groundedBefore.isGrounded &&
-          !wallRunOutput.isWallRunning &&
           doubleJumpSystem.tryUse()
         ) {
           jumpSystem.setVerticalVelocity(locomotionConfig.doubleJumpVelocity);
@@ -241,18 +218,16 @@ export function createCharacterLocomotionSystem(
         desiredSpeed = locomotionConfig.runSpeed * sprintMultiplier;
       }
 
-      const forcedVelocity = wallRunOutput.isWallRunning && wallRunOutput.direction
-        ? wallRunOutput.direction.scale(locomotionConfig.wallRunSpeed)
-        : slideOutput.isSliding && slideOutput.direction
-          ? slideOutput.direction.scale(slideOutput.speed)
-          : null;
+      const forcedVelocity = slideOutput.isSliding && slideOutput.direction
+        ? slideOutput.direction.scale(slideOutput.speed)
+        : null;
 
       const motorOutput = motor.step({
         deltaSeconds: input.deltaSeconds,
         desiredDirection: hasDirectionalIntent ? desiredDirection : Vector3.Zero(),
         desiredSpeed,
         currentRotationY: input.currentTransform.rotationY,
-        rotationDirection: wallRunOutput.direction ?? (slideOutput.direction ?? desiredDirection),
+        rotationDirection: slideOutput.direction ?? desiredDirection,
         isGrounded: groundedBefore.isGrounded,
         canMove: movementEnabled && !input.isFlyModeEnabled,
         airControl: locomotionConfig.airControl,
@@ -272,17 +247,13 @@ export function createCharacterLocomotionSystem(
         verticalDisplacement = verticalAxis * locomotionConfig.walkSpeed * input.deltaSeconds;
         jumpSystem.setVerticalVelocity(0);
       } else {
-        if (wallRunOutput.isWallRunning && jumpSystem.getVerticalVelocity() < -1.1) {
-          jumpSystem.setVerticalVelocity(-1.1);
-        }
-
         const jumpOutput = jumpSystem.integrate({
           deltaSeconds: input.deltaSeconds,
-          isGrounded: groundedBefore.isGrounded && !didGroundJump && !didDoubleJump && !wallRunOutput.isWallRunning,
+          isGrounded: groundedBefore.isGrounded && !didGroundJump && !didDoubleJump,
           gravity: locomotionConfig.gravity,
           fallGravityMultiplier: locomotionConfig.fallGravityMultiplier,
           maxFallSpeed: locomotionConfig.maxFallSpeed,
-          gravityScale: wallRunOutput.gravityScale
+          gravityScale: 1
         });
 
         verticalDisplacement = jumpOutput.verticalDisplacement;
@@ -336,8 +307,7 @@ export function createCharacterLocomotionSystem(
 
       const speedCap = Math.max(
         locomotionConfig.runSpeed * locomotionConfig.sprintBurstSpeedMultiplier,
-        locomotionConfig.slideInitialSpeed,
-        locomotionConfig.wallRunSpeed
+        locomotionConfig.slideInitialSpeed
       );
       const speedNormalized = speedCap > 0 ? Math.max(0, Math.min(1, motorOutput.speed / speedCap)) : 0;
 
@@ -352,10 +322,10 @@ export function createCharacterLocomotionSystem(
         isSprinting: canSprint,
         isCrouching: crouchOutput.isCrouched,
         isSliding: slideOutput.isSliding,
-        isWallRunning: wallRunOutput.isWallRunning,
         didGroundJump,
         didDoubleJump,
         didLand,
+        landingImpact,
         verticalVelocity
       });
 
@@ -369,8 +339,8 @@ export function createCharacterLocomotionSystem(
         isSprinting: canSprint,
         isCrouching: crouchOutput.isCrouched,
         isSliding: slideOutput.isSliding,
-        isWallRunning: wallRunOutput.isWallRunning,
-        wallRunSide: wallRunOutput.side,
+        isWallRunning: false,
+        wallRunSide: "none",
         didGroundJump,
         didDoubleJump,
         didLand,
@@ -378,8 +348,8 @@ export function createCharacterLocomotionSystem(
         didCrouchExit: crouchOutput.didExit,
         didSlideStart: slideOutput.didStart,
         didSlideEnd: slideOutput.didEnd,
-        didWallRunStart: wallRunOutput.didStart,
-        didWallRunEnd: wallRunOutput.didEnd,
+        didWallRunStart: false,
+        didWallRunEnd: false,
         speedNormalized,
         lateralInput,
         forwardInput,
@@ -395,8 +365,8 @@ export function createCharacterLocomotionSystem(
           crouchOffsetY: locomotionConfig.crouchCameraOffsetY,
           slideOffsetY: locomotionConfig.slideCameraOffsetY,
           sprintFovBoostRadians: locomotionConfig.sprintFovBoostRadians,
-          wallRunFovBoostRadians: locomotionConfig.wallRunFovBoostRadians,
-          wallRunTiltRadians: locomotionConfig.wallRunTiltRadians
+          wallRunFovBoostRadians: 0,
+          wallRunTiltRadians: 0
         }
       };
 
@@ -425,7 +395,6 @@ export function createCharacterLocomotionSystem(
       doubleJumpSystem.reset();
       crouchSystem.reset();
       slideSystem.reset();
-      wallRunSystem.reset();
       stateMachine.reset();
       wasJumpPressed = false;
       wasGrounded = false;

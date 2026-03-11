@@ -5,6 +5,7 @@ export type CharacterLocomotionState =
   | "Idle"
   | "Walk"
   | "Run"
+  | "RunStop"
   | "JumpStart"
   | "InAir"
   | "Fall"
@@ -73,4 +74,3 @@ export type CharacterLocomotionSnapshot = {
     wallRunTiltRadians: number;
   };
 };
-

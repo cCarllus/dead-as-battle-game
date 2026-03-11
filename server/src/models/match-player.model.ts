@@ -3,6 +3,7 @@ export type MatchPlayerLocomotionState =
   | "Idle"
   | "Walk"
   | "Run"
+  | "RunStop"
   | "JumpStart"
   | "InAir"
   | "Fall"

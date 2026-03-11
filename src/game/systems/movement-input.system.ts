@@ -1,4 +1,4 @@
-// Responsável por rastrear entrada local de locomoção com suporte a sprint, crouch e fly descend.
+// Responsável por rastrear entrada local de locomoção com crouch por hold no Ctrl e toggle no C.
 export type MovementInputState = {
   forward: boolean;
   left: boolean;
@@ -16,7 +16,7 @@ export type MovementInputSystem = {
   dispose: () => void;
 };
 
-const KEY_TO_DIRECTION: Record<string, keyof MovementInputState> = {
+const HOLD_KEY_TO_DIRECTION: Record<string, keyof Omit<MovementInputState, "crouch"> | "crouch"> = {
   KeyW: "forward",
   KeyA: "left",
   KeyS: "backward",
@@ -26,7 +26,6 @@ const KEY_TO_DIRECTION: Record<string, keyof MovementInputState> = {
   ShiftRight: "sprint",
   ControlLeft: "crouch",
   ControlRight: "crouch",
-  KeyC: "crouch",
   KeyQ: "descend"
 };
 
@@ -59,18 +58,38 @@ function cloneState(state: MovementInputState): MovementInputState {
 export function createMovementInputSystem(): MovementInputSystem {
   let enabled = true;
   let state = createInitialState();
+  let crouchHeld = false;
+  let crouchToggled = false;
 
   const clearState = (): void => {
     state = createInitialState();
+    crouchHeld = false;
+    crouchToggled = false;
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
-    const direction = KEY_TO_DIRECTION[event.code];
-    if (!direction || !enabled) {
+    if (!enabled) {
       return;
     }
 
     if (event.repeat) {
+      event.preventDefault();
+      return;
+    }
+
+    if (event.code === "KeyC") {
+      crouchToggled = !crouchToggled;
+      event.preventDefault();
+      return;
+    }
+
+    const direction = HOLD_KEY_TO_DIRECTION[event.code];
+    if (!direction) {
+      return;
+    }
+
+    if (direction === "crouch") {
+      crouchHeld = true;
       event.preventDefault();
       return;
     }
@@ -84,8 +103,23 @@ export function createMovementInputSystem(): MovementInputSystem {
   };
 
   const onKeyUp = (event: KeyboardEvent): void => {
-    const direction = KEY_TO_DIRECTION[event.code];
+    if (event.code === "KeyC") {
+      if (enabled) {
+        event.preventDefault();
+      }
+      return;
+    }
+
+    const direction = HOLD_KEY_TO_DIRECTION[event.code];
     if (!direction) {
+      return;
+    }
+
+    if (direction === "crouch") {
+      crouchHeld = false;
+      if (enabled) {
+        event.preventDefault();
+      }
       return;
     }
 
@@ -114,7 +148,11 @@ export function createMovementInputSystem(): MovementInputSystem {
         clearState();
       }
     },
-    getState: () => cloneState(state),
+    getState: () => {
+      const nextState = cloneState(state);
+      nextState.crouch = crouchHeld || crouchToggled;
+      return nextState;
+    },
     dispose: () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);

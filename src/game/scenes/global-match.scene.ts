@@ -26,7 +26,6 @@ import {
   type CharacterLocomotionSystem
 } from "../locomotion/character-locomotion-system";
 import { createGroundedSystem } from "../locomotion/grounded-system";
-import { createWallCheckSystem } from "../locomotion/wall-check-system";
 import { createCharacterLeanSystem } from "../movement/character-lean";
 import { MAX_FRAME_DELTA_SECONDS } from "../physics/player-physics";
 import { createCollisionSystem, type CollisionSystem } from "../systems/collision.system";
@@ -290,21 +289,10 @@ export async function createGlobalMatchScene(
       }
     });
 
-    const wallCheckSystem = createWallCheckSystem({
-      scene,
-      runtimeConfig,
-      wallCheckLeft: localView.wallCheckLeft,
-      wallCheckRight: localView.wallCheckRight,
-      isWallMesh: (mesh: AbstractMesh) => {
-        return mapMeshIds.has(mesh.uniqueId);
-      }
-    });
-
     const locomotionSystem = createCharacterLocomotionSystem({
       runtimeConfig,
       collisionSystem,
-      groundedSystem,
-      wallCheckSystem
+      groundedSystem
     });
     const audioController = createCharacterAudioController();
 

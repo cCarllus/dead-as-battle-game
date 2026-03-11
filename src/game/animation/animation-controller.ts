@@ -45,6 +45,7 @@ const NON_RESTARTABLE_SAME_COMMANDS: readonly AnimationCommand[] = [
   "jumpStart",
   "inAir",
   "land",
+  "runStop",
   "death"
 ] as const;
 const DIRECT_SOURCE_PRIORITY: readonly AnimationSource[] = ["override", "shared"] as const;
@@ -103,6 +104,8 @@ function resolveCommandPriority(command: AnimationCommand): number {
     case "inAir":
     case "land":
       return 3;
+    case "runStop":
+      return 2;
     case "run":
       return 2;
     case "walk":
@@ -118,12 +121,29 @@ function resolveCommandPriority(command: AnimationCommand): number {
 
 function resolveAliasCommands(command: AnimationCommand): AnimationCommand[] {
   switch (command) {
+    case "walkBack":
+    case "walkLeft":
+    case "walkRight":
+      return ["walk"];
+    case "runBack":
+    case "runLeft":
+    case "runRight":
+      return ["run"];
     case "death":
       return ["hit"];
     case "jumpStart":
-    case "inAir":
-    case "land":
       return ["jump"];
+    case "inAir":
+    case "fallLoop":
+      return ["inAir", "jump"];
+    case "land":
+      return ["idle"];
+    case "slideStart":
+    case "slideEnd":
+      return ["slideLoop"];
+    case "turnLeft":
+    case "turnRight":
+      return ["idle"];
     default:
       return [];
   }
@@ -181,7 +201,7 @@ export function createAnimationController(options: CreateAnimationControllerOpti
       }
     }
 
-    if (command === "jumpStart" || command === "inAir" || command === "land") {
+    if (command === "jumpStart" || command === "inAir" || command === "fallLoop") {
       const jumpFallback = options.animationConfig.embeddedCommandToGroupName.jump;
       if (jumpFallback) {
         return jumpFallback;

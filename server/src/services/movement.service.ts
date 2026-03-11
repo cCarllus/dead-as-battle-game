@@ -53,6 +53,7 @@ const VALID_LOCOMOTION_STATES = new Set<MatchPlayerLocomotionState>([
   "Idle",
   "Walk",
   "Run",
+  "RunStop",
   "JumpStart",
   "InAir",
   "Fall",

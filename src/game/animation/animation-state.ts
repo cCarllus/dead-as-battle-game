@@ -78,51 +78,30 @@ export function resolveAnimationCommandFromGameplay(
     switch (gameplayState.locomotionState) {
       case "JumpStart":
       case "jumpStart":
-        return "jumpStart";
+        return "jump";
       case "DoubleJump":
         return "doubleJump";
       case "InAir":
       case "inAir":
-        return "inAir";
       case "Fall":
-        return "fallLoop";
+        return "inAir";
       case "Land":
       case "land":
         return "land";
+      case "RunStop":
+        return "runStop";
       case "Slide":
         return "slideLoop";
-      case "WallRun":
-        return "wallRun";
       case "Crouch":
         return "crouchIdle";
       case "CrouchWalk":
         return "crouchWalk";
       case "Run":
       case "run":
-        switch (gameplayState.movementDirection) {
-          case "backward":
-            return "runBack";
-          case "left":
-            return "runLeft";
-          case "right":
-            return "runRight";
-          case "forward":
-          default:
-            return "run";
-        }
+        return "run";
       case "Walk":
       case "walk":
-        switch (gameplayState.movementDirection) {
-          case "backward":
-            return "walkBack";
-          case "left":
-            return "walkLeft";
-          case "right":
-            return "walkRight";
-          case "forward":
-          default:
-            return "walk";
-        }
+        return "walk";
       case "Idle":
       case "idle":
       default:
@@ -142,16 +121,5 @@ export function resolveAnimationCommandFromGameplay(
     return "run";
   }
 
-  switch (gameplayState.movementDirection) {
-    case "backward":
-      return "walkBack";
-    case "left":
-      return "walkLeft";
-    case "right":
-      return "walkRight";
-    case "forward":
-      return "walk";
-    default:
-      return "idle";
-  }
+  return "walk";
 }

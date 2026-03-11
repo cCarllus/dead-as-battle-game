@@ -45,37 +45,16 @@ export const DEFAULT_SHARED_EMBEDDED_GROUP_NAMES: Readonly<Record<AnimationComma
 
 export const SHARED_ANIMATION_ASSET_BY_COMMAND: Readonly<AnimationAssetCommandMap> = {
   idle: "idle.glb",
-
   walk: "walk.glb",
-  walkBack: "walk.glb",
-  walkLeft: "walk.glb",
-  walkRight: "walk.glb",
-
   run: "run.glb",
-  runBack: "run.glb",
-  runLeft: "run.glb",
-  runRight: "run.glb",
   runStop: "run_stop.glb",
-
   jump: "jump.glb",
-  jumpStart: "jump.glb",
-
   inAir: "jump_loop.glb",
-  fallLoop: "fall-loop.glb",
   land: "jump_land.glb",
   crouchIdle: "crouch_idle.glb",
   crouchWalk: "crouch_walk.glb",
-
-  slideStart: "slide.glb",
   slideLoop: "slide.glb",
-  slideEnd: "slide.glb",
-
-  wallRun: "wall_run.glb", // Reutiliza a animação de wall run para o wall run em qualquer direção, mas poderia ser animações distintas para cada direção (ex: wall_run_left.glb, wall_run_right.glb).
-  doubleJump: "jump.glb", // Reutiliza a animação de jump para o double jump, mas poderia ser uma animação distinta.
-
-
-  turnLeft: "turn_left.glb",
-  turnRight: "turn_right.glb"
+  doubleJump: "jump.glb"
 };
 
 export type LoadSharedAnimationLibraryOptions = {

@@ -16,11 +16,10 @@ export function resolveAnimationGameplayState(params: {
       params.snapshot.state === "JumpStart" ||
       params.snapshot.state === "InAir" ||
       params.snapshot.state === "Fall" ||
-      params.snapshot.state === "DoubleJump" ||
-      params.snapshot.state === "WallRun",
+      params.snapshot.state === "DoubleJump",
     isCrouching: params.snapshot.isCrouching,
     isSliding: params.snapshot.isSliding,
-    isWallRunning: params.snapshot.isWallRunning,
+    isWallRunning: false,
     isUltimateActive: params.combat.isUltimateActive,
     isBlocking: params.combat.isBlocking && params.combat.attackComboIndex === 0,
     attackComboIndex: params.combat.attackComboIndex,
@@ -28,4 +27,3 @@ export function resolveAnimationGameplayState(params: {
     locomotionState: params.snapshot.state
   };
 }
-

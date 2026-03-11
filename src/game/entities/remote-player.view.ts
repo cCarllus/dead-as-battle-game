@@ -157,8 +157,7 @@ function resolveAnimationGameplayState(options: {
     options.locomotionState === "Walk" ||
     options.locomotionState === "Run" ||
     options.locomotionState === "CrouchWalk" ||
-    options.locomotionState === "Slide" ||
-    options.locomotionState === "WallRun";
+    options.locomotionState === "Slide";
   const isMoving = replicatedMovingState || horizontalDistance >= movementThreshold;
 
   let movementDirection: MovementDirection = "none";
@@ -180,7 +179,6 @@ function resolveAnimationGameplayState(options: {
     options.locomotionState === "InAir" ||
     options.locomotionState === "Fall" ||
     options.locomotionState === "DoubleJump" ||
-    options.locomotionState === "WallRun" ||
     Math.abs(deltaY) >= VERTICAL_MOVEMENT_EPSILON;
   const locomotionState = options.locomotionState;
 
@@ -193,7 +191,7 @@ function resolveAnimationGameplayState(options: {
     isCrouching:
       options.isCrouching || locomotionState === "Crouch" || locomotionState === "CrouchWalk",
     isSliding: options.isSliding || locomotionState === "Slide",
-    isWallRunning: options.isWallRunning || locomotionState === "WallRun",
+    isWallRunning: false,
     isUltimateActive: options.isUltimateActive,
     isBlocking,
     attackComboIndex: options.attackComboIndex,
@@ -328,10 +326,7 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
           lastAttackComboIndex = serverAttackComboIndex as 1 | 2 | 3;
         }
 
-        if (
-          !nextAnimationGameplayState.isJumping &&
-          (animationGameplayState.isJumping || nowMs < jumpAnimationGraceUntilMs)
-        ) {
+        if (player.locomotionState === "Land") {
           landAnimationGraceUntilMs = nowMs + 110;
         }
       }
@@ -349,6 +344,7 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
       nextAnimationGameplayState.isSprinting =
         nextAnimationGameplayState.isSprinting || nowMs < sprintAnimationGraceUntilMs;
       if (
+        nextAnimationGameplayState.locomotionState !== "RunStop" &&
         !nextAnimationGameplayState.isCrouching &&
         !nextAnimationGameplayState.isSliding &&
         !nextAnimationGameplayState.isWallRunning
