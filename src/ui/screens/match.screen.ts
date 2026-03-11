@@ -43,9 +43,18 @@ const MATCH_HUD_FEED_MAX_ITEMS = 5;
 const MATCH_HUD_FEED_TTL_MS = 14000;
 const MATCH_HUD_FEED_FADE_WINDOW_MS = 4200;
 const MATCH_HUD_FEED_HISTORY_SEED_LIMIT = 3;
+const MATCH_KILL_FEED_MAX_ITEMS = 5;
+const MATCH_KILL_FEED_TTL_MS = 6500;
+const MATCH_KILL_FEED_FADE_WINDOW_MS = 1400;
+const MATCH_KILL_FEED_ENTER_MS = 240;
 const MATCH_CHAT_BUBBLE_TTL_MS = 5200;
 const MATCH_CHAT_BUBBLE_FADE_WINDOW_MS = 1500;
 const MATCH_CHAT_BUBBLE_MAX_CHARS = 96;
+const MATCH_RADAR_RANGE_METERS = 40;
+const MATCH_RADAR_MAX_MARKERS = 10;
+const MATCH_RADAR_MARKER_EDGE_PADDING_PX = 10;
+const MATCH_RADAR_COMPASS_RADIUS_RATIO = 0.82;
+const MATCH_OVERHEAD_BAR_RANGE_METERS = 25;
 
 type MatchHudFeedEntry = {
   id: string;
@@ -63,6 +72,29 @@ type MatchSpeechBubbleEntry = {
   expiresAt: number;
   element: HTMLDivElement;
   textNode: HTMLSpanElement;
+};
+
+type MatchKillFeedEntry = {
+  id: string;
+  killerSessionId: string;
+  victimSessionId: string;
+  killerName: string;
+  victimName: string;
+  timestamp: number;
+  createdAt: number;
+  expiresAt: number;
+};
+
+type MatchRadarMarkerKind = "ally" | "enemy";
+
+type MatchOverheadBarKind = "ally" | "enemy";
+
+type MatchOverheadBarEntry = {
+  sessionId: string;
+  element: HTMLDivElement;
+  levelNode: HTMLSpanElement;
+  nameNode: HTMLSpanElement;
+  healthFillNode: HTMLSpanElement;
 };
 
 function clampPercent(value: number): number {
@@ -243,6 +275,50 @@ function formatMatchElapsedTime(elapsedSeconds: number): string {
   return `${minutes}:${seconds}`;
 }
 
+function normalizeForward(forward: { x: number; z: number } | null): { x: number; z: number } {
+  if (!forward) {
+    return { x: 0, z: 1 };
+  }
+
+  const length = Math.hypot(forward.x, forward.z);
+  if (length <= 0.0001) {
+    return { x: 0, z: 1 };
+  }
+
+  return {
+    x: forward.x / length,
+    z: forward.z / length
+  };
+}
+
+function projectToRadarPlane(options: {
+  deltaX: number;
+  deltaZ: number;
+  forwardX: number;
+  forwardZ: number;
+  maxRadiusPx: number;
+  radarRangeMeters: number;
+}): { x: number; y: number } {
+  const rightX = options.forwardZ;
+  const rightZ = -options.forwardX;
+  let projectedX = ((options.deltaX * rightX + options.deltaZ * rightZ) / options.radarRangeMeters) * options.maxRadiusPx;
+  let projectedY =
+    (-(options.deltaX * options.forwardX + options.deltaZ * options.forwardZ) / options.radarRangeMeters) *
+    options.maxRadiusPx;
+
+  const projectedLength = Math.hypot(projectedX, projectedY);
+  if (projectedLength > options.maxRadiusPx && projectedLength > 0.0001) {
+    const clampFactor = options.maxRadiusPx / projectedLength;
+    projectedX *= clampFactor;
+    projectedY *= clampFactor;
+  }
+
+  return {
+    x: projectedX,
+    y: projectedY
+  };
+}
+
 export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions): () => void {
   const locale = resolveScreenLocale(actions.locale);
   const screen = renderScreenTemplate(root, template, '[data-screen="match"]', locale);
@@ -256,14 +332,25 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const playerCountLabel = qs<HTMLElement>(screen, '[data-slot="match-player-count"]');
   const playerList = qs<HTMLElement>(screen, '[data-slot="match-player-list"]');
   const hudTimer = qs<HTMLElement>(screen, '[data-slot="match-hud-timer"]');
+  const hudKillsLabel = qs<HTMLElement>(screen, '[data-slot="match-hud-kills-label"]');
+  const hudDeathsLabel = qs<HTMLElement>(screen, '[data-slot="match-hud-deaths-label"]');
   const hudKills = qs<HTMLElement>(screen, '[data-slot="match-hud-kills"]');
   const hudDeaths = qs<HTMLElement>(screen, '[data-slot="match-hud-deaths"]');
+  const hudKillLog = qs<HTMLElement>(screen, '[data-slot="match-kill-log"]');
+  const hudRadarDisc = qs<HTMLElement>(screen, '[data-slot="match-radar-disc"]');
+  const hudRadarMarkers = qs<HTMLElement>(screen, '[data-slot="match-radar-markers"]');
+  const hudRadarNorth = qs<HTMLElement>(screen, '[data-slot="match-radar-direction-north"]');
+  const hudRadarEast = qs<HTMLElement>(screen, '[data-slot="match-radar-direction-east"]');
+  const hudRadarSouth = qs<HTMLElement>(screen, '[data-slot="match-radar-direction-south"]');
+  const hudRadarWest = qs<HTMLElement>(screen, '[data-slot="match-radar-direction-west"]');
+  const hudOverheadBarsLayer = qs<HTMLElement>(screen, '[data-slot="match-overhead-bars-layer"]');
   const hudHealthFill = qs<HTMLElement>(screen, '[data-slot="match-hud-health-fill"]');
   const hudResourceFill = qs<HTMLElement>(screen, '[data-slot="match-hud-resource-fill"]');
   const hudHealthValue = qs<HTMLElement>(screen, '[data-slot="match-hud-health-value"]');
   const hudResourceValue = qs<HTMLElement>(screen, '[data-slot="match-hud-resource-value"]');
   const hudHeroName = qs<HTMLElement>(screen, '[data-slot="match-hud-hero-name"]');
   const hudHeroCard = qs<HTMLImageElement>(screen, '[data-slot="match-hud-hero-card"]');
+  const hudLevelBadge = qs<HTMLElement>(screen, '[data-slot="match-hud-level-badge"]');
   const hudUltimateKey = qs<HTMLElement>(screen, '[data-slot="match-hud-ultimate-key"]');
   const hudVitals = qs<HTMLElement>(screen, ".dab-match__vitals");
   const hudSkills = qs<HTMLElement>(screen, '[data-slot="match-skills"]');
@@ -281,6 +368,15 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const hudSkillUltimateKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-ultimate-key"]');
   const hudAttackControlIcon = qs<HTMLElement>(screen, '[data-slot="match-control-icon-attack"]');
   const hudHeavyControlIcon = qs<HTMLElement>(screen, '[data-slot="match-control-icon-heavy"]');
+  const controlsHeading = qs<HTMLElement>(screen, '[data-slot="match-controls-heading"]');
+  const controlCopyAttack = qs<HTMLElement>(screen, '[data-slot="match-control-copy-attack"]');
+  const controlCopyHeavy = qs<HTMLElement>(screen, '[data-slot="match-control-copy-heavy"]');
+  const controlCopySprint = qs<HTMLElement>(screen, '[data-slot="match-control-copy-sprint"]');
+  const controlCopyJump = qs<HTMLElement>(screen, '[data-slot="match-control-copy-jump"]');
+  const controlCopyRoll = qs<HTMLElement>(screen, '[data-slot="match-control-copy-roll"]');
+  const controlCopyFly = qs<HTMLElement>(screen, '[data-slot="match-control-copy-fly"]');
+  const controlKeySprint = qs<HTMLElement>(screen, '[data-slot="match-control-key-sprint"]');
+  const controlKeyJump = qs<HTMLElement>(screen, '[data-slot="match-control-key-jump"]');
   const hudStaminaRoot = qs<HTMLElement>(screen, '[data-slot="match-hud-stamina"]');
   const hudStaminaFill = qs<HTMLElement>(screen, '[data-slot="match-hud-stamina-fill"]');
   const hudChatFeed = qs<HTMLElement>(screen, '[data-slot="match-chat-feed"]');
@@ -316,12 +412,23 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   scoreboardColKills.textContent = t(locale, "match.scoreboard.col.kills");
   scoreboardColDeaths.textContent = t(locale, "match.scoreboard.col.deaths");
   scoreboardColPing.textContent = t(locale, "match.scoreboard.col.ping");
+  hudKillsLabel.textContent = t(locale, "match.hud.kills");
+  hudDeathsLabel.textContent = t(locale, "match.hud.deaths");
   pointerLockHint.textContent = t(locale, "match.hud.pointerLockHint");
   fullscreenNotice.textContent = t(locale, "match.hud.fullscreenExited");
   pauseMenuTitle.textContent = t(locale, "match.menu.title");
   pauseMenuResumeButton.textContent = t(locale, "match.menu.resume");
   pauseMenuExitButton.textContent = t(locale, "match.menu.exit");
   pauseMenuSettingsButton.textContent = t(locale, "match.menu.settings");
+  controlsHeading.textContent = t(locale, "match.controls.heading");
+  controlCopyAttack.textContent = t(locale, "match.controls.attack");
+  controlCopyHeavy.textContent = t(locale, "match.controls.heavy");
+  controlCopySprint.textContent = t(locale, "match.controls.sprint");
+  controlCopyJump.textContent = t(locale, "match.controls.jump");
+  controlCopyRoll.textContent = t(locale, "match.controls.roll");
+  controlCopyFly.textContent = t(locale, "match.controls.flyMode");
+  controlKeySprint.textContent = t(locale, "match.controls.key.shift");
+  controlKeyJump.textContent = t(locale, "match.controls.key.space");
   deathModalTitle.textContent = locale === "pt-BR" ? "Você morreu" : "You Died";
   deathModalMessage.textContent =
     locale === "pt-BR"
@@ -388,13 +495,29 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   let hudFeedIntervalId: number | null = null;
   let didSeedChatHistory = false;
   let hudFeedEntries: MatchHudFeedEntry[] = [];
+  let killFeedEntries: MatchKillFeedEntry[] = [];
   let chatComposerOpen = false;
   let shouldResumePointerLockAfterChat = false;
   let speechBubbleFrameId: number | null = null;
+  let overheadBarsFrameId: number | null = null;
+  let radarFrameId: number | null = null;
   const speechBubblesBySessionId = new Map<string, MatchSpeechBubbleEntry>();
+  const overheadBarsBySessionId = new Map<string, MatchOverheadBarEntry>();
+  const radarMarkersBySessionId = new Map<string, HTMLSpanElement>();
 
   chatInput.maxLength = CHAT_MAX_MESSAGE_LENGTH;
   chatInput.placeholder = locale === "pt-BR" ? "Digite e pressione Enter" : "Type and press Enter";
+  hudLevelBadge.textContent = t(locale, "match.hud.levelBadge", { level: 1 });
+
+  const resolveLocalChampionLevel = (player: MatchPlayerState | null): number => {
+    const user = actions.userService.getCurrentUser();
+    if (!user) {
+      return 1;
+    }
+
+    const championId = player && isChampionId(player.heroId) ? player.heroId : user.selectedChampionId;
+    return user.champions[championId]?.level ?? 1;
+  };
 
   const truncateChatBubbleText = (text: string): string => {
     const normalized = text.replace(/\s+/g, " ").trim();
@@ -418,6 +541,16 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
     bubble.element.remove();
     speechBubblesBySessionId.delete(sessionId);
+  };
+
+  const removeOverheadBar = (sessionId: string): void => {
+    const entry = overheadBarsBySessionId.get(sessionId);
+    if (!entry) {
+      return;
+    }
+
+    entry.element.remove();
+    overheadBarsBySessionId.delete(sessionId);
   };
 
   const isChatFocused = (): boolean => {
@@ -455,6 +588,279 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     });
 
     speechBubbleFrameId = window.requestAnimationFrame(renderSpeechBubbles);
+  };
+
+  const clearOverheadBars = (): void => {
+    overheadBarsBySessionId.forEach((entry) => {
+      entry.element.remove();
+    });
+    overheadBarsBySessionId.clear();
+  };
+
+  const ensureOverheadBar = (player: MatchPlayerState, kind: MatchOverheadBarKind): MatchOverheadBarEntry => {
+    const existing = overheadBarsBySessionId.get(player.sessionId);
+    if (existing) {
+      existing.element.className = `dab-match__overhead-bar is-${kind}`;
+      existing.levelNode.textContent = `LVL ${player.heroLevel}`;
+      existing.nameNode.textContent = player.nickname;
+      return existing;
+    }
+
+    const element = document.createElement("div");
+    element.className = `dab-match__overhead-bar is-${kind}`;
+
+    const titleRow = document.createElement("div");
+    titleRow.className = "dab-match__overhead-title";
+
+    const levelNode = document.createElement("span");
+    levelNode.className = "dab-match__overhead-level";
+    levelNode.textContent = `LVL ${player.heroLevel}`;
+
+    const nameNode = document.createElement("span");
+    nameNode.className = "dab-match__overhead-name";
+    nameNode.textContent = player.nickname;
+
+    const healthTrack = document.createElement("div");
+    healthTrack.className = "dab-match__overhead-health-track";
+
+    const healthPulse = document.createElement("span");
+    healthPulse.className = "dab-match__overhead-health-pulse";
+
+    const healthFillNode = document.createElement("span");
+    healthFillNode.className = "dab-match__overhead-health-fill";
+
+    healthTrack.append(healthPulse, healthFillNode);
+    titleRow.append(levelNode, nameNode);
+    element.append(titleRow, healthTrack);
+    hudOverheadBarsLayer.appendChild(element);
+
+    const entry: MatchOverheadBarEntry = {
+      sessionId: player.sessionId,
+      element,
+      levelNode,
+      nameNode,
+      healthFillNode
+    };
+    overheadBarsBySessionId.set(player.sessionId, entry);
+    return entry;
+  };
+
+  const renderOverheadBars = (): void => {
+    const players = actions.matchService.getPlayers();
+    const handle = sceneHandle;
+    if (!localSessionId || !handle) {
+      overheadBarsBySessionId.forEach((entry) => {
+        entry.element.classList.remove("is-visible");
+      });
+      overheadBarsFrameId = window.requestAnimationFrame(renderOverheadBars);
+      return;
+    }
+
+    const localPlayer = players.find((player) => player.sessionId === localSessionId) ?? null;
+    const localPosition =
+      localPlayer ? handle.getPlayerWorldPosition(localPlayer.sessionId) ?? { x: localPlayer.x, y: localPlayer.y, z: localPlayer.z } : null;
+
+    if (!localPosition) {
+      clearOverheadBars();
+      overheadBarsFrameId = window.requestAnimationFrame(renderOverheadBars);
+      return;
+    }
+
+    const activeSessionIds = new Set<string>();
+
+    players.forEach((player) => {
+      if (player.sessionId === localSessionId || !player.isAlive) {
+        return;
+      }
+
+      const worldPosition = handle.getPlayerWorldPosition(player.sessionId) ?? {
+        x: player.x,
+        y: player.y,
+        z: player.z
+      };
+      const deltaX = worldPosition.x - localPosition.x;
+      const deltaY = worldPosition.y - localPosition.y;
+      const deltaZ = worldPosition.z - localPosition.z;
+      const distanceSquared = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
+      const distanceMeters = Math.sqrt(distanceSquared);
+      const distanceRatio = Math.min(1, distanceMeters / MATCH_OVERHEAD_BAR_RANGE_METERS);
+      const scale = Math.max(0.58, 1 - distanceRatio * 0.42);
+      const screenPosition = handle.getPlayerNameplateScreenPosition(player.sessionId);
+      const isVisible = !!screenPosition && distanceSquared <= MATCH_OVERHEAD_BAR_RANGE_METERS * MATCH_OVERHEAD_BAR_RANGE_METERS;
+      const kind: MatchOverheadBarKind = teamMemberUserIds.has(player.userId) ? "ally" : "enemy";
+      const entry = ensureOverheadBar(player, kind);
+      const safeHealthPercent =
+        player.maxHealth > 0 ? Math.max(0, Math.min(100, (player.currentHealth / player.maxHealth) * 100)) : 0;
+
+      entry.levelNode.textContent = `LVL ${player.heroLevel}`;
+      entry.nameNode.textContent = player.nickname;
+      entry.healthFillNode.style.width = `${safeHealthPercent.toFixed(2)}%`;
+      entry.element.className = `dab-match__overhead-bar is-${kind}${isVisible ? " is-visible" : ""}`;
+
+      if (isVisible && screenPosition) {
+        entry.element.style.setProperty("--dab-overhead-x", `${screenPosition.x}px`);
+        entry.element.style.setProperty("--dab-overhead-y", `${screenPosition.y - 6}px`);
+        entry.element.style.setProperty("--dab-overhead-scale", scale.toFixed(3));
+      }
+
+      activeSessionIds.add(player.sessionId);
+    });
+
+    overheadBarsBySessionId.forEach((entry, sessionId) => {
+      if (activeSessionIds.has(sessionId)) {
+        return;
+      }
+
+      removeOverheadBar(sessionId);
+    });
+
+    overheadBarsFrameId = window.requestAnimationFrame(renderOverheadBars);
+  };
+
+  const clearRadarMarkers = (): void => {
+    radarMarkersBySessionId.forEach((marker) => {
+      marker.remove();
+    });
+    radarMarkersBySessionId.clear();
+  };
+
+  const positionRadarDirection = (
+    element: HTMLElement,
+    vector: { x: number; z: number },
+    forward: { x: number; z: number },
+    compassRadiusPx: number
+  ): void => {
+    const projection = projectToRadarPlane({
+      deltaX: vector.x,
+      deltaZ: vector.z,
+      forwardX: forward.x,
+      forwardZ: forward.z,
+      maxRadiusPx: compassRadiusPx,
+      radarRangeMeters: 1
+    });
+
+    element.style.transform = `translate3d(calc(-50% + ${projection.x.toFixed(2)}px), calc(-50% + ${projection.y.toFixed(
+      2
+    )}px), 0)`;
+  };
+
+  const resolveFallbackRadarForward = (): { x: number; z: number } => {
+    const localPlayer = localSessionId
+      ? actions.matchService.getPlayers().find((player) => player.sessionId === localSessionId) ?? null
+      : null;
+    if (!localPlayer) {
+      return { x: 0, z: 1 };
+    }
+
+    return {
+      x: Math.sin(localPlayer.rotationY),
+      z: Math.cos(localPlayer.rotationY)
+    };
+  };
+
+  const resolveRadarPlayerPosition = (player: MatchPlayerState): { x: number; y: number; z: number } => {
+    return sceneHandle?.getPlayerWorldPosition(player.sessionId) ?? {
+      x: player.x,
+      y: player.y,
+      z: player.z
+    };
+  };
+
+  const ensureRadarMarker = (
+    sessionId: string,
+    nickname: string,
+    kind: MatchRadarMarkerKind
+  ): HTMLSpanElement => {
+    const existing = radarMarkersBySessionId.get(sessionId);
+    if (existing) {
+      existing.className = `dab-match__radar-marker is-dynamic is-${kind}`;
+      existing.setAttribute("aria-label", nickname);
+      existing.title = nickname;
+      return existing;
+    }
+
+    const marker = document.createElement("span");
+    marker.className = `dab-match__radar-marker is-dynamic is-${kind}`;
+    marker.setAttribute("aria-label", nickname);
+    marker.title = nickname;
+    hudRadarMarkers.appendChild(marker);
+    radarMarkersBySessionId.set(sessionId, marker);
+    return marker;
+  };
+
+  const renderRadar = (): void => {
+    const discRadiusPx = hudRadarDisc.clientWidth * 0.5;
+    const markerRadiusPx = Math.max(0, discRadiusPx - MATCH_RADAR_MARKER_EDGE_PADDING_PX);
+    const compassRadiusPx = Math.max(18, discRadiusPx * MATCH_RADAR_COMPASS_RADIUS_RATIO);
+    const forward = normalizeForward(sceneHandle?.getCameraGroundForward() ?? resolveFallbackRadarForward());
+
+    positionRadarDirection(hudRadarNorth, { x: 0, z: 1 }, forward, compassRadiusPx);
+    positionRadarDirection(hudRadarEast, { x: 1, z: 0 }, forward, compassRadiusPx);
+    positionRadarDirection(hudRadarSouth, { x: 0, z: -1 }, forward, compassRadiusPx);
+    positionRadarDirection(hudRadarWest, { x: -1, z: 0 }, forward, compassRadiusPx);
+
+    if (!localSessionId || markerRadiusPx <= 0) {
+      clearRadarMarkers();
+      radarFrameId = window.requestAnimationFrame(renderRadar);
+      return;
+    }
+
+    const players = actions.matchService.getPlayers();
+    const localPlayer = players.find((player) => player.sessionId === localSessionId) ?? null;
+    const localPosition = localPlayer ? resolveRadarPlayerPosition(localPlayer) : null;
+    if (!localPosition) {
+      clearRadarMarkers();
+      radarFrameId = window.requestAnimationFrame(renderRadar);
+      return;
+    }
+
+    const visibleIds = new Set<string>();
+    const visiblePlayers = players
+      .filter((player) => player.sessionId !== localSessionId && player.isAlive)
+      .map((player) => {
+        const position = resolveRadarPlayerPosition(player);
+        const deltaX = position.x - localPosition.x;
+        const deltaZ = position.z - localPosition.z;
+        const distanceSquared = deltaX * deltaX + deltaZ * deltaZ;
+        return {
+          player,
+          deltaX,
+          deltaZ,
+          distanceSquared
+        };
+      })
+      .filter((entry) => entry.distanceSquared <= MATCH_RADAR_RANGE_METERS * MATCH_RADAR_RANGE_METERS)
+      .sort((left, right) => left.distanceSquared - right.distanceSquared)
+      .slice(0, MATCH_RADAR_MAX_MARKERS);
+
+    visiblePlayers.forEach((entry) => {
+      const kind: MatchRadarMarkerKind = teamMemberUserIds.has(entry.player.userId) ? "ally" : "enemy";
+      const marker = ensureRadarMarker(entry.player.sessionId, entry.player.nickname, kind);
+      const projection = projectToRadarPlane({
+        deltaX: entry.deltaX,
+        deltaZ: entry.deltaZ,
+        forwardX: forward.x,
+        forwardZ: forward.z,
+        maxRadiusPx: markerRadiusPx,
+        radarRangeMeters: MATCH_RADAR_RANGE_METERS
+      });
+
+      marker.style.transform = `translate3d(calc(-50% + ${projection.x.toFixed(2)}px), calc(-50% + ${projection.y.toFixed(
+        2
+      )}px), 0)`;
+      visibleIds.add(entry.player.sessionId);
+    });
+
+    radarMarkersBySessionId.forEach((marker, sessionId) => {
+      if (visibleIds.has(sessionId)) {
+        return;
+      }
+
+      marker.remove();
+      radarMarkersBySessionId.delete(sessionId);
+    });
+
+    radarFrameId = window.requestAnimationFrame(renderRadar);
   };
 
   const upsertSpeechBubble = (sessionId: string, text: string): void => {
@@ -534,6 +940,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     }
   };
 
+  const pruneKillFeedEntries = (now = Date.now()): void => {
+    killFeedEntries = killFeedEntries.filter((entry) => entry.expiresAt > now).slice(0, MATCH_KILL_FEED_MAX_ITEMS);
+  };
+
   const renderHudFeed = (): void => {
     const now = Date.now();
     pruneHudFeedEntries(now);
@@ -599,6 +1009,72 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       nickname: message.nickname.trim() || "Player",
       text: normalizedText
     });
+  };
+
+  const renderKillFeed = (): void => {
+    const now = Date.now();
+    pruneKillFeedEntries(now);
+    hudKillLog.replaceChildren();
+
+    killFeedEntries.forEach((entry) => {
+      const enterProgress = Math.max(0, Math.min(1, (now - entry.createdAt) / MATCH_KILL_FEED_ENTER_MS));
+      const timeRemainingMs = Math.max(0, entry.expiresAt - now);
+      const fadeProgress =
+        timeRemainingMs >= MATCH_KILL_FEED_FADE_WINDOW_MS
+          ? 1
+          : Math.max(0, timeRemainingMs / MATCH_KILL_FEED_FADE_WINDOW_MS);
+      const opacity = Math.max(0, Math.min(1, fadeProgress * enterProgress));
+      const offsetY = (1 - enterProgress) * -10;
+
+      const item = document.createElement("div");
+      item.className = "dab-match__kill-feed-item";
+      item.style.setProperty("--dab-kill-feed-opacity", opacity.toFixed(3));
+      item.style.setProperty("--dab-kill-feed-offset", `${offsetY.toFixed(2)}px`);
+
+      const killer = document.createElement("span");
+      killer.className = `dab-match__kill-feed-player ${
+        entry.killerSessionId === localSessionId ? "is-local" : "is-enemy"
+      }`;
+      killer.textContent = entry.killerName;
+
+      const icon = document.createElement("span");
+      icon.className = "dab-match__kill-feed-icon";
+      icon.textContent = "⊗";
+
+      const victim = document.createElement("span");
+      victim.className = `dab-match__kill-feed-player ${
+        entry.victimSessionId === localSessionId ? "is-local" : "is-enemy"
+      }`;
+      victim.textContent = entry.victimName;
+
+      item.append(killer, icon, victim);
+      hudKillLog.appendChild(item);
+    });
+  };
+
+  const pushKillFeedEntry = (payload: {
+    killerSessionId: string;
+    victimSessionId: string;
+    killerName: string;
+    victimName: string;
+    timestamp: number;
+  }): void => {
+    const now = Date.now();
+    killFeedEntries = [
+      {
+        id: `${payload.timestamp}:${payload.killerSessionId}:${payload.victimSessionId}`,
+        killerSessionId: payload.killerSessionId,
+        victimSessionId: payload.victimSessionId,
+        killerName: payload.killerName,
+        victimName: payload.victimName,
+        timestamp: payload.timestamp,
+        createdAt: now,
+        expiresAt: now + MATCH_KILL_FEED_TTL_MS
+      },
+      ...killFeedEntries
+    ].slice(0, MATCH_KILL_FEED_MAX_ITEMS);
+
+    renderKillFeed();
   };
 
   const isSettingsModalOpen = (): boolean => {
@@ -804,6 +1280,9 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     hudUltimateKey.style.setProperty("--dab-hero-skill-theme", combatHudState.skillThemeColor);
 
     hudHeroName.textContent = combatHudState.heroLabel;
+    hudLevelBadge.textContent = t(locale, "match.hud.levelBadge", {
+      level: resolveLocalChampionLevel(player)
+    });
     if (hudHeroCard.src !== combatHudState.heroCardImageUrl) {
       hudHeroCard.src = combatHudState.heroCardImageUrl;
     }
@@ -1000,12 +1479,28 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   });
   const disposeCombatKill = actions.matchService.onCombatKill((payload) => {
     if (!localSessionId) {
+      pushKillFeedEntry({
+        killerSessionId: payload.killerSessionId,
+        victimSessionId: payload.victimSessionId,
+        killerName: payload.killerName,
+        victimName: payload.victimName,
+        timestamp: payload.timestamp
+      });
+      renderMatchPresence(actions.matchService.getPlayers());
       return;
     }
 
     const killsDelta = payload.killerSessionId === localSessionId ? 1 : 0;
     const deathsDelta = payload.victimSessionId === localSessionId ? 1 : 0;
     applyLocalChampionKdaDelta(killsDelta, deathsDelta);
+    pushKillFeedEntry({
+      killerSessionId: payload.killerSessionId,
+      victimSessionId: payload.victimSessionId,
+      killerName: payload.killerName,
+      victimName: payload.victimName,
+      timestamp: payload.timestamp
+    });
+    renderMatchPresence(actions.matchService.getPlayers());
   });
   const disposeCombatUltimate = actions.matchService.onCombatUltimate((payload) => {
     sceneHandle?.triggerPlayerUltimateEffect({
@@ -1316,7 +1811,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   setDeathModalOpen(false);
   hideFullscreenNotice();
   renderHudFeed();
+  renderKillFeed();
   renderSpeechBubbles();
+  renderOverheadBars();
+  renderRadar();
 
   void (async () => {
     showLoading(t(locale, "match.loading.connecting"));
@@ -1381,7 +1879,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
       hudFeedIntervalId = window.setInterval(() => {
         renderHudFeed();
-      }, 1000);
+        renderKillFeed();
+      }, 250);
     } catch (error) {
       const message = error instanceof Error ? error.message : t(locale, "match.error.startFailed");
       showError(message);
@@ -1455,10 +1954,22 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       speechBubbleFrameId = null;
     }
 
+    if (overheadBarsFrameId !== null) {
+      window.cancelAnimationFrame(overheadBarsFrameId);
+      overheadBarsFrameId = null;
+    }
+
+    if (radarFrameId !== null) {
+      window.cancelAnimationFrame(radarFrameId);
+      radarFrameId = null;
+    }
+
     speechBubblesBySessionId.forEach((bubble) => {
       bubble.element.remove();
     });
     speechBubblesBySessionId.clear();
+    clearOverheadBars();
+    clearRadarMarkers();
 
     combatFeedbackSystem.dispose();
     damageNumberEffect.dispose();

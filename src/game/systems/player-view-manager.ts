@@ -45,6 +45,7 @@ function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     userId: player.userId,
     nickname: player.nickname,
     heroId: player.heroId,
+    heroLevel: player.heroLevel,
     x: player.x,
     y: player.y,
     z: player.z,
@@ -118,6 +119,7 @@ function didPlayerStateChange(previous: MatchPlayerState | undefined, next: Matc
     previous.isAlive !== next.isAlive ||
     previous.nickname !== next.nickname ||
     previous.heroId !== next.heroId ||
+    previous.heroLevel !== next.heroLevel ||
     previous.joinedAt !== next.joinedAt ||
     previous.userId !== next.userId
   );
@@ -158,7 +160,9 @@ export type PlayerViewManager = {
   tick: (nowMs: number) => void;
   getLocalPlayerView: () => LocalPlayerView | null;
   getLocalPlayerState: () => MatchPlayerState | null;
+  getPlayerWorldPosition: (sessionId: string) => { x: number; y: number; z: number } | null;
   getPlayerCameraTarget: (sessionId: string) => { x: number; y: number; z: number } | null;
+  getPlayerNameplateTarget: (sessionId: string) => { x: number; y: number; z: number } | null;
   getPlayerEffectAnchor: (sessionId: string) => {
     gameplayRoot: RemotePlayerView["gameplayRoot"];
     visualRoot: RemotePlayerView["visualRoot"];
@@ -448,6 +452,19 @@ export function createPlayerViewManager(options: CreatePlayerViewManagerOptions)
     },
     getLocalPlayerView,
     getLocalPlayerState,
+    getPlayerWorldPosition: (sessionId) => {
+      const view = playerViewsBySessionId.get(sessionId);
+      if (!view) {
+        return null;
+      }
+
+      const transform = view.getTransform();
+      return {
+        x: transform.x,
+        y: transform.y,
+        z: transform.z
+      };
+    },
     getPlayerCameraTarget: (sessionId) => {
       const view = playerViewsBySessionId.get(sessionId);
       if (!view) {
@@ -455,6 +472,14 @@ export function createPlayerViewManager(options: CreatePlayerViewManagerOptions)
       }
 
       return view.getCameraTarget();
+    },
+    getPlayerNameplateTarget: (sessionId) => {
+      const view = playerViewsBySessionId.get(sessionId);
+      if (!view) {
+        return null;
+      }
+
+      return view.getNameplateTarget();
     },
     getPlayerEffectAnchor: (sessionId) => {
       const view = playerViewsBySessionId.get(sessionId);

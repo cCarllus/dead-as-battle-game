@@ -51,6 +51,7 @@ export type RemotePlayerView = {
   playAnimationCommand: (command: AnimationCommand) => void;
   getTransform: () => { x: number; y: number; z: number; rotationY: number };
   getCameraTarget: () => { x: number; y: number; z: number };
+  getNameplateTarget: () => { x: number; y: number; z: number };
   getRuntimeConfig: () => CharacterRuntimeConfig;
   dispose: () => void;
 };
@@ -453,6 +454,14 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
     },
     getCameraTarget: () => {
       const target = entity.getCameraTarget();
+      return {
+        x: target.x,
+        y: target.y,
+        z: target.z
+      };
+    },
+    getNameplateTarget: () => {
+      const target = entity.getNameplateTarget();
       return {
         x: target.x,
         y: target.y,

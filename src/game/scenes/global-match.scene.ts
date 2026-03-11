@@ -83,6 +83,9 @@ export type GlobalMatchSceneHandle = {
   onPointerLockChanged: (listener: (locked: boolean) => void) => () => void;
   triggerPlayerUltimateEffect: (payload: Pick<MatchCombatUltimatePayload, "sessionId" | "characterId" | "durationMs">) => void;
   getPlayerScreenPosition: (sessionId: string) => { x: number; y: number } | null;
+  getPlayerNameplateScreenPosition: (sessionId: string) => { x: number; y: number } | null;
+  getPlayerWorldPosition: (sessionId: string) => { x: number; y: number; z: number } | null;
+  getCameraGroundForward: () => { x: number; z: number };
   dispose: () => void;
 };
 
@@ -794,6 +797,24 @@ export async function createGlobalMatchScene(
         engine,
         new Vector3(target.x, target.y + 0.45, target.z)
       );
+    },
+    getPlayerNameplateScreenPosition: (sessionId) => {
+      const target = playerViewManager.getPlayerNameplateTarget(sessionId);
+      if (!target) {
+        return null;
+      }
+
+      return resolveProjectedPoint(scene, camera, engine, new Vector3(target.x, target.y, target.z));
+    },
+    getPlayerWorldPosition: (sessionId) => {
+      return playerViewManager.getPlayerWorldPosition(sessionId);
+    },
+    getCameraGroundForward: () => {
+      const forward = cameraController.getGroundForward();
+      return {
+        x: forward.x,
+        z: forward.z
+      };
     },
     dispose: () => {
       window.removeEventListener("resize", onWindowResize);

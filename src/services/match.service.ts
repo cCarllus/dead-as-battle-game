@@ -51,6 +51,7 @@ export type MatchIdentity = {
   userId: string;
   nickname: string;
   heroId: string;
+  heroLevel: number;
 };
 
 export type MatchServiceOptions = {
@@ -144,6 +145,7 @@ function normalizeIdentity(identity: MatchIdentity | null): MatchIdentity | null
   const userId = normalizeText(identity.userId);
   const nickname = normalizeText(identity.nickname);
   const heroId = normalizeText(identity.heroId);
+  const heroLevel = Math.max(1, Math.floor(normalizeNumber(identity.heroLevel) ?? 1));
 
   if (!userId || !nickname || !heroId) {
     return null;
@@ -152,7 +154,8 @@ function normalizeIdentity(identity: MatchIdentity | null): MatchIdentity | null
   return {
     userId,
     nickname,
-    heroId
+    heroId,
+    heroLevel
   };
 }
 
@@ -166,6 +169,7 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const userId = normalizeText(candidate.userId);
   const nickname = normalizeText(candidate.nickname);
   const heroId = normalizeText(candidate.heroId);
+  const heroLevel = Math.max(1, Math.floor(normalizeNumber(candidate.heroLevel) ?? 1));
   const x = normalizeNumber(candidate.x);
   const y = normalizeNumber(candidate.y);
   const z = normalizeNumber(candidate.z);
@@ -229,6 +233,7 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
     userId,
     nickname,
     heroId,
+    heroLevel,
     x,
     y,
     z,
@@ -572,18 +577,32 @@ function normalizeCombatKillPayload(payload: unknown): MatchCombatKillPayload | 
   const candidate = payload as Partial<MatchCombatKillPayload>;
   const killerSessionId = normalizeText(candidate.killerSessionId);
   const victimSessionId = normalizeText(candidate.victimSessionId);
+  const killerName = normalizeText(candidate.killerName);
+  const victimName = normalizeText(candidate.victimName);
   const killerKills = normalizeNumber(candidate.killerKills);
   const victimDeaths = normalizeNumber(candidate.victimDeaths);
+  const timestamp = normalizeNumber(candidate.timestamp);
 
-  if (!killerSessionId || !victimSessionId || killerKills === null || victimDeaths === null) {
+  if (
+    !killerSessionId ||
+    !victimSessionId ||
+    !killerName ||
+    !victimName ||
+    killerKills === null ||
+    victimDeaths === null ||
+    timestamp === null
+  ) {
     return null;
   }
 
   return {
     killerSessionId,
     victimSessionId,
+    killerName,
+    victimName,
     killerKills: Math.max(0, Math.floor(killerKills)),
-    victimDeaths: Math.max(0, Math.floor(victimDeaths))
+    victimDeaths: Math.max(0, Math.floor(victimDeaths)),
+    timestamp
   };
 }
 
@@ -624,6 +643,7 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     userId: player.userId,
     nickname: player.nickname,
     heroId: player.heroId,
+    heroLevel: player.heroLevel,
     x: player.x,
     y: player.y,
     z: player.z,
@@ -1044,18 +1064,22 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
 
       const killer = playersBySessionId.get(killPayload.killerSessionId);
       if (killer) {
-        playersBySessionId.set(killer.sessionId, {
+        const updatedKiller = {
           ...killer,
           kills: killPayload.killerKills
-        });
+        };
+        playersBySessionId.set(updatedKiller.sessionId, updatedKiller);
+        emitPlayerUpdated(updatedKiller);
       }
 
       const victim = playersBySessionId.get(killPayload.victimSessionId);
       if (victim) {
-        playersBySessionId.set(victim.sessionId, {
+        const updatedVictim = {
           ...victim,
           deaths: killPayload.victimDeaths
-        });
+        };
+        playersBySessionId.set(updatedVictim.sessionId, updatedVictim);
+        emitPlayerUpdated(updatedVictim);
       }
 
       emitCombatKill(killPayload);
@@ -1173,7 +1197,8 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
           connectedIdentity &&
           connectedIdentity.userId === identity.userId &&
           connectedIdentity.nickname === identity.nickname &&
-          connectedIdentity.heroId === identity.heroId
+          connectedIdentity.heroId === identity.heroId &&
+          connectedIdentity.heroLevel === identity.heroLevel
         ) {
           return;
         }
@@ -1190,7 +1215,8 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         const connectedRoom = await client.joinOrCreate(roomName, {
           userId: identity.userId,
           nickname: identity.nickname,
-          heroId: identity.heroId
+          heroId: identity.heroId,
+          heroLevel: identity.heroLevel
         });
 
         room = connectedRoom;

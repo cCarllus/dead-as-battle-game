@@ -59,6 +59,14 @@ function normalizeHeroId(value: unknown): string {
   return VALID_HERO_IDS.has(normalized) ? normalized : DEFAULT_HERO_ID;
 }
 
+function normalizeHeroLevel(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 1;
+  }
+
+  return Math.max(1, Math.floor(value));
+}
+
 export class GlobalMatchRoom extends Room {
   private readonly spawnService = new SpawnService();
   private readonly moveIntentBySessionId = new Map<string, NormalizedMoveIntent>();
@@ -304,6 +312,7 @@ export class GlobalMatchRoom extends Room {
 
     const now = Date.now();
     const heroId = normalizeHeroId(options?.heroId);
+    const heroLevel = normalizeHeroLevel(options?.heroLevel);
     const heroCombatConfig = resolveHeroCombatServerConfig(heroId);
     const spawn = this.spawnService.getNextSpawnPoint();
     const resolvedSpawn = resolveHorizontalPlayerCollision({
@@ -320,6 +329,7 @@ export class GlobalMatchRoom extends Room {
       userId,
       nickname,
       heroId,
+      heroLevel,
       kills: 0,
       deaths: 0,
       x: resolvedSpawn.x,

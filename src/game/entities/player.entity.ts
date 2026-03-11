@@ -195,6 +195,7 @@ export type MatchPlayerEntity = {
   setTransform: (transform: { x: number; y: number; z: number; rotationY: number }) => void;
   getTransform: () => { x: number; y: number; z: number; rotationY: number };
   getCameraTarget: () => Vector3;
+  getNameplateTarget: () => Vector3;
   getRuntimeConfig: () => CharacterRuntimeConfig;
   setNickname: (nickname: string) => void;
   setVisualStyle: (style: PlayerVisualStyle) => void;
@@ -233,6 +234,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
 
   const label = createPlayerLabel(options.scene, options.player.sessionId);
   label.mesh.parent = runtimeRig.nameplateAnchor;
+  label.mesh.isVisible = false;
 
   let isDisposed = false;
   let skinLoadVersion = 0;
@@ -383,6 +385,9 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     },
     getCameraTarget: () => {
       return runtimeRig.cameraTargetAnchor.getAbsolutePosition().clone();
+    },
+    getNameplateTarget: () => {
+      return runtimeRig.nameplateAnchor.getAbsolutePosition().clone();
     },
     getRuntimeConfig: () => {
       return {

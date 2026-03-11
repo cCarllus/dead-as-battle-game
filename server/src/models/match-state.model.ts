@@ -5,6 +5,7 @@ export type MatchPlayerStructuredState = {
   sessionId: string;
   nickname: string;
   characterId: string;
+  level: number;
   transform: {
     x: number;
     y: number;
@@ -48,6 +49,7 @@ export function toStructuredPlayerState(player: MatchPlayerState): MatchPlayerSt
     sessionId: player.sessionId,
     nickname: player.nickname,
     characterId: player.heroId,
+    level: player.heroLevel,
     transform: {
       x: player.x,
       y: player.y,
@@ -93,6 +95,7 @@ export function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     userId: player.userId,
     nickname: player.nickname,
     heroId: player.heroId,
+    heroLevel: player.heroLevel,
     kills: player.kills,
     deaths: player.deaths,
     x: player.x,

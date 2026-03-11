@@ -23,6 +23,7 @@ export type MatchPlayerState = {
   userId: string;
   nickname: string;
   heroId: string;
+  heroLevel: number;
   x: number;
   y: number;
   z: number;
@@ -156,8 +157,11 @@ export type MatchCombatStatePayload = {
 export type MatchCombatKillPayload = {
   killerSessionId: string;
   victimSessionId: string;
+  killerName: string;
+  victimName: string;
   killerKills: number;
   victimDeaths: number;
+  timestamp: number;
 };
 
 export type MatchCombatUltimatePayload = {

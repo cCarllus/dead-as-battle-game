@@ -211,8 +211,11 @@ export function handleAttackStart(options: {
       ? {
           killerSessionId: attacker.sessionId,
           victimSessionId: target.sessionId,
+          killerName: attacker.nickname,
+          victimName: target.nickname,
           killerKills: attacker.kills,
-          victimDeaths: target.deaths
+          victimDeaths: target.deaths,
+          timestamp: now
         }
       : null
   };

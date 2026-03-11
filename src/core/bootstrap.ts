@@ -88,10 +88,13 @@ export function bootstrap(): void {
       return null;
     }
 
+    const selectedHeroId = heroSelectionService.resolveSafeSelectedHeroId(localUser);
+
     return {
       userId: snapshot?.userId ?? localUser.id,
       nickname: snapshot?.nickname ?? localUser.nickname,
-      heroId: heroSelectionService.resolveSafeSelectedHeroId(localUser)
+      heroId: selectedHeroId,
+      heroLevel: localUser.champions[selectedHeroId]?.level ?? 1
     };
   };
 

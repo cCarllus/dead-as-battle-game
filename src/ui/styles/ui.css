@@ -6659,8 +6659,8 @@ button.dab-match__skill {
 }
 
 .dab-match .dab-match__hud-frame--top-left {
-  top: 18px;
-  left: 18px;
+  top: 26px;
+  left: 34px;
 }
 
 .dab-match .dab-match__hud-frame--top-right {
@@ -6703,18 +6703,19 @@ button.dab-match__skill {
 .dab-match .dab-match__vitals {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 14px;
 }
 
 .dab-match .dab-match__portrait-shell {
   position: relative;
-  width: 64px;
-  flex: 0 0 64px;
+  width: 76px;
+  flex: 0 0 76px;
+  z-index: 2;
 }
 
 .dab-match .dab-match__portrait-ring {
-  width: 64px;
-  height: 64px;
+  width: 76px;
+  height: 76px;
   border-radius: 999px;
   border: 3px solid rgba(148, 163, 184, 0.72);
   background:
@@ -6726,25 +6727,28 @@ button.dab-match__skill {
 }
 
 .dab-match .dab-match__portrait-image {
-  inset: 7px;
-  width: calc(100% - 14px);
-  height: calc(100% - 14px);
+  inset: 8px;
+  width: calc(100% - 16px);
+  height: calc(100% - 16px);
 }
 
 .dab-match .dab-match__portrait-badge {
-  right: -6px;
-  bottom: -10px;
+  right: -8px;
+  bottom: -12px;
   border-radius: 6px;
   border: 1px solid rgba(250, 204, 21, 0.44);
   background: rgba(15, 23, 42, 0.92);
-  padding: 4px 7px 3px;
+  padding: 5px 8px 4px;
   box-shadow: 0 8px 14px rgba(0, 0, 0, 0.24);
 }
 
 .dab-match .dab-match__portrait-badge-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #facc15;
   font-family: "Rajdhani", "Exo 2", sans-serif;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -6752,9 +6756,11 @@ button.dab-match__skill {
 
 .dab-match .dab-match__vitals-stack {
   display: grid;
-  gap: 6px;
-  min-width: 260px;
-  padding-top: 6px;
+  gap: 8px;
+  min-width: 312px;
+  padding-top: 8px;
+  margin-left: -30px;
+  z-index: 1;
 }
 
 .dab-match .dab-match__bar {
@@ -6767,13 +6773,13 @@ button.dab-match__skill {
 }
 
 .dab-match .dab-match__bar.is-health {
-  width: 286px;
-  height: 18px;
+  width: 334px;
+  height: 21px;
 }
 
 .dab-match .dab-match__bar.is-resource {
-  width: 236px;
-  height: 12px;
+  width: 278px;
+  height: 14px;
 }
 
 .dab-match .dab-match__bar.is-health .dab-match__bar-fill {
@@ -6789,12 +6795,12 @@ button.dab-match__skill {
 .dab-match .dab-match__bar-percent {
   position: absolute;
   top: 50%;
-  right: 8px;
+  right: 10px;
   transform: translateY(-50%);
   z-index: 1;
   color: #f8fafc;
   font-family: "Orbitron", "Rajdhani", sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.05em;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.58);
@@ -6802,7 +6808,7 @@ button.dab-match__skill {
 }
 
 .dab-match .dab-match__bar-percent--resource {
-  font-size: 0.64rem;
+  font-size: 0.7rem;
 }
 
 .dab-match .dab-match__stats-pill {
@@ -6815,32 +6821,28 @@ button.dab-match__skill {
   gap: 12px;
 }
 
-.dab-match .dab-match__stat-label {
-  display: none;
+.dab-match .dab-match__scoreboard-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  margin: 0;
+  z-index: 48;
+  contain: layout paint;
+}
+
+.dab-match.is-scoreboard-visible .dab-match__stats-pill {
+  grid-column: auto;
 }
 
 .dab-match .dab-match__stat-item {
-  position: relative;
-  gap: 0;
-}
-
-.dab-match .dab-match__stat-item:nth-of-type(2),
-.dab-match .dab-match__stat-item:nth-of-type(3) {
   display: grid;
   justify-items: center;
   gap: 1px;
 }
 
-.dab-match .dab-match__stat-item:nth-of-type(2)::before {
-  content: "KILLS";
-}
-
-.dab-match .dab-match__stat-item:nth-of-type(3)::before {
-  content: "DEATHS";
-}
-
-.dab-match .dab-match__stat-item:nth-of-type(2)::before,
-.dab-match .dab-match__stat-item:nth-of-type(3)::before {
+.dab-match .dab-match__stat-label {
   color: rgba(226, 232, 240, 0.46);
   font-family: "Rajdhani", "Exo 2", sans-serif;
   font-size: 0.5rem;
@@ -6875,30 +6877,62 @@ button.dab-match__skill {
   gap: 10px;
 }
 
-.dab-match .dab-match__radar-head {
-  display: none;
-}
-
-.dab-match .dab-match__radar-chip {
-  display: none;
-}
-
 .dab-match .dab-match__radar-disc {
+  position: relative;
   width: 168px;
   height: 168px;
   border-radius: 999px;
-  border: 3px solid rgba(148, 163, 184, 0.74);
+  border: 2px solid rgba(255, 255, 255, 0.12);
   background:
-    radial-gradient(circle at center, rgba(15, 23, 42, 0.44), rgba(15, 23, 42, 0.18)),
-    repeating-radial-gradient(circle at center, rgba(148, 163, 184, 0.08) 0 1px, transparent 1px 26px);
+    radial-gradient(circle at 50% 50%, rgba(12, 18, 28, 0.92), rgba(2, 6, 23, 0.94)),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.12), rgba(2, 6, 23, 0.04));
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 14px 26px rgba(0, 0, 0, 0.18);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 16px 30px rgba(0, 0, 0, 0.26);
 }
 
-.dab-match .dab-match__radar-north {
-  top: 10px;
-  font-size: 0.62rem;
+.dab-match .dab-match__radar-disc::before,
+.dab-match .dab-match__radar-disc::after {
+  display: none;
+}
+
+.dab-match .dab-match__radar-grid,
+.dab-match .dab-match__radar-compass,
+.dab-match .dab-match__radar-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dab-match .dab-match__radar-grid {
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.dab-match .dab-match__radar-axis,
+.dab-match .dab-match__radar-ring {
+  position: absolute;
+  inset: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+}
+
+.dab-match .dab-match__radar-axis {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dab-match .dab-match__radar-axis.is-horizontal {
+  width: calc(100% - 16px);
+  height: 1px;
+}
+
+.dab-match .dab-match__radar-axis.is-vertical {
+  width: 1px;
+  height: calc(100% - 16px);
+}
+
+.dab-match .dab-match__radar-ring {
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .dab-match .dab-match__radar-ring.is-inner {
@@ -6911,8 +6945,78 @@ button.dab-match__skill {
   height: 108px;
 }
 
-.dab-match .dab-match__radar-sweep {
-  background: none;
+.dab-match .dab-match__radar-cone {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 160px;
+  height: 160px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 70%);
+  clip-path: polygon(50% 0%, 66% 52%, 34% 52%);
+  opacity: 0.44;
+  transform: translate(-50%, -86%);
+}
+
+.dab-match .dab-match__radar-direction {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  color: rgba(226, 232, 240, 0.36);
+  font-family: "Rajdhani", "Exo 2", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transform: translate3d(-50%, -50%, 0);
+  transition: transform 90ms linear, color 120ms ease;
+}
+
+.dab-match .dab-match__radar-direction.is-north {
+  color: rgba(245, 158, 11, 0.92);
+  text-shadow: 0 0 8px rgba(245, 158, 11, 0.28);
+}
+
+.dab-match .dab-match__radar-marker.is-local,
+.dab-match .dab-match__radar-marker.is-dynamic {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  border-radius: 999px;
+  transform: translate3d(-50%, -50%, 0);
+}
+
+.dab-match .dab-match__radar-marker.is-local {
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.68);
+  background: #f8fafc;
+  box-shadow: 0 0 10px rgba(248, 250, 252, 0.74);
+  z-index: 2;
+}
+
+.dab-match .dab-match__radar-marker.is-dynamic {
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgba(2, 6, 23, 0.7);
+  box-shadow: 0 0 10px rgba(2, 6, 23, 0.24);
+  transition: transform 90ms linear, opacity 160ms ease;
+  will-change: transform;
+}
+
+.dab-match .dab-match__radar-marker.is-dynamic.is-ally {
+  background: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.68);
+}
+
+.dab-match .dab-match__radar-marker.is-dynamic.is-enemy {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.64);
 }
 
 .dab-match .dab-match__kill-log {
@@ -6931,6 +7035,9 @@ button.dab-match__skill {
   background: rgba(15, 23, 42, 0.72);
   padding: 8px 12px;
   box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+  opacity: var(--dab-kill-feed-opacity, 1);
+  transform: translateY(var(--dab-kill-feed-offset, 0));
+  transition: opacity 160ms linear, transform 160ms ease;
 }
 
 .dab-match .dab-match__kill-feed-player {
@@ -6940,12 +7047,12 @@ button.dab-match__skill {
   letter-spacing: 0.02em;
 }
 
-.dab-match .dab-match__kill-feed-player.is-gold {
-  color: #facc15;
+.dab-match .dab-match__kill-feed-player.is-local {
+  color: #60a5fa;
 }
 
-.dab-match .dab-match__kill-feed-player.is-violet {
-  color: #818cf8;
+.dab-match .dab-match__kill-feed-player.is-enemy {
+  color: #f87171;
 }
 
 .dab-match .dab-match__kill-feed-icon {
@@ -7029,6 +7136,116 @@ button.dab-match__skill {
   inset: 0;
   pointer-events: none;
   z-index: 24;
+}
+
+.dab-match .dab-match__overhead-bars-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 23;
+}
+
+.dab-match .dab-match__overhead-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  min-width: 124px;
+  max-width: 176px;
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+  opacity: 0;
+  transform: translate3d(calc(var(--dab-overhead-x, 0px) - 50%), calc(var(--dab-overhead-y, 0px) - 100%), 0)
+    scale(var(--dab-overhead-scale, 1));
+  transform-origin: center bottom;
+  transition: opacity 180ms ease;
+  will-change: transform, opacity;
+}
+
+.dab-match .dab-match__overhead-bar.is-visible {
+  opacity: 1;
+}
+
+.dab-match .dab-match__overhead-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.34));
+}
+
+.dab-match .dab-match__overhead-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  padding: 1px 5px 0;
+  border-radius: 4px;
+  border: 1px solid rgba(71, 85, 105, 0.82);
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  font-family: "Rajdhani", "Exo 2", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dab-match .dab-match__overhead-name {
+  color: #f87171;
+  font-family: "Rajdhani", "Exo 2", sans-serif;
+  font-size: 0.94rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.48);
+}
+
+.dab-match .dab-match__overhead-health-track {
+  position: relative;
+  width: 132px;
+  height: 7px;
+  overflow: hidden;
+  border: 1px solid rgba(51, 65, 85, 0.88);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.dab-match .dab-match__overhead-health-pulse {
+  position: absolute;
+  inset: 0;
+  opacity: 0.22;
+  background: currentColor;
+}
+
+.dab-match .dab-match__overhead-health-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  border-radius: inherit;
+  background: #dc2626;
+  transition: width 180ms ease;
+}
+
+.dab-match .dab-match__overhead-bar.is-ally .dab-match__overhead-name {
+  color: #93c5fd;
+}
+
+.dab-match .dab-match__overhead-bar.is-ally .dab-match__overhead-health-pulse {
+  color: #38bdf8;
+}
+
+.dab-match .dab-match__overhead-bar.is-ally .dab-match__overhead-health-fill {
+  background: linear-gradient(90deg, #2563eb, #38bdf8);
+}
+
+.dab-match .dab-match__overhead-bar.is-enemy .dab-match__overhead-health-pulse {
+  color: #f87171;
+}
+
+.dab-match .dab-match__overhead-bar.is-enemy .dab-match__overhead-health-fill {
+  background: linear-gradient(90deg, #dc2626, #ef4444);
 }
 
 .dab-match .dab-match__speech-bubble {
@@ -7231,19 +7448,25 @@ button.dab-match__skill {
 }
 
 .dab-match .dab-match__skill-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   left: 50%;
   right: auto;
   bottom: -8px;
   transform: translateX(-50%);
   min-width: 22px;
+  height: 18px;
   border-radius: 4px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(39, 39, 42, 0.96);
-  padding: 2px 7px 1px;
+  padding: 0 7px;
   color: rgba(248, 250, 252, 0.84);
   font-family: "JetBrains Mono", "Consolas", monospace;
   font-size: 0.64rem;
   font-weight: 700;
+  line-height: 1;
+  text-align: center;
 }
 
 .dab-match .dab-match__skill-key.is-ultimate {

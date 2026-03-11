@@ -23,7 +23,7 @@
               <div class="dab-match__portrait-gloss"></div>
             </div>
             <div class="dab-match__portrait-badge">
-              <span class="dab-match__portrait-badge-label">LVL 35</span>
+              <span class="dab-match__portrait-badge-label" data-slot="match-hud-level-badge">LVL 1</span>
             </div>
           </div>
 
@@ -58,40 +58,37 @@
             </div>
             <span class="dab-match__stat-divider" aria-hidden="true"></span>
             <div class="dab-match__stat-item">
+              <span class="dab-match__stat-label" data-slot="match-hud-kills-label">Kills</span>
               <strong class="dab-match__stat-value is-kills" data-slot="match-hud-kills">0</strong>
             </div>
             <span class="dab-match__stat-divider" aria-hidden="true"></span>
             <div class="dab-match__stat-item">
+              <span class="dab-match__stat-label" data-slot="match-hud-deaths-label">Deaths</span>
               <strong class="dab-match__stat-value is-deaths" data-slot="match-hud-deaths">0</strong>
             </div>
           </section>
 
-          <div class="dab-match__radar-head">
-            <span class="dab-match__radar-chip">Radar</span>
-            <span class="dab-match__radar-chip is-live">Live</span>
-          </div>
-          <div class="dab-match__radar-disc">
-            <span class="dab-match__radar-north">N</span>
-            <span class="dab-match__radar-ring is-inner"></span>
-            <span class="dab-match__radar-ring is-outer"></span>
-            <span class="dab-match__radar-sweep"></span>
-            <span class="dab-match__radar-marker is-player"></span>
-            <span class="dab-match__radar-marker is-objective"></span>
-            <span class="dab-match__radar-marker is-enemy"></span>
+          <div class="dab-match__radar-disc" data-slot="match-radar-disc">
+            <div class="dab-match__radar-grid" aria-hidden="true">
+              <span class="dab-match__radar-ring is-inner"></span>
+              <span class="dab-match__radar-ring is-outer"></span>
+              <span class="dab-match__radar-axis is-horizontal"></span>
+              <span class="dab-match__radar-axis is-vertical"></span>
+              <span class="dab-match__radar-cone"></span>
+            </div>
+
+            <div class="dab-match__radar-compass" aria-hidden="true">
+              <span class="dab-match__radar-direction is-north" data-slot="match-radar-direction-north">N</span>
+              <span class="dab-match__radar-direction is-east" data-slot="match-radar-direction-east">E</span>
+              <span class="dab-match__radar-direction is-south" data-slot="match-radar-direction-south">S</span>
+              <span class="dab-match__radar-direction is-west" data-slot="match-radar-direction-west">W</span>
+            </div>
+
+            <div class="dab-match__radar-markers" data-slot="match-radar-markers"></div>
+            <span class="dab-match__radar-marker is-local" aria-hidden="true"></span>
           </div>
 
-          <div class="dab-match__kill-log">
-            <div class="dab-match__kill-feed-item">
-              <span class="dab-match__kill-feed-player is-gold">BASTION</span>
-              <span class="dab-match__kill-feed-icon">⊗</span>
-              <span class="dab-match__kill-feed-player is-violet">RAMATTRA</span>
-            </div>
-            <div class="dab-match__kill-feed-item">
-              <span class="dab-match__kill-feed-player is-violet">JUNKRAT</span>
-              <span class="dab-match__kill-feed-icon">⊗</span>
-              <span class="dab-match__kill-feed-player is-gold">HANZO</span>
-            </div>
-          </div>
+          <div class="dab-match__kill-log" data-slot="match-kill-log" role="log" aria-live="polite"></div>
         </aside>
       </div>
 
@@ -99,6 +96,7 @@
         <span class="dab-match__crosshair-dot"></span>
       </div>
 
+      <div class="dab-match__overhead-bars-layer" data-slot="match-overhead-bars-layer" aria-hidden="true"></div>
       <div class="dab-match__speech-layer" data-slot="match-speech-layer" aria-hidden="true"></div>
 
       <div class="dab-match__hud-frame dab-match__hud-frame--bottom-left">
@@ -159,10 +157,10 @@
 
       <div class="dab-match__hud-frame dab-match__hud-frame--bottom-right">
         <aside class="dab-match__weapon-stack" aria-hidden="true">
-          <div class="dab-match__controls-heading">Controls</div>
+          <div class="dab-match__controls-heading" data-slot="match-controls-heading">Controls</div>
           <div class="dab-match__controls-list">
             <div class="dab-match__control-row">
-              <span class="dab-match__control-copy">Attack</span>
+              <span class="dab-match__control-copy" data-slot="match-control-copy-attack">Attack</span>
               <span class="dab-match__control-key">
                 <span class="dab-match__control-keycap">
                   <span class="dab-match__control-keycap-icon" data-slot="match-control-icon-attack"></span>
@@ -171,7 +169,7 @@
               </span>
             </div>
             <div class="dab-match__control-row">
-              <span class="dab-match__control-copy">Heavy</span>
+              <span class="dab-match__control-copy" data-slot="match-control-copy-heavy">Heavy</span>
               <span class="dab-match__control-key">
                 <span class="dab-match__control-keycap is-accent">
                   <span class="dab-match__control-keycap-icon" data-slot="match-control-icon-heavy"></span>
@@ -180,19 +178,19 @@
               </span>
             </div>
             <div class="dab-match__control-row">
-              <span class="dab-match__control-copy">Sprint</span>
-              <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text">Shift</span></span>
+              <span class="dab-match__control-copy" data-slot="match-control-copy-sprint">Sprint</span>
+              <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text" data-slot="match-control-key-sprint">Shift</span></span>
             </div>
             <div class="dab-match__control-row">
-              <span class="dab-match__control-copy">Jump</span>
-              <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text">Space</span></span>
+              <span class="dab-match__control-copy" data-slot="match-control-copy-jump">Jump</span>
+              <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text" data-slot="match-control-key-jump">Space</span></span>
             </div>
             <div class="dab-match__control-row">
-              <span class="dab-match__control-copy">Roll</span>
+              <span class="dab-match__control-copy" data-slot="match-control-copy-roll">Roll</span>
               <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text">C</span></span>
             </div>
             <div class="dab-match__control-row">
-              <span class="dab-match__control-copy">Fly Mode</span>
+              <span class="dab-match__control-copy" data-slot="match-control-copy-fly">Fly Mode</span>
               <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text">F</span></span>
             </div>
           </div>
