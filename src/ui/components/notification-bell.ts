@@ -1,6 +1,7 @@
 // Responsável por renderizar o sino de notificações com badge de não lidas.
 import type { Locale } from "../../i18n";
 import { bind } from "./dom";
+import { createMenuIcon } from "./menu-icon";
 
 export type NotificationBellOptions = {
   container: HTMLElement;
@@ -28,10 +29,7 @@ export function mountNotificationBell(options: NotificationBellOptions): Notific
   button.className = "dab-icon-button dab-notification-bell";
   button.dataset.action = "open-notifications";
 
-  const icon = document.createElement("span");
-  icon.className = "dab-notification-bell__icon";
-  icon.setAttribute("aria-hidden", "true");
-  icon.textContent = "🔔";
+  const icon = createMenuIcon("bell", { className: "dab-notification-bell__icon" });
 
   const badge = document.createElement("span");
   badge.className = "dab-notification-bell__badge";

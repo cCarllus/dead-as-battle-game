@@ -1,5 +1,6 @@
 // Responsável por renderizar e atualizar o indicador de moedas no topo da interface.
 import { t, type Locale } from "../../i18n";
+import { createMenuIcon } from "./menu-icon";
 
 export type CoinsDisplayOptions = {
   container: HTMLElement;
@@ -27,10 +28,7 @@ export function mountCoinsDisplay(options: CoinsDisplayOptions): CoinsDisplayHan
   const item = document.createElement("div");
   item.className = "dab-currency__item";
 
-  const icon = document.createElement("span");
-  icon.className = "dab-currency__icon dab-currency__icon--coin";
-  icon.setAttribute("aria-hidden", "true");
-  icon.textContent = "M";
+  const icon = createMenuIcon("coin", { className: "dab-currency__icon dab-currency__icon--coin" });
 
   const value = document.createElement("span");
   value.className = "dab-currency__value";

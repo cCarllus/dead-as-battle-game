@@ -4,6 +4,7 @@ import type { NotificationService } from "../../services/notification.service";
 import type { UserService } from "../../services/user.service";
 import template from "../layout/notes.html?raw";
 import { bindDelegatedClick, qs } from "../components/dom";
+import { setMenuIconContent } from "../components/menu-icon";
 import { mountNavbarNotificationCenter } from "../components/navbar-notification-center";
 import { renderNavbar } from "../components/navbar";
 import { MENU_NAV_ITEMS, type MenuTabId } from "../navigation/menu.model";
@@ -64,6 +65,15 @@ export function renderNotesScreen(root: HTMLElement, actions: NotesActions): () 
     userService: actions.userService,
     notificationService: actions.notificationService,
     initialCoins: actions.coins ?? 0
+  });
+
+  screen.querySelectorAll<HTMLElement>('[data-note-icon="chevron"]').forEach((icon) => {
+    setMenuIconContent(icon, "chevron");
+  });
+
+  screen.querySelectorAll<HTMLElement>("[data-community-icon]").forEach((icon) => {
+    const iconId = icon.dataset.communityIcon === "twitter-x" ? "socialX" : "community";
+    setMenuIconContent(icon, iconId);
   });
 
   const disposeClick = bindDelegatedClick(screen, "button", (button) => {

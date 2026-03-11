@@ -32,7 +32,6 @@ export type HomeEventsOptions = {
 
 export function bindHomeEvents(options: HomeEventsOptions): () => void {
   let activeTab = options.initialActiveTab;
-  const parallaxBackground = options.menu.querySelector<HTMLElement>('[data-parallax="bg"]');
 
   const cleanups = [
     bindDelegatedClick(options.menu, "button", (button) => {
@@ -47,24 +46,6 @@ export function bindHomeEvents(options: HomeEventsOptions): () => void {
       if (isMenuActionId(action)) {
         options.onAction(action);
       }
-    }),
-    bind(options.menu, "pointermove", (event) => {
-      if (!parallaxBackground) {
-        return;
-      }
-
-      const bounds = options.menu.getBoundingClientRect();
-      const xRatio = (event.clientX - bounds.left) / bounds.width - 0.5;
-      const yRatio = (event.clientY - bounds.top) / bounds.height - 0.5;
-
-      parallaxBackground.style.transform = `scale(1.06) translate(${xRatio * -16}px, ${yRatio * -12}px)`;
-    }),
-    bind(options.menu, "pointerleave", () => {
-      if (!parallaxBackground) {
-        return;
-      }
-
-      parallaxBackground.style.transform = "scale(1.06) translate(0, 0)";
     })
   ];
 

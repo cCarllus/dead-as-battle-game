@@ -7,6 +7,7 @@ import type { HeroUnlockResult } from "../../services/hero-purchase.service";
 import template from "../layout/champions.html?raw";
 import { bind, bindDelegatedClick, qs } from "../components/dom";
 import { createHeroCardElement, type HeroCardData } from "../components/hero-card";
+import { setMenuIconContent } from "../components/menu-icon";
 import { renderNavbar } from "../components/navbar";
 import { mountNavbarNotificationCenter } from "../components/navbar-notification-center";
 import { MENU_NAV_ITEMS, type MenuTabId } from "../navigation/menu.model";
@@ -96,6 +97,8 @@ export function renderChampionsScreen(root: HTMLElement, actions: ChampionsActio
 
   const filterLabel = qs<HTMLElement>(screen, '[data-slot="filter-label"]');
   filterLabel.textContent = t(locale, "champions.filter.allChampions");
+  const filterIcon = qs<HTMLElement>(screen, '[data-slot="filter-icon"]');
+  setMenuIconContent(filterIcon, "filter");
 
   const grid = qs<HTMLElement>(screen, '[data-slot="champion-grid"]');
   const confirmButton = qs<HTMLButtonElement>(screen, 'button[data-action="confirm"]');

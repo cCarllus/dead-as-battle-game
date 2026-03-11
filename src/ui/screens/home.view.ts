@@ -1,5 +1,6 @@
 // Responsável por montar a estrutura visual e conteúdo estático da tela Home.
 import { t, type Locale } from "../../i18n";
+import { createMenuIcon } from "../components/menu-icon";
 import { qs } from "../components/dom";
 import { mountChampionPreview } from "../components/champion-preview";
 import { renderNavbar } from "../components/navbar";
@@ -42,26 +43,14 @@ function renderFooterActions(container: HTMLElement, locale: Locale): void {
     button.className = "dab-footer-button";
     button.dataset.action = item.action;
 
-    if (item.action === "champions") {
-      const icon = document.createElement("span");
-      icon.className = "dab-footer-button__icon";
-      icon.textContent = "✦";
-      button.appendChild(icon);
-    }
-
-    if (item.action === "settings") {
-      const icon = document.createElement("span");
-      icon.className = "dab-footer-button__icon";
-      icon.textContent = "⚙";
-      button.appendChild(icon);
-    }
-
     if (item.action === "exit") {
       const keycap = document.createElement("span");
       keycap.className = "dab-keycap";
       keycap.textContent = "ESC";
       button.appendChild(keycap);
     }
+
+    button.appendChild(createMenuIcon(item.iconId, { className: "dab-footer-button__icon" }));
 
     const label = document.createElement("span");
     label.textContent = t(locale, item.labelKey);
@@ -119,10 +108,7 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
   const killsItem = document.createElement("article");
   killsItem.className = "dab-kd-card__item is-kills";
 
-  const killsIcon = document.createElement("span");
-  killsIcon.className = "dab-kd-card__icon";
-  killsIcon.setAttribute("aria-hidden", "true");
-  killsIcon.textContent = "✦";
+  const killsIcon = createMenuIcon("kills", { className: "dab-kd-card__icon" });
 
   const killsLabel = document.createElement("small");
   killsLabel.textContent = t(options.locale, "home.stats.kills");
@@ -135,10 +121,7 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
   const deathsItem = document.createElement("article");
   deathsItem.className = "dab-kd-card__item is-deaths";
 
-  const deathsIcon = document.createElement("span");
-  deathsIcon.className = "dab-kd-card__icon";
-  deathsIcon.setAttribute("aria-hidden", "true");
-  deathsIcon.textContent = "☠";
+  const deathsIcon = createMenuIcon("deaths", { className: "dab-kd-card__icon" });
 
   const deathsLabel = document.createElement("small");
   deathsLabel.textContent = t(options.locale, "home.stats.deaths");
@@ -167,6 +150,12 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
     total: TEAM_TOTAL_SLOTS
   });
 
+  const teamTab = qs<HTMLElement>(menu, '[data-slot="team-tab"]');
+  teamTab.replaceChildren(
+    createMenuIcon("team", { className: "dab-roster__team-icon" }),
+    document.createTextNode(t(options.locale, "menu.roster.title"))
+  );
+
   const teamSlots = qs<HTMLElement>(menu, '[data-slot="team-slots"]');
   teamSlots.replaceChildren();
 
@@ -175,6 +164,23 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
 
   const playSection = qs<HTMLElement>(menu, ".dab-play");
   playSection.setAttribute("aria-label", t(options.locale, "menu.aria.playModes"));
+
+  const playButton = qs<HTMLButtonElement>(menu, 'button[data-action="play"]');
+  const playButtonLabel = playButton.querySelector("span:not(.dab-play__start-icon)");
+  const playButtonIcon = qs<HTMLElement>(playButton, ".dab-play__start-icon");
+  playButtonIcon.replaceChildren(createMenuIcon("play", { className: "dab-play__start-icon-svg" }));
+  if (playButtonLabel) {
+    playButton.replaceChildren(playButtonLabel, playButtonIcon);
+  }
+
+  const chatButton = qs<HTMLButtonElement>(menu, ".dab-chat-button");
+  const chatKeycap = qs<HTMLElement>(chatButton, ".dab-keycap");
+  const chatLabel = chatButton.querySelector<HTMLElement>('span[data-i18n="menu.footer.chat"]');
+  chatButton.replaceChildren(
+    createMenuIcon("chat", { className: "dab-chat-button__icon" }),
+    chatKeycap,
+    chatLabel ?? document.createTextNode(t(options.locale, "menu.footer.chat"))
+  );
 
   const championPreview = qs<HTMLElement>(menu, "#champion-preview");
   const disposeChampionPreview = mountChampionPreview(championPreview, {

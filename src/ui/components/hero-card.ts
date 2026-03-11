@@ -1,6 +1,7 @@
 // Responsável por renderizar o card visual de herói com estados de bloqueio, seleção e compra.
 import { t, type Locale } from "../../i18n";
 import type { ChampionId } from "../../models/champion.model";
+import { createMenuIcon } from "./menu-icon";
 
 function formatCoins(locale: Locale, value: number): string {
   return new Intl.NumberFormat(locale).format(Math.max(0, Math.floor(value)));
@@ -49,9 +50,7 @@ export function createHeroCardElement(options: HeroCardOptions): HTMLElement {
   level.className = "dab-champion-card__level";
   level.textContent = t(options.locale, "champions.level", { value: options.hero.level });
 
-  const check = document.createElement("span");
-  check.className = "dab-champion-card__check";
-  check.textContent = "✓";
+  const check = createMenuIcon("check", { className: "dab-champion-card__check" });
 
   const footer = document.createElement("span");
   footer.className = "dab-champion-card__footer";
@@ -73,10 +72,7 @@ export function createHeroCardElement(options: HeroCardOptions): HTMLElement {
     const lockPanel = document.createElement("div");
     lockPanel.className = "dab-champion-card__lock-panel";
 
-    const lockIcon = document.createElement("span");
-    lockIcon.className = "dab-champion-card__lock-icon";
-    lockIcon.setAttribute("aria-hidden", "true");
-    lockIcon.textContent = "🔒";
+    const lockIcon = createMenuIcon("lock", { className: "dab-champion-card__lock-icon" });
 
     const lockText = document.createElement("span");
     lockText.className = "dab-champion-card__locked-text";

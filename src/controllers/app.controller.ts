@@ -6,7 +6,7 @@ import type { SessionService } from "../core/storage";
 import { t } from "../i18n";
 import type { ChampionId } from "../models/champion.model";
 import { getChampionCardsForUser, getSelectedChampionForUser } from "../services/champion.service";
-import type { AudioService } from "../services/audio.service";
+import type { MenuAudioManager } from "../services/menu-audio-manager";
 import { renderLoadingScreen } from "../ui/screens/loading.screen";
 import { renderHomeScreen } from "../ui/screens/home.screen";
 import { renderNicknameScreen } from "../ui/screens/nickname.screen";
@@ -30,7 +30,7 @@ export type AppControllerDependencies = {
   state: AppStateStore;
   userService: UserService;
   sessionService: SessionService;
-  audioService: AudioService;
+  menuAudioManager: MenuAudioManager;
   settingsService: SettingsService;
   chatService: ChatService;
   teamService: TeamService;
@@ -81,7 +81,7 @@ function bindGlobalTeamInviteNotifications(params: {
 function createScreenRegistry(
   userService: UserService,
   sessionService: SessionService,
-  audioService: AudioService,
+  menuAudioManager: MenuAudioManager,
   settingsService: SettingsService,
   chatService: ChatService,
   teamService: TeamService,
@@ -94,9 +94,11 @@ function createScreenRegistry(
 ): ScreenRegistry {
   return {
     loading: ({ uiRoot, state }) => {
+      menuAudioManager.playPageMusic("loading", { fadeMs: 0 });
       renderLoadingScreen(uiRoot, { locale: state.get().locale });
     },
     nickname: ({ uiRoot, state, goTo }) => {
+      menuAudioManager.playPageMusic("nickname", { fadeMs: 0 });
       return renderNicknameScreen(uiRoot, {
         locale: state.get().locale,
         onSubmit: (nickname) => {
@@ -108,6 +110,7 @@ function createScreenRegistry(
       });
     },
     home: ({ uiRoot, state, goTo }) => {
+      menuAudioManager.playPageMusic("home", { fadeMs: 0 });
       heroSelectionService.ensureSelectedHeroUnlocked();
       rewardService.generateRewardIfNeeded();
       const user = userService.getCurrentUser();
@@ -170,7 +173,7 @@ function createScreenRegistry(
           goTo("nickname");
         },
         onApplyAudioSettings: (settings) => {
-          audioService.applySettings(settings);
+          menuAudioManager.applySettings(settings);
         },
         onApplyLocale: (locale) => {
           const currentLocale = state.get().locale;
@@ -210,6 +213,11 @@ function createScreenRegistry(
         return;
       }
 
+      menuAudioManager.playPageMusic("champions", {
+        championId: user.selectedChampionId,
+        restart: true
+      });
+
       const cards = getChampionCardsForUser(user).map((champion) => ({
         id: champion.id,
         displayName: champion.displayName,
@@ -242,7 +250,7 @@ function createScreenRegistry(
           }
         },
         onPreviewSelection: (championId: ChampionId) => {
-          audioService.playChampionSelect(championId);
+          menuAudioManager.playChampionTheme(championId);
         },
         onConfirmSelection: (championId: ChampionId) => {
           const selectionResult = heroSelectionService.setSelectedHero(championId);
@@ -270,6 +278,8 @@ function createScreenRegistry(
         return;
       }
 
+      menuAudioManager.playPageMusic("notes", { fadeMs: 0 });
+
       return renderNotesScreen(uiRoot, {
         locale: state.get().locale,
         activeTab: state.get().activeMenuTab,
@@ -291,6 +301,7 @@ function createScreenRegistry(
       });
     },
     match: ({ uiRoot, state, goTo }) => {
+      menuAudioManager.playPageMusic("match", { fadeMs: 0 });
       heroSelectionService.ensureSelectedHeroUnlocked();
       rewardService.generateRewardIfNeeded();
 
@@ -311,7 +322,7 @@ function createScreenRegistry(
         matchService,
         teamService,
         onApplyAudioSettings: (settings) => {
-          audioService.applySettings(settings);
+          menuAudioManager.applySettings(settings);
         },
         onApplyLocale: (locale) => {
           const currentLocale = state.get().locale;
@@ -343,6 +354,7 @@ function createScreenRegistry(
       });
     },
     settings: ({ uiRoot, state, goTo }) => {
+      menuAudioManager.playPageMusic("settings", { fadeMs: 0 });
       return renderSettingsScreen(uiRoot, {
         locale: state.get().locale,
         onBack: () => {
@@ -384,7 +396,7 @@ export function createAppController({
   state,
   userService,
   sessionService,
-  audioService,
+  menuAudioManager,
   settingsService,
   chatService,
   teamService,
@@ -405,7 +417,7 @@ export function createAppController({
     createScreenRegistry(
       userService,
       sessionService,
-      audioService,
+      menuAudioManager,
       settingsService,
       chatService,
       teamService,
@@ -446,7 +458,7 @@ export function createAppController({
       stopRewardTracking = null;
       disposeTeamInviteNotifications();
       router.dispose();
-      audioService.dispose();
+      menuAudioManager.dispose();
       matchPresenceService.disconnect();
       matchService.disconnect();
       chatService.disconnect();

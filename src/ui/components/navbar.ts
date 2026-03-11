@@ -1,5 +1,7 @@
 // Responsável por renderizar cabeçalho de navegação e indicadores de moeda da Home.
 import { t, type Locale } from "../../i18n";
+import { createMenuIcon } from "./menu-icon";
+import { renderMenuLogo } from "./menu-logo";
 import { MENU_NAV_ITEMS, type MenuTabId } from "../navigation/menu.model";
 
 export type NavbarProps = {
@@ -18,18 +20,7 @@ export function renderNavbar(container: HTMLElement, props: NavbarProps): void {
   const header = document.createElement("header");
   header.className = "dab-menu__header";
 
-  const logo = document.createElement("div");
-  logo.className = "dab-logo";
-
-  const logoMark = document.createElement("span");
-  logoMark.className = "dab-logo__mark";
-  logoMark.setAttribute("aria-hidden", "true");
-
-  const logoText = document.createElement("span");
-  logoText.className = "dab-logo__text";
-  logoText.textContent = t(props.locale, "menu.logo");
-
-  logo.append(logoMark, logoText);
+  const logo = renderMenuLogo();
 
   const nav = document.createElement("nav");
   nav.className = "dab-menu__nav";
@@ -40,7 +31,13 @@ export function renderNavbar(container: HTMLElement, props: NavbarProps): void {
     button.type = "button";
     button.className = "dab-menu__nav-btn";
     button.dataset.tab = item.id;
-    button.textContent = t(props.locale, item.labelKey);
+
+    const icon = createMenuIcon(item.iconId, { className: "dab-menu__nav-icon" });
+    const label = document.createElement("span");
+    label.className = "dab-menu__nav-label";
+    label.textContent = t(props.locale, item.labelKey);
+
+    button.append(icon, label);
 
     if (item.id === props.activeTab) {
       button.classList.add("is-active");
@@ -63,9 +60,7 @@ export function renderNavbar(container: HTMLElement, props: NavbarProps): void {
   itemNode.className = "dab-currency__item";
   itemNode.setAttribute("aria-label", t(props.locale, "menu.currency.coin", { value: formatNumber(props.locale, normalizedCoins) }));
 
-  const icon = document.createElement("span");
-  icon.className = "dab-currency__icon dab-currency__icon--coin";
-  icon.textContent = "M";
+  const icon = createMenuIcon("coin", { className: "dab-currency__icon dab-currency__icon--coin" });
 
   const value = document.createElement("span");
   value.className = "dab-currency__value";

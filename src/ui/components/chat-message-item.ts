@@ -1,5 +1,6 @@
 import { t, type Locale } from "../../i18n";
 import type { ChatMessage } from "../../models/chat-message.model";
+import { createMenuIcon } from "./menu-icon";
 
 export type ChatMessageItemOptions = {
   locale: Locale;
@@ -63,12 +64,12 @@ export function createChatMessageItem(options: ChatMessageItemOptions): HTMLLIEl
 
     if (alreadyInTeam) {
       inviteButton.classList.add("is-checked");
-      inviteButton.textContent = "✓";
       inviteButton.disabled = true;
       inviteButton.title = t(locale, "team.chat.alreadyInTeam");
+      inviteButton.appendChild(createMenuIcon("check", { className: "dab-global-chat__invite-icon" }));
     } else {
-      inviteButton.textContent = "+";
       inviteButton.title = t(locale, "team.chat.inviteTooltip", { nickname: message.nickname });
+      inviteButton.appendChild(createMenuIcon("teamInvite", { className: "dab-global-chat__invite-icon" }));
 
       inviteButton.addEventListener("click", () => {
         onInvitePlayer?.(message.userId, message.nickname);

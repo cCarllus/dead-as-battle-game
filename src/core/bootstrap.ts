@@ -8,7 +8,7 @@ import { createAppState } from "./state";
 import { createSessionService } from "./storage";
 import { createUserRepository } from "../repositories/user.repository";
 import { createUserService } from "../services/user.service";
-import { createAudioService } from "../services/audio.service";
+import { createMenuAudioManager } from "../services/menu-audio-manager";
 import { createSettingsService } from "../services/settings.service";
 import { createChatService } from "../services/chat.service";
 import { createTeamService } from "../services/team.service";
@@ -40,13 +40,13 @@ export function bootstrap(): void {
   document.documentElement.lang = initialSettings.locale;
   const appState = createAppState({ locale: initialSettings.locale });
   const audioCatalog = getChampionCatalogForUser("Player");
-  const audioService = createAudioService({
-    selectAudioByChampionId: audioCatalog.reduce((acc, champion) => {
+  const menuAudioManager = createMenuAudioManager({
+    championThemeById: audioCatalog.reduce((acc, champion) => {
       acc[champion.id] = champion.selectAudioUrl;
       return acc;
     }, {} as Record<ChampionId, string>)
   });
-  audioService.applySettings(initialSettings);
+  menuAudioManager.applySettings(initialSettings);
 
   const resolveNetworkIdentity = () => {
     const snapshot = sessionService.getSnapshot();
@@ -119,7 +119,7 @@ export function bootstrap(): void {
     state: appState,
     userService,
     sessionService,
-    audioService,
+    menuAudioManager,
     settingsService,
     chatService,
     teamService,

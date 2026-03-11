@@ -1,5 +1,6 @@
 // Responsável por definir modelos e dados estáticos usados pela tela Home.
 import type { TranslationKey, TranslationParams } from "../../i18n";
+import type { MenuIconId } from "../components/menu-icon";
 
 export const MENU_ACTION_IDS = ["play", "champions", "settings", "exit"] as const;
 export type MenuActionId = (typeof MENU_ACTION_IDS)[number];
@@ -59,12 +60,13 @@ export function createTeamSlots(params: {
 export type FooterAction = {
   labelKey: TranslationKey;
   action: MenuActionId;
+  iconId: MenuIconId;
 };
 
 export const FOOTER_ACTIONS: readonly FooterAction[] = [
-  { labelKey: "menu.footer.champions", action: "champions" },
-  { labelKey: "menu.footer.settings", action: "settings" },
-  { labelKey: "common.back", action: "exit" }
+  { labelKey: "menu.footer.champions", action: "champions", iconId: "champions" },
+  { labelKey: "menu.footer.settings", action: "settings", iconId: "settings" },
+  { labelKey: "common.back", action: "exit", iconId: "back" }
 ];
 
 export function isMenuActionId(value: string | undefined): value is MenuActionId {

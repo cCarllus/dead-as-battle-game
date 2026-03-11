@@ -1,16 +1,37 @@
 /* Responsável por centralizar o estilo visual de todas as telas e componentes de UI. */
-@import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&display=swap");
+
+:root {
+  --dab-font-display: "Orbitron", "Rajdhani", sans-serif;
+  --dab-font-heading: "Rajdhani", "Exo 2", sans-serif;
+  --dab-font-body: "Exo 2", "Segoe UI", sans-serif;
+  --dab-font-ui: "Rajdhani", "Exo 2", sans-serif;
+  --dab-panel-border: rgba(255, 255, 255, 0.12);
+  --dab-panel-bg: rgba(7, 12, 26, 0.78);
+  --dab-accent-gold: #facc15;
+  --dab-accent-gold-strong: #f59e0b;
+  --dab-accent-cyan: #22d3ee;
+}
 
 html,
 body {
   margin: 0;
   width: 100%;
   height: 100%;
-  font-family: Arial, sans-serif;
+  font-family: var(--dab-font-body);
   background: #0a0a0a;
   color: #ffffff;
   overflow: hidden;
+  font-synthesis-weight: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 #ui-root {
@@ -77,7 +98,7 @@ body {
   pointer-events: auto;
   overflow: hidden;
   isolation: isolate;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--dab-font-ui);
 }
 
 .nickname-screen__bg {
@@ -128,9 +149,10 @@ body {
   margin: 0 0 22px;
   text-align: center;
   font-size: clamp(1.55rem, 2.9vw, 2.05rem);
-  font-weight: 600;
+  font-family: var(--dab-font-heading);
+  font-weight: 700;
   line-height: 1.18;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   text-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
 }
 
@@ -329,7 +351,7 @@ body {
   overflow: hidden;
   pointer-events: auto;
   color: #f8fbff;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--dab-font-ui);
   background: #070b17;
   isolation: isolate;
   --dab-champion-theme: #22d3ee;
@@ -384,15 +406,18 @@ body {
   right: 0;
   left: 0;
   z-index: 40;
-  height: 76px;
+  height: 88px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 26px;
-  padding: 0 28px;
+  gap: 22px;
+  padding: 0 28px 0 26px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  background: rgba(8, 12, 24, 0.7);
+  backdrop-filter: blur(18px);
+  background:
+    linear-gradient(180deg, rgba(7, 11, 21, 0.94), rgba(7, 11, 21, 0.76)),
+    linear-gradient(90deg, rgba(250, 204, 21, 0.06), transparent 34%);
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.28);
 }
 
 .dab-menu__header::before {
@@ -408,45 +433,126 @@ body {
 .dab-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 120px;
+  gap: 14px;
+  min-width: 250px;
   position: relative;
   z-index: 1;
 }
 
-.dab-logo__mark {
+.dab-logo__crest {
   position: relative;
-  width: 26px;
-  height: 26px;
-  border-radius: 4px;
-  background: linear-gradient(140deg, #facc15, #d97706);
-  transform: rotate(45deg);
-  box-shadow: 0 0 16px rgba(250, 204, 21, 0.35);
+  width: 56px;
+  height: 56px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 18px;
+  border: 1px solid rgba(250, 204, 21, 0.34);
+  background:
+    linear-gradient(155deg, rgba(250, 204, 21, 0.26), rgba(245, 158, 11, 0.08)),
+    linear-gradient(135deg, rgba(9, 15, 31, 0.98), rgba(9, 15, 31, 0.76));
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 0 1px rgba(250, 204, 21, 0.06),
+    0 18px 28px rgba(2, 6, 23, 0.32);
 }
 
-.dab-logo__mark::after {
+.dab-logo__crest::before {
   content: "";
   position: absolute;
   inset: 7px;
-  border: 2px solid #0f172a;
-  border-radius: 3px;
+  border-radius: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  opacity: 0.8;
 }
 
-.dab-logo__text {
-  font-size: 1.5rem;
+.dab-logo__crest-icon {
+  position: absolute;
+  right: -3px;
+  top: -4px;
+  color: rgba(250, 204, 21, 0.95);
+  transform: rotate(6deg);
+}
+
+.dab-logo__crest-cut {
+  position: absolute;
+  inset: auto 8px 14px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.85), transparent);
+  transform: skewX(-34deg);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.45);
+}
+
+.dab-logo__crest-copy {
+  position: relative;
+  z-index: 1;
+  font-family: var(--dab-font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: #f8fafc;
+  text-shadow:
+    0 0 12px rgba(34, 211, 238, 0.18),
+    0 0 18px rgba(250, 204, 21, 0.12);
+}
+
+.dab-logo__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dab-logo__eyebrow {
+  font-size: 0.63rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.34em;
+  color: rgba(125, 211, 252, 0.84);
+  text-transform: uppercase;
+}
+
+.dab-logo__wordmark {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--dab-font-display);
+}
+
+.dab-logo__word,
+.dab-logo__compact-word {
+  font-size: clamp(1.18rem, 1.8vw, 1.52rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: #f7fbff;
   text-shadow:
     0 0 1px rgba(0, 0, 0, 0.8),
     0 0 14px color-mix(in oklab, var(--dab-champion-theme) 42%, transparent);
 }
 
+.dab-logo__word--accent {
+  color: var(--dab-accent-gold);
+  text-shadow:
+    0 0 12px rgba(250, 204, 21, 0.35),
+    0 0 24px rgba(250, 204, 21, 0.12);
+}
+
+.dab-logo[data-variant="compact"] .dab-logo__crest {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.dab-logo[data-variant="compact"] .dab-logo__eyebrow {
+  letter-spacing: 0.22em;
+}
+
 .dab-menu__nav {
   display: flex;
   align-items: stretch;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -459,35 +565,57 @@ body {
 .dab-menu__nav-btn {
   position: relative;
   border: 0;
-  color: rgba(255, 255, 255, 0.58);
-  background: transparent;
-  padding: 0 10px;
-  min-height: 76px;
-  font-size: 0.83rem;
-  letter-spacing: 0.16em;
-  font-weight: 600;
+  color: rgba(226, 232, 240, 0.62);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0 16px;
+  min-height: 54px;
+  min-width: 112px;
+  border-radius: 16px;
+  font-size: 0.77rem;
+  letter-spacing: 0.18em;
+  font-weight: 700;
   cursor: pointer;
-  white-space: nowrap;
   text-transform: uppercase;
-  transition: color 180ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  white-space: nowrap;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+  border: 1px solid transparent;
 }
 
 .dab-menu__nav-btn:hover {
   color: #fff;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
 }
 
 .dab-menu__nav-btn.is-active {
   color: #ffffff;
+  border-color: rgba(250, 204, 21, 0.2);
+  background:
+    linear-gradient(180deg, rgba(250, 204, 21, 0.14), rgba(250, 204, 21, 0.04)),
+    rgba(255, 255, 255, 0.04);
   text-shadow: 0 0 10px rgba(250, 204, 21, 0.4);
+  box-shadow:
+    0 10px 20px rgba(2, 6, 23, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .dab-menu__nav-btn.is-active::after {
   content: "";
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 4px;
+  right: 14px;
+  bottom: -1px;
+  left: 14px;
+  height: 3px;
+  border-radius: 999px;
   background: linear-gradient(90deg, #facc15, #f59e0b);
   box-shadow: 0 0 14px rgba(250, 204, 21, 0.45);
 }
@@ -497,26 +625,60 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.dab-menu-icon,
+.dab-menu-icon-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.dab-menu-icon__svg {
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+}
+
+.dab-menu__nav-icon {
+  font-size: 1rem;
+}
+
+.dab-menu__nav-label {
+  transform: translateY(1px);
 }
 
 .dab-icon-button {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(8, 14, 28, 0.78);
   color: rgba(255, 255, 255, 0.76);
-  font-size: 1rem;
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: border-color 180ms ease, background-color 180ms ease, color 180ms ease;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .dab-icon-button:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(250, 204, 21, 0.32);
+  background:
+    linear-gradient(180deg, rgba(250, 204, 21, 0.12), rgba(255, 255, 255, 0.02)),
+    rgba(11, 18, 34, 0.92);
   color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(2, 6, 23, 0.26);
 }
 
 .dab-notification-bell {
@@ -525,7 +687,7 @@ body {
 }
 
 .dab-notification-bell__icon {
-  font-size: 0.9rem;
+  font-size: 1rem;
   line-height: 1;
   transform: translateY(-1px);
 }
@@ -552,10 +714,14 @@ body {
   align-items: center;
   gap: 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(15, 23, 42, 0.7);
-  padding: 6px 14px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(8, 14, 28, 0.78);
+  padding: 7px 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 20px rgba(2, 6, 23, 0.18);
 }
 
 .dab-currency__item {
@@ -565,18 +731,21 @@ body {
 }
 
 .dab-currency__icon {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   display: grid;
   place-items: center;
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   font-weight: 700;
 }
 
 .dab-currency__icon--coin {
-  color: #0f172a;
-  background: linear-gradient(145deg, #f59e0b, #facc15);
+  color: #16110b;
+  background: radial-gradient(circle at 30% 30%, #fde68a, #f59e0b 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 0 16px rgba(250, 204, 21, 0.32);
 }
 
 .dab-currency__icon--gem {
@@ -587,9 +756,10 @@ body {
 }
 
 .dab-currency__value {
-  font-size: 1.1rem;
+  font-family: var(--dab-font-heading);
+  font-size: 1.08rem;
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.03em;
 }
 
 .dab-currency__divider {
@@ -645,8 +815,9 @@ body {
 .dab-menu__watermark h1 {
   position: relative;
   margin: 0;
+  font-family: var(--dab-font-display);
   font-size: clamp(3.4rem, 8vw, 7.2rem);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.18);
   text-shadow:
@@ -657,6 +828,7 @@ body {
 .dab-menu__watermark p {
   position: relative;
   margin: 4px 0 0;
+  font-family: var(--dab-font-heading);
   font-size: clamp(1rem, 2.6vw, 1.75rem);
   letter-spacing: 0.38em;
   color: color-mix(in oklab, var(--dab-champion-theme) 75%, white 12%);
@@ -668,7 +840,7 @@ body {
 
 .dab-menu__stage {
   position: absolute;
-  top: 76px;
+  top: 88px;
   right: 0;
   left: 0;
   bottom: 0;
@@ -860,10 +1032,10 @@ body {
 
 .dab-kd-card {
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 18px;
+  padding: 14px;
   background:
-    linear-gradient(150deg, rgba(8, 17, 33, 0.78), rgba(11, 19, 35, 0.64)),
+    linear-gradient(150deg, rgba(8, 17, 33, 0.88), rgba(11, 19, 35, 0.68)),
     radial-gradient(circle at 8% 0%, color-mix(in oklab, var(--dab-champion-theme) 18%, transparent), transparent 60%);
   backdrop-filter: blur(10px);
   box-shadow:
@@ -880,17 +1052,18 @@ body {
 }
 
 .dab-kd-card__header strong {
-  font-size: 0.74rem;
-  letter-spacing: 0.14em;
+  font-family: var(--dab-font-display);
+  font-size: 0.82rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: rgba(241, 245, 249, 0.95);
 }
 
 .dab-kd-card__header small {
   min-width: 0;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   color: rgba(147, 197, 253, 0.86);
-  letter-spacing: 0.03em;
+  letter-spacing: 0.08em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -907,32 +1080,33 @@ body {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 8px;
-  padding: 7px 8px;
-  border-radius: 8px;
+  padding: 10px 10px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(5, 11, 24, 0.58);
 }
 
 .dab-kd-card__item small {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   color: rgba(226, 232, 240, 0.86);
 }
 
 .dab-kd-card__item strong {
-  font-size: 0.84rem;
-  letter-spacing: 0.04em;
+  font-family: var(--dab-font-display);
+  font-size: 0.98rem;
+  letter-spacing: 0.08em;
   color: #f8fafc;
 }
 
 .dab-kd-card__icon {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   display: grid;
   place-items: center;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   line-height: 1;
 }
 
@@ -963,13 +1137,20 @@ body {
   padding: 0;
   background: transparent;
   color: rgba(255, 255, 255, 0.92);
-  letter-spacing: 0.03em;
+  letter-spacing: 0.08em;
   font-size: clamp(1.5rem, 2.3vw, 2rem);
-  font-style: italic;
   text-transform: uppercase;
-  font-family: inherit;
+  font-family: var(--dab-font-display);
   cursor: default;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   transition: color 180ms ease, text-shadow 180ms ease;
+}
+
+.dab-roster__team-icon {
+  font-size: 0.95rem;
+  color: rgba(125, 211, 252, 0.96);
 }
 
 .dab-roster__team-tab.is-active-team {
@@ -1371,9 +1552,10 @@ body {
   padding: 16px 26px;
   cursor: pointer;
   text-transform: uppercase;
-  font-size: clamp(2.1rem, 3.8vw, 2.8rem);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-family: var(--dab-font-display);
+  font-size: clamp(2.1rem, 3.8vw, 2.7rem);
+  font-weight: 800;
+  letter-spacing: 0.12em;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1403,11 +1585,14 @@ body {
 }
 
 .dab-play__start-icon {
-  width: 0;
-  height: 0;
-  border-top: 10px solid transparent;
-  border-bottom: 10px solid transparent;
-  border-left: 15px solid #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+}
+
+.dab-play__start-icon-svg {
+  font-size: 1.1rem;
 }
 
 .dab-play__status {
@@ -1436,15 +1621,22 @@ body {
 .dab-footer-button {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.72);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(8, 14, 28, 0.72);
+  color: rgba(255, 255, 255, 0.78);
   font-size: 0.95rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  padding: 8px 14px;
-  backdrop-filter: blur(10px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 9px 16px;
+  backdrop-filter: blur(12px);
   cursor: pointer;
-  transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .dab-chat-button {
@@ -1457,8 +1649,12 @@ body {
 .dab-chat-button:hover,
 .dab-footer-button:hover {
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(250, 204, 21, 0.28);
+  background:
+    linear-gradient(180deg, rgba(250, 204, 21, 0.12), rgba(255, 255, 255, 0.04)),
+    rgba(11, 18, 34, 0.86);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(2, 6, 23, 0.24);
 }
 
 .dab-keycap {
@@ -1490,7 +1686,12 @@ body {
 
 .dab-footer-button__icon {
   font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(250, 204, 21, 0.96);
+}
+
+.dab-chat-button__icon {
+  font-size: 0.92rem;
+  color: rgba(125, 211, 252, 0.94);
 }
 
 .dab-global-chat-anchor {
@@ -1523,8 +1724,9 @@ body {
 
 .dab-global-chat__header h3 {
   margin: 0;
-  font-size: 0.95rem;
-  letter-spacing: 0.09em;
+  font-family: var(--dab-font-display);
+  font-size: 0.92rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #e2e8f0;
 }
@@ -1607,8 +1809,8 @@ body {
 }
 
 .dab-global-chat__invite {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border: 1px solid rgba(250, 204, 21, 0.6);
   border-radius: 999px;
   background: rgba(250, 204, 21, 0.18);
@@ -1617,10 +1819,12 @@ body {
   display: inline-grid;
   place-items: center;
   font-family: inherit;
-  font-size: 0.9rem;
-  line-height: 1;
   cursor: pointer;
   transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.dab-global-chat__invite-icon {
+  font-size: 0.72rem;
 }
 
 .dab-global-chat__invite:hover {
@@ -2623,7 +2827,7 @@ body {
 
   .dab-menu__stage {
     position: relative;
-    top: 76px;
+    top: 88px;
     bottom: auto;
     height: 56vh;
     min-height: 420px;
@@ -2705,25 +2909,65 @@ body {
 
 @media (max-width: 760px) {
   .dab-menu__header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "logo tools"
+      "nav nav";
+    align-items: center;
     height: auto;
-    min-height: 76px;
-    padding: 10px;
+    min-height: 88px;
+    padding: 12px;
+    row-gap: 10px;
+  }
+
+  .dab-logo {
+    grid-area: logo;
+    min-width: 0;
+    gap: 10px;
+  }
+
+  .dab-logo__crest {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+  }
+
+  .dab-logo__crest::before {
+    inset: 5px;
+    border-radius: 10px;
+  }
+
+  .dab-logo__crest-copy {
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+  }
+
+  .dab-logo__copy {
+    display: none;
+  }
+
+  .dab-menu__tools {
+    grid-area: tools;
+    gap: 8px;
   }
 
   .dab-menu__nav {
-    order: 3;
+    grid-area: nav;
     width: 100%;
-    justify-content: flex-start;
-    gap: 0;
+    justify-content: space-between;
+    gap: 8px;
+    overflow-x: hidden;
   }
 
   .dab-menu__nav-btn {
-    min-height: 46px;
+    min-height: 48px;
+    min-width: 0;
+    flex: 1 1 0;
     padding: 0 10px;
-    font-size: 0.75rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    gap: 8px;
   }
 
   .dab-currency {
@@ -2850,6 +3094,55 @@ body {
   }
 }
 
+@media (max-width: 460px) {
+  .dab-menu__header {
+    padding: 10px;
+    row-gap: 8px;
+  }
+
+  .dab-menu__nav {
+    gap: 6px;
+  }
+
+  .dab-menu__nav-btn {
+    min-height: 46px;
+    padding: 0;
+    border-radius: 14px;
+  }
+
+  .dab-menu__nav-label {
+    display: none;
+  }
+
+  .dab-menu__nav-icon {
+    font-size: 1rem;
+  }
+
+  .dab-menu__tools {
+    gap: 6px;
+  }
+
+  .dab-icon-button {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+
+  .dab-currency {
+    padding: 4px 9px;
+  }
+
+  .dab-currency__icon {
+    width: 20px;
+    height: 20px;
+    font-size: 0.68rem;
+  }
+
+  .dab-currency__value {
+    font-size: 0.84rem;
+  }
+}
+
 @media (max-width: 500px) {
   .dab-play__mode h3 {
     font-size: 1.8rem;
@@ -2908,7 +3201,7 @@ body {
   overflow: auto;
   pointer-events: auto;
   color: #f8fbff;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--dab-font-ui);
   background: #070b17;
   isolation: isolate;
 }
@@ -3095,7 +3388,7 @@ body {
   border-radius: 10px;
   padding: 8px 12px;
   color: rgba(241, 245, 249, 0.86);
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   background: rgba(255, 255, 255, 0.03);
@@ -3104,6 +3397,7 @@ body {
 .dab-note-card__chevron {
   display: inline-flex;
   transition: transform 220ms ease;
+  font-size: 0.78rem;
 }
 
 .dab-note-card.is-open .dab-note-card__chevron {
@@ -3176,7 +3470,8 @@ body {
 
 .dab-notes-widget h3 {
   margin: 0 0 10px;
-  font-size: 1rem;
+  font-family: var(--dab-font-display);
+  font-size: 0.92rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3291,6 +3586,7 @@ body {
   display: inline-grid;
   place-items: center;
   color: #22d3ee;
+  background: rgba(8, 14, 28, 0.72);
 }
 
 @media (max-width: 1150px) {
@@ -3355,7 +3651,7 @@ body {
   overflow: hidden;
   pointer-events: auto;
   color: #f8fbff;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--dab-font-ui);
   background: #070b17;
   isolation: isolate;
 }
@@ -3479,7 +3775,7 @@ body {
 
 .dab-champions__subnav {
   position: absolute;
-  top: 76px;
+  top: 88px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 42;
@@ -3538,19 +3834,21 @@ body {
 
 .dab-champions__filter-btn {
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 4px;
-  background: #24273a;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    #24273a;
   color: rgba(255, 255, 255, 0.95);
-  min-height: 42px;
+  min-height: 46px;
   min-width: 214px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 0 14px;
+  padding: 0 16px;
   font-size: 0.84rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: default;
   transition: background-color 160ms ease, border-color 160ms ease;
@@ -3562,17 +3860,8 @@ body {
 }
 
 .dab-champions__filter-icon {
-  width: 10px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
-  opacity: 0.7;
-}
-
-.dab-champions__filter-icon span {
-  width: 4px;
-  height: 4px;
-  background: currentColor;
+  font-size: 0.9rem;
+  opacity: 0.8;
 }
 
 .dab-champions__filter-chevron {
@@ -3644,7 +3933,7 @@ body {
   position: relative;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #151622;
-  border-radius: 8px;
+  border-radius: 16px;
   overflow: hidden;
   aspect-ratio: 3 / 4.5;
   cursor: pointer;
@@ -3681,14 +3970,14 @@ body {
   left: 10px;
   z-index: 2;
   padding: 4px 9px;
-  border-radius: 4px;
+  border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(2, 6, 23, 0.65);
   backdrop-filter: blur(6px);
   color: #fff;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
 }
 
 .dab-champion-card__check {
@@ -3696,15 +3985,15 @@ body {
   top: 10px;
   right: 10px;
   z-index: 3;
-  width: 23px;
-  height: 23px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   display: none;
   place-items: center;
   border: 1px solid color-mix(in oklab, var(--dab-card-theme) 70%, white 15%);
   background: color-mix(in oklab, var(--dab-card-theme) 30%, #0f172a);
   color: #ffffff;
-  font-size: 0.82rem;
+  font-size: 0.92rem;
   font-weight: 800;
   box-shadow: 0 0 14px color-mix(in oklab, var(--dab-card-theme) 35%, transparent);
 }
@@ -3715,21 +4004,22 @@ body {
   bottom: 0;
   left: 0;
   z-index: 2;
-  min-height: 62px;
+  min-height: 72px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 2px;
   background: rgba(26, 28, 42, 0.92);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 10px 12px;
+  padding: 12px 14px;
 }
 
 .dab-champion-card__footer strong {
   color: rgba(255, 255, 255, 0.92);
-  font-size: 1rem;
+  font-family: var(--dab-font-display);
+  font-size: 0.98rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -3778,8 +4068,8 @@ body {
 
 .dab-champion-card__footer small {
   color: rgba(255, 255, 255, 0.56);
-  font-size: 0.76rem;
-  letter-spacing: 0.11em;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
@@ -3830,10 +4120,10 @@ body {
 
 .dab-champion-card__lock-panel {
   position: relative;
-  border-radius: 10px;
+  border-radius: 14px;
   border: 1px solid rgba(250, 204, 21, 0.42);
   background: rgba(8, 12, 24, 0.9);
-  padding: 10px;
+  padding: 12px;
   display: grid;
   gap: 7px;
 }
@@ -3842,23 +4132,24 @@ body {
   position: absolute;
   top: -10px;
   right: -8px;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   display: grid;
   place-items: center;
   border: 1px solid rgba(250, 204, 21, 0.58);
   background: rgba(69, 26, 3, 0.94);
-  font-size: 0.8rem;
+  font-size: 0.88rem;
 }
 
 .dab-champion-card__locked-text {
   position: relative;
   z-index: 1;
   color: rgba(250, 204, 21, 0.86);
-  font-size: 0.75rem;
+  font-family: var(--dab-font-display);
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
