@@ -200,7 +200,7 @@ function createScreenRegistry(
         selectedChampionModelUrl: selectedChampion.modelUrl,
         selectedChampionSplashImageUrl: selectedChampion.splashImageUrl,
         selectedChampionThemeColor: selectedChampion.themeColor,
-        isUserChampion: selectedChampion.id === "user",
+        isDefaultChampion: selectedChampion.isDefault,
         isSessionActive,
         currentUserId: user.id,
         selectedChampionStats

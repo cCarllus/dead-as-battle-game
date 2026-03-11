@@ -40,17 +40,7 @@ const DEFAULT_VISUAL_SETUP: HeroVisualSetup = {
 };
 
 const HERO_VISUAL_SETUP_BY_ID: Record<ChampionId, HeroVisualSetup> = {
-  user: {
-    visualScale: 1,
-    visualOffset: { x: 0, y: 0, z: 0 },
-    visualYaw: 0
-  },
-  sukuna: {
-    visualScale: 1,
-    visualOffset: { x: 0, y: 0, z: 0 },
-    visualYaw: 0
-  },
-  kaiju_no_8: {
+  default_champion: {
     visualScale: 1,
     visualOffset: { x: 0, y: 0, z: 0 },
     visualYaw: 0

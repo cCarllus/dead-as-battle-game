@@ -1,5 +1,5 @@
 // Responsável por tipar catálogo e metadados de campeões.
-export type ChampionId = "user" | "sukuna" | "kaiju_no_8";
+export type ChampionId = "default_champion";
 
 export type ChampionCatalogItem = {
   id: ChampionId;

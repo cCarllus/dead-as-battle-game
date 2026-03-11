@@ -23,10 +23,6 @@ function normalizeHeroLabel(heroId: string | null): string {
     return DEFAULT_HERO_LABEL;
   }
 
-  if (normalized === "kaiju_no_8") {
-    return "KAIJU NO. 8";
-  }
-
   return normalized.replace(/_/g, " ").toUpperCase();
 }
 

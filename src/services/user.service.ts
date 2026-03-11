@@ -61,6 +61,11 @@ function resolveLegacySelectedChampionId(rawProfile: Record<string, unknown>): s
   return typeof legacyEntry?.[1] === "string" ? legacyEntry[1] : undefined;
 }
 
+function normalizeChampionIdCandidate(value: unknown): ChampionId {
+  const normalizedValue = typeof value === "string" ? value : undefined;
+  return isChampionId(normalizedValue) ? normalizedValue : DEFAULT_CHAMPION_ID;
+}
+
 function resolveLegacyChampionRecord(rawProfile: Record<string, unknown>): unknown {
   const legacyEntry = Object.entries(rawProfile).find(([key, entryValue]) => {
     if (key === "champions" || !isObjectRecord(entryValue)) {
@@ -109,9 +114,7 @@ function isChampionUnlocked(user: Pick<UserProfile, "champions">, championId: Ch
 }
 
 function resolveSafeSelectedChampionId(user: Pick<UserProfile, "selectedChampionId" | "champions">): ChampionId {
-  const selectedChampionId = isChampionId(user.selectedChampionId)
-    ? user.selectedChampionId
-    : DEFAULT_CHAMPION_ID;
+  const selectedChampionId = normalizeChampionIdCandidate(user.selectedChampionId);
 
   if (isChampionUnlocked(user, selectedChampionId)) {
     return selectedChampionId;
@@ -130,9 +133,7 @@ function normalizeLoadedUser(rawProfile: unknown): UserProfile | null {
       ? rawProfile.selectedChampionId
       : resolveLegacySelectedChampionId(rawProfile);
 
-  const selectedChampionId = isChampionId(selectedCandidate)
-    ? selectedCandidate
-    : DEFAULT_CHAMPION_ID;
+  const selectedChampionId = normalizeChampionIdCandidate(selectedCandidate);
   const rawChampionProgress = rawProfile.champions ?? resolveLegacyChampionRecord(rawProfile);
 
   const normalizedUser: UserProfile = {
@@ -162,9 +163,7 @@ export function migrateUserChampions(user: UserProfile): UserProfile {
     pendingCoinRewards: clampPendingRewards(user.pendingCoinRewards),
     notifications: sanitizeNotifications(user.notifications),
     champions,
-    selectedChampionId: isChampionId(user.selectedChampionId)
-      ? user.selectedChampionId
-      : DEFAULT_CHAMPION_ID
+    selectedChampionId: normalizeChampionIdCandidate(user.selectedChampionId)
   };
 
   return {

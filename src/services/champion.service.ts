@@ -15,7 +15,7 @@ export type ChampionWithProgress = ChampionCatalogItem & {
 };
 
 export function getChampionDisplayName(user: UserProfile, champion: ChampionCatalogItem): string {
-  if (champion.id === "user") {
+  if (champion.isDefault) {
     return user.nickname;
   }
 

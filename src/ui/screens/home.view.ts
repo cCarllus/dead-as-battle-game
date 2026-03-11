@@ -24,7 +24,7 @@ export type HomeViewOptions = {
   selectedChampionModelUrl: string | null;
   selectedChampionSplashImageUrl: string;
   selectedChampionThemeColor: string;
-  isUserChampion: boolean;
+  isDefaultChampion: boolean;
   isSessionActive: boolean;
   selectedChampionStats: HomeSelectedChampionStats;
 };
@@ -140,9 +140,9 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
     level: options.selectedChampionLevel
   });
 
-  const userChampionBadge = qs<HTMLElement>(menu, '[data-slot="user-champion-badge"]');
-  userChampionBadge.hidden = !options.isUserChampion;
-  userChampionBadge.textContent = t(options.locale, "home.userChampionBadge");
+  const defaultChampionBadge = qs<HTMLElement>(menu, '[data-slot="user-champion-badge"]');
+  defaultChampionBadge.hidden = !options.isDefaultChampion;
+  defaultChampionBadge.textContent = t(options.locale, "home.userChampionBadge");
 
   const rosterCount = qs<HTMLElement>(menu, '[data-slot="roster-count"]');
   rosterCount.textContent = t(options.locale, "menu.roster.count", {

@@ -5,7 +5,7 @@ import {
   type DefaultUltimateEffectHandle
 } from "./default-ultimate.effect";
 
-const DEFAULT_HERO_ID = "user";
+const DEFAULT_HERO_ID = "default_champion";
 
 export type UltimateEffectPayload = {
   sessionId: string;

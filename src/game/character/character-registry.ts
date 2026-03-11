@@ -13,19 +13,7 @@ export type CharacterDefinition = {
 };
 
 const CHARACTER_CONFIG_OVERRIDES: Record<string, DeepPartial<CharacterRuntimeConfig>> = {
-  user: {},
-  sukuna: {
-    locomotion: {
-      runSpeed: 9.1,
-      slideInitialSpeed: 11.1
-    }
-  },
-  kaiju_no_8: {
-    locomotion: {
-      jumpVelocity: 8.5,
-      doubleJumpVelocity: 7.9
-    }
-  }
+  default_champion: {}
 };
 
 function mergeRuntimeConfig(
@@ -61,4 +49,3 @@ export function resolveCharacterDefinition(heroId: string): CharacterDefinition 
     audioProfileId: resolvedHeroId
   };
 }
-

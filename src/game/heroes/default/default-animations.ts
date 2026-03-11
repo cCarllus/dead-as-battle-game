@@ -2,7 +2,7 @@
 import type { HeroAnimationConfig } from "../../animation/animation-types";
 
 export const DEFAULT_HERO_ANIMATION_CONFIG: HeroAnimationConfig = {
-  heroId: "user",
+  heroId: "default_champion",
   embeddedCommandToGroupName: {
     idle: "Left_Jab_from_Guard",
     walk: "Skill_01",

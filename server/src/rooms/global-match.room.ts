@@ -26,7 +26,7 @@ import { createCombatSystem, type CombatSystem } from "../systems/combat.system.
 import { createMovementSystem, type MovementSystem } from "../systems/movement.system.js";
 import { createRegenerationSystem, type RegenerationSystem } from "../systems/regeneration.system.js";
 
-const DEFAULT_HERO_ID = "user";
+const DEFAULT_HERO_ID = "default_champion";
 const MAX_NICKNAME_LENGTH = 24;
 const SIMULATION_TICK_MS = 50;
 const SNAPSHOT_SYNC_INTERVAL_MS = 120;

@@ -40,17 +40,7 @@ const DEFAULT_VISUAL_TUNING: HeroVisualTuning = {
 };
 
 const HERO_VISUAL_TUNING_BY_ID: Record<ChampionId, HeroVisualTuning> = {
-  user: {
-    visualScale: 1,
-    visualOffset: { x: 0, y: 0, z: 0 },
-    visualYaw: 0
-  },
-  sukuna: {
-    visualScale: 1,
-    visualOffset: { x: 0, y: 0, z: 0 },
-    visualYaw: 0
-  },
-  kaiju_no_8: {
+  default_champion: {
     visualScale: 1,
     visualOffset: { x: 0, y: 0, z: 0 },
     visualYaw: 0

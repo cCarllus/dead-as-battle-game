@@ -23,8 +23,8 @@ export type HeroCombatClientConfig = {
 type HeroCombatBaseConfig = Omit<HeroCombatClientConfig, "skillThemeColor">;
 
 const HERO_COMBAT_BASE_CONFIG_BY_ID: Record<ChampionId, HeroCombatBaseConfig> = {
-  user: {
-    id: "user",
+  default_champion: {
+    id: "default_champion",
     maxHealth: 1000,
     ultimateMax: 100,
     skills: {
@@ -32,32 +32,12 @@ const HERO_COMBAT_BASE_CONFIG_BY_ID: Record<ChampionId, HeroCombatBaseConfig> = 
       secondary: { key: "2", icon: "DS", name: "Dash" },
       ultimate: { key: "G", icon: "OV", name: "Overdrive" }
     }
-  },
-  sukuna: {
-    id: "sukuna",
-    maxHealth: 900,
-    ultimateMax: 100,
-    skills: {
-      primary: { key: "1", icon: "DI", name: "Dismantle" },
-      secondary: { key: "2", icon: "CL", name: "Cleave" },
-      ultimate: { key: "G", icon: "MS", name: "Malevolent Shrine" }
-    }
-  },
-  kaiju_no_8: {
-    id: "kaiju_no_8",
-    maxHealth: 1400,
-    ultimateMax: 100,
-    skills: {
-      primary: { key: "1", icon: "CL", name: "Claw Rush" },
-      secondary: { key: "2", icon: "SR", name: "Sonic Roar" },
-      ultimate: { key: "G", icon: "KB", name: "Kaiju Burst" }
-    }
   }
 };
 
 export function resolveHeroCombatClientConfig(heroId: string): HeroCombatClientConfig {
   const resolvedHeroId = isChampionId(heroId) ? heroId : DEFAULT_CHAMPION_ID;
-  const base = HERO_COMBAT_BASE_CONFIG_BY_ID[resolvedHeroId] ?? HERO_COMBAT_BASE_CONFIG_BY_ID.user;
+  const base = HERO_COMBAT_BASE_CONFIG_BY_ID[resolvedHeroId] ?? HERO_COMBAT_BASE_CONFIG_BY_ID.default_champion;
 
   return {
     ...base,
