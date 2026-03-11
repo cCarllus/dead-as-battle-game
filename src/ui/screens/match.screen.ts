@@ -1,6 +1,8 @@
 // Responsável por orquestrar entrada na partida global com HUD completo, pointer lock e menu ESC de pausa.
 import { t, type Locale } from "../../i18n";
 import type { MatchPlayerState } from "../../models/match-player.model";
+import type { ChatMessage } from "../../models/chat-message.model";
+import { CHAT_MAX_MESSAGE_LENGTH, type ChatService } from "../../services/chat.service";
 import type { MatchService } from "../../services/match.service";
 import type { GameSettings, SettingsService } from "../../services/settings.service";
 import type { TeamService } from "../../services/team.service";
@@ -24,6 +26,7 @@ export type MatchScreenActions = {
   locale?: Locale;
   userService: UserService;
   settingsService: SettingsService;
+  chatService: ChatService;
   matchService: MatchService;
   teamService: TeamService;
   onApplyAudioSettings: (settings: GameSettings) => void;
@@ -36,6 +39,31 @@ const FULLSCREEN_NOTICE_TIMEOUT_MS = 3000;
 const MIN_EMPTY_BAR_VISUAL_PERCENT = 0;
 const STAMINA_PULSE_DURATION_MS = 450;
 const HEALTH_BAR_MAX_HUE = 120;
+const MATCH_HUD_FEED_MAX_ITEMS = 5;
+const MATCH_HUD_FEED_TTL_MS = 14000;
+const MATCH_HUD_FEED_FADE_WINDOW_MS = 4200;
+const MATCH_HUD_FEED_HISTORY_SEED_LIMIT = 3;
+const MATCH_CHAT_BUBBLE_TTL_MS = 5200;
+const MATCH_CHAT_BUBBLE_FADE_WINDOW_MS = 1500;
+const MATCH_CHAT_BUBBLE_MAX_CHARS = 96;
+
+type MatchHudFeedEntry = {
+  id: string;
+  kind: "server" | "chat";
+  nickname: string | null;
+  text: string;
+  createdAt: number;
+  expiresAt: number;
+};
+
+type MatchSpeechBubbleEntry = {
+  sessionId: string;
+  text: string;
+  createdAt: number;
+  expiresAt: number;
+  element: HTMLDivElement;
+  textNode: HTMLSpanElement;
+};
 
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -255,6 +283,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const hudHeavyControlIcon = qs<HTMLElement>(screen, '[data-slot="match-control-icon-heavy"]');
   const hudStaminaRoot = qs<HTMLElement>(screen, '[data-slot="match-hud-stamina"]');
   const hudStaminaFill = qs<HTMLElement>(screen, '[data-slot="match-hud-stamina-fill"]');
+  const hudChatFeed = qs<HTMLElement>(screen, '[data-slot="match-chat-feed"]');
+  const hudSpeechLayer = qs<HTMLElement>(screen, '[data-slot="match-speech-layer"]');
+  const chatComposer = qs<HTMLFormElement>(screen, '[data-slot="match-chat-composer"]');
+  const chatInput = qs<HTMLInputElement>(screen, '[data-slot="match-chat-input"]');
   const pointerLockHint = qs<HTMLElement>(screen, '[data-slot="match-pointer-lock-hint"]');
   const fullscreenNotice = qs<HTMLElement>(screen, '[data-slot="match-fullscreen-notice"]');
   const scoreboardColPlayer = qs<HTMLElement>(screen, '[data-slot="match-scoreboard-col-player"]');
@@ -353,6 +385,221 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   let staminaPulseTimeoutId: number | null = null;
   let deathModalOpen = false;
   let respawnRequestPending = false;
+  let hudFeedIntervalId: number | null = null;
+  let didSeedChatHistory = false;
+  let hudFeedEntries: MatchHudFeedEntry[] = [];
+  let chatComposerOpen = false;
+  let shouldResumePointerLockAfterChat = false;
+  let speechBubbleFrameId: number | null = null;
+  const speechBubblesBySessionId = new Map<string, MatchSpeechBubbleEntry>();
+
+  chatInput.maxLength = CHAT_MAX_MESSAGE_LENGTH;
+  chatInput.placeholder = locale === "pt-BR" ? "Digite e pressione Enter" : "Type and press Enter";
+
+  const truncateChatBubbleText = (text: string): string => {
+    const normalized = text.replace(/\s+/g, " ").trim();
+    if (normalized.length <= MATCH_CHAT_BUBBLE_MAX_CHARS) {
+      return normalized;
+    }
+
+    return `${normalized.slice(0, MATCH_CHAT_BUBBLE_MAX_CHARS - 1).trimEnd()}…`;
+  };
+
+  const resolveSessionIdForUserId = (userId: string): string | null => {
+    const player = actions.matchService.getPlayers().find((candidate) => candidate.userId === userId) ?? null;
+    return player?.sessionId ?? null;
+  };
+
+  const removeSpeechBubble = (sessionId: string): void => {
+    const bubble = speechBubblesBySessionId.get(sessionId);
+    if (!bubble) {
+      return;
+    }
+
+    bubble.element.remove();
+    speechBubblesBySessionId.delete(sessionId);
+  };
+
+  const isChatFocused = (): boolean => {
+    return inputModeSystem.getState().chatFocused;
+  };
+
+  const setChatFocused = (focused: boolean): void => {
+    inputModeSystem.setChatFocused(focused);
+  };
+
+  const renderSpeechBubbles = (): void => {
+    const now = Date.now();
+
+    speechBubblesBySessionId.forEach((bubble, sessionId) => {
+      if (bubble.expiresAt <= now) {
+        removeSpeechBubble(sessionId);
+        return;
+      }
+
+      const playerScreenPosition = sceneHandle?.getPlayerScreenPosition(sessionId) ?? null;
+      if (!playerScreenPosition) {
+        bubble.element.hidden = true;
+        return;
+      }
+
+      const fadeProgress =
+        bubble.expiresAt - now > MATCH_CHAT_BUBBLE_FADE_WINDOW_MS
+          ? 1
+          : Math.max(0, (bubble.expiresAt - now) / MATCH_CHAT_BUBBLE_FADE_WINDOW_MS);
+
+      bubble.element.hidden = false;
+      bubble.element.style.setProperty("--dab-speech-x", `${playerScreenPosition.x}px`);
+      bubble.element.style.setProperty("--dab-speech-y", `${playerScreenPosition.y - 74}px`);
+      bubble.element.style.setProperty("--dab-speech-opacity", fadeProgress.toFixed(3));
+    });
+
+    speechBubbleFrameId = window.requestAnimationFrame(renderSpeechBubbles);
+  };
+
+  const upsertSpeechBubble = (sessionId: string, text: string): void => {
+    const now = Date.now();
+    const normalizedText = truncateChatBubbleText(text);
+    let bubble = speechBubblesBySessionId.get(sessionId);
+    if (!bubble) {
+      const element = document.createElement("div");
+      element.className = "dab-match__speech-bubble";
+
+      const textNode = document.createElement("span");
+      textNode.className = "dab-match__speech-text";
+
+      const tail = document.createElement("span");
+      tail.className = "dab-match__speech-tail";
+
+      element.append(textNode, tail);
+      hudSpeechLayer.appendChild(element);
+
+      bubble = {
+        sessionId,
+        text: normalizedText,
+        createdAt: now,
+        expiresAt: now + MATCH_CHAT_BUBBLE_TTL_MS,
+        element,
+        textNode
+      };
+      speechBubblesBySessionId.set(sessionId, bubble);
+    }
+
+    bubble.text = normalizedText;
+    bubble.createdAt = now;
+    bubble.expiresAt = now + MATCH_CHAT_BUBBLE_TTL_MS;
+    bubble.textNode.textContent = normalizedText;
+  };
+
+  const closeChatComposer = (resumePointerLock: boolean): void => {
+    if (!chatComposerOpen) {
+      return;
+    }
+
+    chatComposerOpen = false;
+    screen.classList.remove("is-chat-open");
+    setChatFocused(false);
+    chatInput.blur();
+
+    if (resumePointerLock && shouldResumePointerLockAfterChat && hasGameplayInputPermission()) {
+      sceneHandle?.requestPointerLock();
+    }
+
+    shouldResumePointerLockAfterChat = false;
+    applyInputState();
+  };
+
+  const openChatComposer = (): void => {
+    if (chatComposerOpen || !isMatchReady || hasFatalError || deathModalOpen || isSettingsModalOpen()) {
+      return;
+    }
+
+    shouldResumePointerLockAfterChat = sceneHandle?.isPointerLocked() ?? false;
+    chatComposerOpen = true;
+    screen.classList.add("is-chat-open");
+    setChatFocused(true);
+    sceneHandle?.exitPointerLock();
+    applyInputState();
+
+    window.setTimeout(() => {
+      chatInput.focus();
+      chatInput.select();
+    }, 0);
+  };
+
+  const pruneHudFeedEntries = (now = Date.now()): void => {
+    hudFeedEntries = hudFeedEntries.filter((entry) => entry.expiresAt > now);
+    if (hudFeedEntries.length > MATCH_HUD_FEED_MAX_ITEMS) {
+      hudFeedEntries = hudFeedEntries.slice(-MATCH_HUD_FEED_MAX_ITEMS);
+    }
+  };
+
+  const renderHudFeed = (): void => {
+    const now = Date.now();
+    pruneHudFeedEntries(now);
+    hudChatFeed.replaceChildren();
+
+    hudFeedEntries.forEach((entry) => {
+      const ageMs = Math.max(0, now - entry.createdAt);
+      const timeRemainingMs = Math.max(0, entry.expiresAt - now);
+      const fadeProgress =
+        timeRemainingMs >= MATCH_HUD_FEED_FADE_WINDOW_MS
+          ? 1
+          : Math.max(0, timeRemainingMs / MATCH_HUD_FEED_FADE_WINDOW_MS);
+      const stackProgress = 1 - Math.min(0.34, (hudFeedEntries.length - 1 - hudFeedEntries.indexOf(entry)) * 0.06);
+      const opacity = Math.max(0, Math.min(1, fadeProgress * stackProgress));
+      const offsetY = Math.min(10, ageMs / 1400);
+
+      const line = document.createElement("div");
+      line.className = `dab-match__chat-line ${entry.kind === "server" ? "is-server" : "is-chat"}`;
+      line.style.setProperty("--dab-chat-feed-opacity", opacity.toFixed(3));
+      line.style.setProperty("--dab-chat-feed-offset", `${offsetY}px`);
+
+      if (entry.kind === "server") {
+        line.textContent = entry.text;
+      } else {
+        const nickname = document.createElement("span");
+        nickname.className = "dab-match__chat-nickname";
+        nickname.textContent = `[${entry.nickname ?? "Player"}]:`;
+
+        const message = document.createElement("span");
+        message.className = "dab-match__chat-message";
+        message.textContent = entry.text;
+
+        line.append(nickname, " ", message);
+      }
+
+      hudChatFeed.appendChild(line);
+    });
+  };
+
+  const pushHudFeedEntry = (entry: Omit<MatchHudFeedEntry, "createdAt" | "expiresAt">): void => {
+    const now = Date.now();
+    hudFeedEntries = [
+      ...hudFeedEntries,
+      {
+        ...entry,
+        createdAt: now,
+        expiresAt: now + MATCH_HUD_FEED_TTL_MS
+      }
+    ];
+    pruneHudFeedEntries(now);
+    renderHudFeed();
+  };
+
+  const appendHudChatMessage = (message: Pick<ChatMessage, "id" | "nickname" | "text">): void => {
+    const normalizedText = message.text.trim();
+    if (!normalizedText) {
+      return;
+    }
+
+    pushHudFeedEntry({
+      id: `chat:${message.id}`,
+      kind: "chat",
+      nickname: message.nickname.trim() || "Player",
+      text: normalizedText
+    });
+  };
 
   const isSettingsModalOpen = (): boolean => {
     return screen.classList.contains("is-settings-open");
@@ -369,6 +616,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     deathModal.setAttribute("aria-hidden", String(!open));
 
     if (open) {
+      closeChatComposer(false);
       sceneHandle?.exitPointerLock();
       closePauseMenu(false);
       setScoreboardRequested(false);
@@ -401,7 +649,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   const hasGameplayInputPermission = (): boolean => {
     const inputState = inputModeSystem.getState();
-    return inputState.gameplayEnabled && isMatchReady && !hasFatalError && !deathModalOpen;
+    return inputState.gameplayEnabled && isMatchReady && !hasFatalError && !deathModalOpen && !chatComposerOpen;
   };
 
   const renderScoreboardVisibility = (): void => {
@@ -680,6 +928,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       return;
     }
 
+    closeChatComposer(false);
     pauseMenuSystem?.open();
     inputModeSystem.setPauseMenuOpen(true);
     renderScoreboardVisibility();
@@ -722,6 +971,12 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   });
 
   const disposePlayerAdded = actions.matchService.onPlayerAdded((player) => {
+    pushHudFeedEntry({
+      id: `join:${player.sessionId}:${player.joinedAt}`,
+      kind: "server",
+      nickname: null,
+      text: `${player.nickname} se conectou a sala`
+    });
     sceneHandle?.addPlayer(player);
   });
 
@@ -730,6 +985,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   });
 
   const disposePlayerRemoved = actions.matchService.onPlayerRemoved((sessionId) => {
+    removeSpeechBubble(sessionId);
     sceneHandle?.removePlayer(sessionId);
   });
 
@@ -758,9 +1014,70 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       durationMs: payload.durationMs
     });
   });
+  const disposeChatHistory = actions.chatService.onHistory((history) => {
+    if (didSeedChatHistory || history.length === 0) {
+      return;
+    }
+
+    didSeedChatHistory = true;
+    history.slice(-MATCH_HUD_FEED_HISTORY_SEED_LIMIT).forEach((message) => {
+      appendHudChatMessage(message);
+    });
+  });
+  const disposeChatMessage = actions.chatService.onMessage((message) => {
+    appendHudChatMessage(message);
+    const sessionId = resolveSessionIdForUserId(message.userId);
+    if (sessionId) {
+      upsertSpeechBubble(sessionId, message.text);
+    }
+  });
 
   const disposeFlyToggleClick = bind(flyToggleButton, "click", () => {
     toggleFlyMode();
+  });
+  const disposeChatComposerSubmit = bind(chatComposer, "submit", (event) => {
+    event.preventDefault();
+    const text = chatInput.value.trim();
+    if (!text) {
+      closeChatComposer(true);
+      return;
+    }
+
+    actions.chatService.sendMessage(text);
+    chatInput.value = "";
+    closeChatComposer(true);
+  });
+  const disposeChatInputFocus = bind(chatInput, "focus", () => {
+    setChatFocused(true);
+    applyInputState();
+  });
+  const disposeChatInputBlur = bind(chatInput, "blur", (event) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && chatComposer.contains(nextTarget)) {
+      setChatFocused(true);
+      return;
+    }
+
+    if (chatComposerOpen) {
+      closeChatComposer(false);
+      return;
+    }
+
+    setChatFocused(false);
+    applyInputState();
+  });
+  const disposeChatInputKeyDown = bind(chatInput, "keydown", (event) => {
+    event.stopPropagation();
+
+    if (event.key !== "Escape") {
+      return;
+    }
+
+    event.preventDefault();
+    closeChatComposer(true);
+  });
+  const disposeChatInputKeyUp = bind(chatInput, "keyup", (event) => {
+    event.stopPropagation();
   });
   const disposeDeathBackLobbyClick = bind(deathModalBackLobbyButton, "click", () => {
     actions.onLeaveMatch();
@@ -810,6 +1127,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       !isPointerLocked &&
       (isMatchReady || hasFatalError) &&
       !deathModalOpen &&
+      !chatComposerOpen &&
+      !isChatFocused() &&
       !isSettingsModalOpen() &&
       !(pauseMenuSystem?.isOpen() ?? false)
     ) {
@@ -835,6 +1154,24 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   };
 
   const onWindowKeyDown = (event: KeyboardEvent): void => {
+    if (isChatFocused()) {
+      return;
+    }
+
+    if (event.key === "Enter") {
+      if (isTypingOnInputField()) {
+        return;
+      }
+
+      if (!hasGameplayInputPermission()) {
+        return;
+      }
+
+      event.preventDefault();
+      openChatComposer();
+      return;
+    }
+
     if (event.code === "Tab") {
       if (
         isTypingOnInputField() ||
@@ -892,6 +1229,12 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       return;
     }
 
+    if (chatComposerOpen) {
+      event.preventDefault();
+      closeChatComposer(true);
+      return;
+    }
+
     if (isSettingsModalOpen()) {
       return;
     }
@@ -914,6 +1257,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   };
 
   const onWindowKeyUp = (event: KeyboardEvent): void => {
+    if (isChatFocused()) {
+      return;
+    }
+
     if (event.code !== "Tab") {
       return;
     }
@@ -923,6 +1270,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   };
 
   const onWindowBlur = (): void => {
+    setChatFocused(false);
     setScoreboardRequested(false);
   };
 
@@ -967,12 +1315,19 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   setScoreboardRequested(false);
   setDeathModalOpen(false);
   hideFullscreenNotice();
+  renderHudFeed();
+  renderSpeechBubbles();
 
   void (async () => {
     showLoading(t(locale, "match.loading.connecting"));
 
     try {
-      await actions.matchService.connect();
+      await Promise.all([
+        actions.matchService.connect(),
+        actions.chatService.connect().catch(() => {
+          // Match HUD chat is optional. Keep the match flow alive if chat is unavailable.
+        })
+      ]);
       localSessionId = actions.matchService.getLocalSessionId();
       if (!localSessionId) {
         throw new Error(t(locale, "match.error.invalidSession"));
@@ -1023,6 +1378,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
         refreshLocalPingLabel();
         renderMatchPresence(actions.matchService.getPlayers());
       }, 2000);
+
+      hudFeedIntervalId = window.setInterval(() => {
+        renderHudFeed();
+      }, 1000);
     } catch (error) {
       const message = error instanceof Error ? error.message : t(locale, "match.error.startFailed");
       showError(message);
@@ -1041,6 +1400,11 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     disposeScenePointerLockChanged = null;
 
     disposeFlyToggleClick();
+    disposeChatComposerSubmit();
+    disposeChatInputFocus();
+    disposeChatInputBlur();
+    disposeChatInputKeyDown();
+    disposeChatInputKeyUp();
     disposeDeathBackLobbyClick();
     disposeDeathRespawnClick();
     disposePlayersChanged();
@@ -1051,6 +1415,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     disposeMatchError();
     disposeCombatKill();
     disposeCombatUltimate();
+    disposeChatHistory();
+    disposeChatMessage();
 
     pauseMenuSystem?.dispose();
     pauseMenuSystem = null;
@@ -1062,6 +1428,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     sceneHandle?.dispose();
     sceneHandle = null;
     setFlyUiState(false);
+    closeChatComposer(false);
 
     if (matchTimerIntervalId !== null) {
       window.clearInterval(matchTimerIntervalId);
@@ -1073,10 +1440,25 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       hudRefreshIntervalId = null;
     }
 
+    if (hudFeedIntervalId !== null) {
+      window.clearInterval(hudFeedIntervalId);
+      hudFeedIntervalId = null;
+    }
+
     if (staminaPulseTimeoutId !== null) {
       window.clearTimeout(staminaPulseTimeoutId);
       staminaPulseTimeoutId = null;
     }
+
+    if (speechBubbleFrameId !== null) {
+      window.cancelAnimationFrame(speechBubbleFrameId);
+      speechBubbleFrameId = null;
+    }
+
+    speechBubblesBySessionId.forEach((bubble) => {
+      bubble.element.remove();
+    });
+    speechBubblesBySessionId.clear();
 
     combatFeedbackSystem.dispose();
     damageNumberEffect.dispose();

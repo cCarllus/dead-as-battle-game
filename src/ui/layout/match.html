@@ -99,13 +99,20 @@
         <span class="dab-match__crosshair-dot"></span>
       </div>
 
+      <div class="dab-match__speech-layer" data-slot="match-speech-layer" aria-hidden="true"></div>
+
       <div class="dab-match__hud-frame dab-match__hud-frame--bottom-left">
-        <aside class="dab-match__chat-feed" aria-hidden="true">
-          <div class="dab-match__chat-line is-system">Invalid chat channel</div>
-          <div class="dab-match__chat-line is-team">[Player Name]: Hello Team!</div>
-          <div class="dab-match__chat-line is-global">[Player Name]: Hello Match!</div>
-          <div class="dab-match__chat-line is-alert">[Player_name]: Need healing!</div>
-        </aside>
+        <aside class="dab-match__chat-feed" data-slot="match-chat-feed" role="log" aria-live="polite"></aside>
+        <form class="dab-match__chat-composer" data-slot="match-chat-composer">
+          <input
+            class="dab-match__chat-input"
+            data-slot="match-chat-input"
+            type="text"
+            autocomplete="off"
+            placeholder="Pressione Enter para conversar"
+          />
+          <button type="submit" class="dab-match__chat-send" data-slot="match-chat-send">Enter</button>
+        </form>
 
         <section class="dab-match__skills" data-slot="match-skills">
           <div class="dab-match__skills-grid">

@@ -58,6 +58,15 @@ function cloneState(state: MovementInputState): MovementInputState {
   };
 }
 
+function isInteractiveElement(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const tagName = target.tagName;
+  return tagName === "INPUT" || tagName === "TEXTAREA" || target.isContentEditable;
+}
+
 export function createMovementInputSystem(): MovementInputSystem {
   let enabled = true;
   let state = createInitialState();
@@ -72,6 +81,10 @@ export function createMovementInputSystem(): MovementInputSystem {
 
   const onKeyDown = (event: KeyboardEvent): void => {
     if (!enabled) {
+      return;
+    }
+
+    if (isInteractiveElement(event.target)) {
       return;
     }
 
@@ -116,6 +129,10 @@ export function createMovementInputSystem(): MovementInputSystem {
   };
 
   const onKeyUp = (event: KeyboardEvent): void => {
+    if (isInteractiveElement(event.target)) {
+      return;
+    }
+
     if (event.code === "KeyC") {
       if (enabled) {
         event.preventDefault();

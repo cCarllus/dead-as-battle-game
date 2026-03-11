@@ -7,6 +7,7 @@ export type InputModeState = {
   gameplayAvailable: boolean;
   pauseMenuOpen: boolean;
   settingsOpen: boolean;
+  chatFocused: boolean;
   gameplayEnabled: boolean;
 };
 
@@ -15,6 +16,7 @@ export type InputModeSystem = {
   setGameplayAvailable: (available: boolean) => void;
   setPauseMenuOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
+  setChatFocused: (focused: boolean) => void;
   onStateChanged: (listener: (state: InputModeState) => void) => () => void;
   dispose: () => void;
 };
@@ -23,20 +25,23 @@ export type CreateInputModeSystemOptions = {
   gameplayAvailable?: boolean;
   pauseMenuOpen?: boolean;
   settingsOpen?: boolean;
+  chatFocused?: boolean;
 };
 
 function resolveState(
   gameplayAvailable: boolean,
   pauseMenuOpen: boolean,
-  settingsOpen: boolean
+  settingsOpen: boolean,
+  chatFocused: boolean
 ): InputModeState {
-  const gameplayEnabled = gameplayAvailable && !pauseMenuOpen && !settingsOpen;
+  const gameplayEnabled = gameplayAvailable && !pauseMenuOpen && !settingsOpen && !chatFocused;
 
   return {
     mode: gameplayEnabled ? "gameplay" : "ui",
     gameplayAvailable,
     pauseMenuOpen,
     settingsOpen,
+    chatFocused,
     gameplayEnabled
   };
 }
@@ -45,17 +50,19 @@ export function createInputModeSystem(options: CreateInputModeSystemOptions = {}
   let gameplayAvailable = options.gameplayAvailable ?? false;
   let pauseMenuOpen = options.pauseMenuOpen ?? false;
   let settingsOpen = options.settingsOpen ?? false;
+  let chatFocused = options.chatFocused ?? false;
 
-  let state = resolveState(gameplayAvailable, pauseMenuOpen, settingsOpen);
+  let state = resolveState(gameplayAvailable, pauseMenuOpen, settingsOpen, chatFocused);
   const listeners = new Set<(state: InputModeState) => void>();
 
   const apply = (): void => {
-    const nextState = resolveState(gameplayAvailable, pauseMenuOpen, settingsOpen);
+    const nextState = resolveState(gameplayAvailable, pauseMenuOpen, settingsOpen, chatFocused);
     const changed =
       nextState.mode !== state.mode ||
       nextState.gameplayAvailable !== state.gameplayAvailable ||
       nextState.pauseMenuOpen !== state.pauseMenuOpen ||
       nextState.settingsOpen !== state.settingsOpen ||
+      nextState.chatFocused !== state.chatFocused ||
       nextState.gameplayEnabled !== state.gameplayEnabled;
 
     if (!changed) {
@@ -80,6 +87,10 @@ export function createInputModeSystem(options: CreateInputModeSystemOptions = {}
     },
     setSettingsOpen: (open) => {
       settingsOpen = open;
+      apply();
+    },
+    setChatFocused: (focused) => {
+      chatFocused = focused;
       apply();
     },
     onStateChanged: (listener) => {

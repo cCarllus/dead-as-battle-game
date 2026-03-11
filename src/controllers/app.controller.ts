@@ -317,6 +317,7 @@ function createScreenRegistry(
         locale: state.get().locale,
         userService,
         settingsService,
+        chatService,
         matchService,
         teamService,
         onApplyAudioSettings: (settings) => {

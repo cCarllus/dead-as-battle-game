@@ -6961,7 +6961,115 @@ button.dab-match__skill {
   display: grid;
   gap: 6px;
   margin-bottom: 6px;
+  max-width: 360px;
+  min-height: 108px;
+  align-content: end;
+  overflow: hidden;
   pointer-events: none;
+}
+
+.dab-match .dab-match__chat-composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(360px, calc(100vw - 48px));
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(5, 10, 20, 0.84), rgba(8, 15, 28, 0.72));
+  box-shadow: 0 20px 38px rgba(2, 6, 23, 0.34);
+  backdrop-filter: blur(14px);
+  opacity: 0.12;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+  transform: translateY(6px);
+}
+
+.dab-match.is-chat-open .dab-match__chat-composer,
+.dab-match .dab-match__chat-composer:focus-within {
+  opacity: 0.94;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.dab-match .dab-match__chat-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f8fafc;
+  font-family: "Rajdhani", "Exo 2", sans-serif;
+  font-size: 0.96rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  opacity: 0.9;
+}
+
+.dab-match .dab-match__chat-input::placeholder {
+  color: rgba(226, 232, 240, 0.42);
+}
+
+.dab-match .dab-match__chat-send {
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #facc15;
+  font-family: "Rajdhani", "Exo 2", sans-serif;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+}
+
+.dab-match .dab-match__speech-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 24;
+}
+
+.dab-match .dab-match__speech-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 220px;
+  padding: 9px 12px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(5, 10, 20, 0.92), rgba(8, 15, 28, 0.84));
+  box-shadow: 0 18px 44px rgba(2, 6, 23, 0.4);
+  color: #f8fafc;
+  font-family: "Rajdhani", "Exo 2", sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: 0.02em;
+  opacity: var(--dab-speech-opacity, 1);
+  transform: translate3d(calc(var(--dab-speech-x, 0px) - 50%), calc(var(--dab-speech-y, 0px) - 100%), 0);
+  transition: opacity 160ms linear;
+}
+
+.dab-match .dab-match__speech-text {
+  display: block;
+  white-space: normal;
+  word-break: break-word;
+  text-align: center;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.dab-match .dab-match__speech-tail {
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  border-right: 1px solid rgba(148, 163, 184, 0.28);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(7, 12, 22, 0.9);
+  transform: translateX(-50%) rotate(45deg);
 }
 
 .dab-match .dab-match__chat-line {
@@ -6970,23 +7078,29 @@ button.dab-match__skill {
   font-weight: 700;
   letter-spacing: 0.01em;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  opacity: var(--dab-chat-feed-opacity, 1);
+  transform: translateY(var(--dab-chat-feed-offset, 0));
+  transition: opacity 220ms ease, transform 220ms ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.dab-match .dab-match__chat-line.is-system {
+.dab-match .dab-match__chat-line.is-server {
   color: #f472b6;
   font-style: italic;
 }
 
-.dab-match .dab-match__chat-line.is-team {
+.dab-match .dab-match__chat-line.is-chat {
+  color: #f8fafc;
+}
+
+.dab-match .dab-match__chat-nickname {
   color: #facc15;
 }
 
-.dab-match .dab-match__chat-line.is-global {
+.dab-match .dab-match__chat-message {
   color: #fb923c;
-}
-
-.dab-match .dab-match__chat-line.is-alert {
-  color: #34d399;
 }
 
 .dab-match .dab-match__skills {
@@ -7329,8 +7443,19 @@ button.dab-match__skill {
     gap: 4px;
   }
 
+  .dab-match .dab-match__chat-composer {
+    width: min(320px, calc(100vw - 40px));
+    padding: 8px 10px;
+    margin-bottom: 10px;
+  }
+
   .dab-match .dab-match__chat-line {
     font-size: 0.78rem;
+  }
+
+  .dab-match .dab-match__speech-bubble {
+    max-width: 180px;
+    font-size: 0.76rem;
   }
 
   .dab-match .dab-match__skill {
