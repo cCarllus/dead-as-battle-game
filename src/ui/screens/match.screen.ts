@@ -15,6 +15,7 @@ import { createCombatFeedbackSystem, type CombatFeedbackSystem } from "../../gam
 import { createGlobalMatchScene, type GlobalMatchSceneHandle } from "../../game/scenes/global-match.scene";
 import { createDamageNumberEffect, type DamageNumberEffect } from "../effects/damage-number.effect";
 import { bind, qs } from "../components/dom";
+import { setMenuIconContent } from "../components/menu-icon";
 import { mountSettingsModal } from "../components/settings-modal";
 import template from "../layout/match.html?raw";
 import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
@@ -243,10 +244,15 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const hudSkillUltimate = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-ultimate"]');
   const hudSkillPrimaryIcon = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-primary-icon"]');
   const hudSkillSecondaryIcon = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-secondary-icon"]');
+  const hudSkillTertiaryIcon = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-tertiary-icon"]');
+  const hudSkillUtilityIcon = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-utility-icon"]');
+  const hudSkillFlyIcon = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-fly-icon"]');
   const hudSkillUltimateIcon = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-ultimate-icon"]');
   const hudSkillPrimaryKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-primary-key"]');
   const hudSkillSecondaryKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-secondary-key"]');
   const hudSkillUltimateKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-ultimate-key"]');
+  const hudAttackControlIcon = qs<HTMLElement>(screen, '[data-slot="match-control-icon-attack"]');
+  const hudHeavyControlIcon = qs<HTMLElement>(screen, '[data-slot="match-control-icon-heavy"]');
   const hudStaminaRoot = qs<HTMLElement>(screen, '[data-slot="match-hud-stamina"]');
   const hudStaminaFill = qs<HTMLElement>(screen, '[data-slot="match-hud-stamina-fill"]');
   const pointerLockHint = qs<HTMLElement>(screen, '[data-slot="match-pointer-lock-hint"]');
@@ -291,6 +297,15 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       : "Choose to return to the lobby or respawn and continue fighting.";
   deathModalBackLobbyButton.textContent = locale === "pt-BR" ? "Voltar ao lobby" : "Back to lobby";
   deathModalRespawnButton.textContent = locale === "pt-BR" ? "Renascer" : "Respawn";
+
+  setMenuIconContent(hudSkillPrimaryIcon, "hudAbilityPrimary", { className: "dab-match__hud-svg-icon" });
+  setMenuIconContent(hudSkillSecondaryIcon, "hudAbilitySecondary", { className: "dab-match__hud-svg-icon" });
+  setMenuIconContent(hudSkillTertiaryIcon, "hudAbilityTertiary", { className: "dab-match__hud-svg-icon" });
+  setMenuIconContent(hudSkillUtilityIcon, "hudAbilityUtility", { className: "dab-match__hud-svg-icon" });
+  setMenuIconContent(hudSkillFlyIcon, "hudAbilityUtility", { className: "dab-match__hud-svg-icon" });
+  setMenuIconContent(hudSkillUltimateIcon, "hudUltimate", { className: "dab-match__hud-svg-icon" });
+  setMenuIconContent(hudAttackControlIcon, "hudControlMouse", { className: "dab-match__control-svg-icon" });
+  setMenuIconContent(hudHeavyControlIcon, "hudControlMouse", { className: "dab-match__control-svg-icon" });
 
   const settingsModal = mountSettingsModal({
     locale,
@@ -496,6 +511,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       hudStaminaRoot.classList.remove("is-visible", "is-depleted-pulse", "is-recovered-pulse");
       hudStaminaFill.style.width = "100%";
       hudStaminaFill.classList.remove("is-mid", "is-low");
+      setHudBarFill(hudResourceFill, 100);
+      hudResourceValue.textContent = "100%";
       previousLocalStaminaPercent = 100;
       previousSprintBlocked = false;
       return;
@@ -507,6 +524,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     hudStaminaFill.style.width = `${staminaPercent}%`;
     hudStaminaFill.classList.toggle("is-mid", staminaPercent <= 50 && staminaPercent > 25);
     hudStaminaFill.classList.toggle("is-low", staminaPercent <= 25);
+    setHudBarFill(hudResourceFill, staminaPercent);
+    hudResourceValue.textContent = `${staminaPercent}%`;
 
     const shouldShowStaminaHud = player.isSprinting || staminaPercent < 100;
     hudStaminaRoot.classList.toggle("is-visible", shouldShowStaminaHud);
@@ -529,7 +548,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     const healthBarVisual = resolveHealthBarFillGradient(healthPercent);
     hudHealthFill.style.setProperty("--dab-health-bar-fill", healthBarVisual.gradient);
     hudHealthFill.style.setProperty("--dab-health-bar-shadow", healthBarVisual.shadow);
-    const ultimatePercent = setHudBarFill(hudResourceFill, combatHudState.ultimatePercent);
+    const ultimatePercent = clampPercent(combatHudState.ultimatePercent);
     const isUltimateReady = ultimatePercent >= 100;
 
     screen.style.setProperty("--dab-hero-skill-theme", combatHudState.skillThemeColor);
@@ -540,27 +559,25 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     if (hudHeroCard.src !== combatHudState.heroCardImageUrl) {
       hudHeroCard.src = combatHudState.heroCardImageUrl;
     }
-    hudSkillPrimaryIcon.textContent = combatHudState.skills.primary.icon;
-    hudSkillSecondaryIcon.textContent = combatHudState.skills.secondary.icon;
-    hudSkillUltimateIcon.textContent = combatHudState.skills.ultimate.icon;
     hudSkillPrimaryKey.textContent = combatHudState.skills.primary.key;
     hudSkillSecondaryKey.textContent = combatHudState.skills.secondary.key;
     hudSkillUltimateKey.textContent = combatHudState.skills.ultimate.key;
     hudSkillPrimary.title = combatHudState.skills.primary.name;
     hudSkillSecondary.title = combatHudState.skills.secondary.name;
     hudSkillUltimate.title = combatHudState.skills.ultimate.name;
+    hudSkillUltimate.style.setProperty("--dab-ultimate-charge", `${ultimatePercent}%`);
     hudUltimateKey.textContent = `[${combatHudState.skills.ultimate.key}] ULTIMATE`;
 
     hudHealthValue.textContent = `${combatHudState.healthCurrent} / ${combatHudState.healthMax}`;
     hudResourceValue.textContent = `${ultimatePercent}%`;
 
-    hudUltimateKey.hidden = !isUltimateReady;
+    hudUltimateKey.hidden = true;
     hudUltimateKey.classList.toggle("is-ready", isUltimateReady);
     hudVitals.classList.toggle("is-ultimate-ready", isUltimateReady);
+    hudSkillUltimate.classList.toggle("is-ready", isUltimateReady);
     setLocalStaminaHud(player);
 
     if (isUltimateReady) {
-      hudResourceValue.textContent = "100%";
       return;
     }
 

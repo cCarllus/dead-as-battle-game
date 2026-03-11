@@ -9,104 +9,190 @@
     </section>
 
     <section class="dab-match__hud-layer" aria-hidden="true">
-      <div class="dab-match__hud-zone dab-match__hud-zone--top-center">
-        <section class="dab-match__stats-pill">
-          <div class="dab-match__stat-item">
-            <span class="dab-match__stat-label">Tempo</span>
-            <strong class="dab-match__stat-value" data-slot="match-hud-timer">00:00</strong>
-          </div>
-          <span class="dab-match__stat-divider" aria-hidden="true"></span>
-          <div class="dab-match__stat-item">
-            <span class="dab-match__stat-label">Kills</span>
-            <strong class="dab-match__stat-value is-kills" data-slot="match-hud-kills">0</strong>
-          </div>
-          <span class="dab-match__stat-divider" aria-hidden="true"></span>
-          <div class="dab-match__stat-item">
-            <span class="dab-match__stat-label">Deaths</span>
-            <strong class="dab-match__stat-value is-deaths" data-slot="match-hud-deaths">0</strong>
-          </div>
-        </section>
-      </div>
-
-      <div class="dab-match__hud-zone dab-match__hud-zone--top-left">
+      <div class="dab-match__hud-frame dab-match__hud-frame--top-left">
         <section class="dab-match__vitals">
-          <div class="dab-match__vitals-cluster" aria-hidden="true">
-            <div class="dab-match__vitals-core">
+          <div class="dab-match__portrait-shell" aria-hidden="true">
+            <div class="dab-match__portrait-ring">
               <img
-                class="dab-match__vitals-core-portrait"
+                class="dab-match__portrait-image"
                 data-slot="match-hud-hero-card"
                 alt="Hero card portrait"
                 loading="eager"
                 decoding="async"
               />
+              <div class="dab-match__portrait-gloss"></div>
             </div>
-            <div class="dab-match__vitals-gem is-left">
-              <span class="dab-match__vitals-gem-icon">W</span>
+            <div class="dab-match__portrait-badge">
+              <span class="dab-match__portrait-badge-label">LVL 35</span>
             </div>
-            <div class="dab-match__vitals-gem is-top">
-              <span class="dab-match__vitals-gem-icon">S</span>
-            </div>
-            <div class="dab-match__vitals-gem is-bottom">
-              <span class="dab-match__vitals-gem-icon">Z</span>
-            </div>
-            <div class="dab-match__vitals-connector"></div>
           </div>
 
-          <div class="dab-match__vitals-bars-wrap">
-            <div class="dab-match__vitals-bars">
-              <div class="dab-match__status-header">
-                <strong class="dab-match__hero-name" data-slot="match-hud-hero-name">HERO</strong>
-                <span class="dab-match__ultimate-key" data-slot="match-hud-ultimate-key">[G] ULTIMATE</span>
-              </div>
-              <div class="dab-match__bar is-health">
-                <span class="dab-match__bar-fill" data-slot="match-hud-health-fill">
-                  <strong class="dab-match__bar-percent" data-slot="match-hud-health-value">1000 / 1000</strong>
-                </span>
-              </div>
-              <div class="dab-match__bar is-resource">
-                <span class="dab-match__bar-fill" data-slot="match-hud-resource-fill">
-                  <strong class="dab-match__bar-percent" data-slot="match-hud-resource-value">0%</strong>
-                </span>
-              </div>
-              <section class="dab-match__stamina" data-slot="match-hud-stamina" aria-hidden="true">
-                <div class="dab-match__stamina-track">
-                  <span class="dab-match__stamina-fill" data-slot="match-hud-stamina-fill"></span>
-                </div>
-              </section>
+          <div class="dab-match__vitals-stack">
+            <strong class="dab-match__hero-name dab-match__hero-name--hidden" data-slot="match-hud-hero-name">HERO</strong>
+            <span class="dab-match__ultimate-key dab-match__ultimate-key--hidden" data-slot="match-hud-ultimate-key">[G] ULTIMATE</span>
+
+            <div class="dab-match__bar is-health">
+              <span class="dab-match__bar-fill" data-slot="match-hud-health-fill"></span>
+              <strong class="dab-match__bar-percent dab-match__bar-percent--health" data-slot="match-hud-health-value">1000 / 1000</strong>
             </div>
+
+            <div class="dab-match__bar is-resource">
+              <span class="dab-match__bar-fill" data-slot="match-hud-resource-fill"></span>
+              <strong class="dab-match__bar-percent dab-match__bar-percent--resource" data-slot="match-hud-resource-value">0%</strong>
+            </div>
+
+            <section class="dab-match__stamina dab-match__stamina--hidden" data-slot="match-hud-stamina" aria-hidden="true">
+              <div class="dab-match__stamina-track">
+                <span class="dab-match__stamina-fill" data-slot="match-hud-stamina-fill"></span>
+              </div>
+            </section>
           </div>
         </section>
       </div>
 
-      <div class="dab-match__hud-zone dab-match__hud-zone--bottom-right">
+      <div class="dab-match__hud-frame dab-match__hud-frame--top-right">
+        <aside class="dab-match__radar-stack" aria-hidden="true">
+          <section class="dab-match__stats-pill">
+            <div class="dab-match__stat-item">
+              <strong class="dab-match__stat-value" data-slot="match-hud-timer">00:00</strong>
+            </div>
+            <span class="dab-match__stat-divider" aria-hidden="true"></span>
+            <div class="dab-match__stat-item">
+              <strong class="dab-match__stat-value is-kills" data-slot="match-hud-kills">0</strong>
+            </div>
+            <span class="dab-match__stat-divider" aria-hidden="true"></span>
+            <div class="dab-match__stat-item">
+              <strong class="dab-match__stat-value is-deaths" data-slot="match-hud-deaths">0</strong>
+            </div>
+          </section>
+
+          <div class="dab-match__radar-head">
+            <span class="dab-match__radar-chip">Radar</span>
+            <span class="dab-match__radar-chip is-live">Live</span>
+          </div>
+          <div class="dab-match__radar-disc">
+            <span class="dab-match__radar-north">N</span>
+            <span class="dab-match__radar-ring is-inner"></span>
+            <span class="dab-match__radar-ring is-outer"></span>
+            <span class="dab-match__radar-sweep"></span>
+            <span class="dab-match__radar-marker is-player"></span>
+            <span class="dab-match__radar-marker is-objective"></span>
+            <span class="dab-match__radar-marker is-enemy"></span>
+          </div>
+
+          <div class="dab-match__kill-log">
+            <div class="dab-match__kill-feed-item">
+              <span class="dab-match__kill-feed-player is-gold">BASTION</span>
+              <span class="dab-match__kill-feed-icon">⊗</span>
+              <span class="dab-match__kill-feed-player is-violet">RAMATTRA</span>
+            </div>
+            <div class="dab-match__kill-feed-item">
+              <span class="dab-match__kill-feed-player is-violet">JUNKRAT</span>
+              <span class="dab-match__kill-feed-icon">⊗</span>
+              <span class="dab-match__kill-feed-player is-gold">HANZO</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="dab-match__crosshair" aria-hidden="true">
+        <span class="dab-match__crosshair-dot"></span>
+      </div>
+
+      <div class="dab-match__hud-frame dab-match__hud-frame--bottom-left">
+        <aside class="dab-match__chat-feed" aria-hidden="true">
+          <div class="dab-match__chat-line is-system">Invalid chat channel</div>
+          <div class="dab-match__chat-line is-team">[Player Name]: Hello Team!</div>
+          <div class="dab-match__chat-line is-global">[Player Name]: Hello Match!</div>
+          <div class="dab-match__chat-line is-alert">[Player_name]: Need healing!</div>
+        </aside>
+
         <section class="dab-match__skills" data-slot="match-skills">
-          <div class="dab-match__skill" data-slot="match-skill-slot-primary" title="Primary skill">
-            <span class="dab-match__skill-icon" data-slot="match-skill-slot-primary-icon">ST</span>
-            <small class="dab-match__skill-key" data-slot="match-skill-slot-primary-key">1</small>
+          <div class="dab-match__skills-grid">
+            <div class="dab-match__skills-row is-top">
+              <div class="dab-match__skill" data-slot="match-skill-slot-primary" title="Primary skill">
+                <span class="dab-match__skill-icon" data-slot="match-skill-slot-primary-icon"></span>
+                <small class="dab-match__skill-key" data-slot="match-skill-slot-primary-key">1</small>
+              </div>
+              <div class="dab-match__skill" data-slot="match-skill-slot-secondary" title="Secondary skill">
+                <span class="dab-match__skill-icon" data-slot="match-skill-slot-secondary-icon"></span>
+                <small class="dab-match__skill-key" data-slot="match-skill-slot-secondary-key">2</small>
+              </div>
+              <div class="dab-match__skill is-placeholder" title="Third skill">
+                <span class="dab-match__skill-icon" data-slot="match-skill-slot-tertiary-icon"></span>
+                <small class="dab-match__skill-key">3</small>
+              </div>
+            </div>
+
+            <div class="dab-match__skills-row is-bottom">
+              <div class="dab-match__skill is-placeholder" title="Fourth skill">
+                <span class="dab-match__skill-icon" data-slot="match-skill-slot-utility-icon"></span>
+                <small class="dab-match__skill-key">4</small>
+              </div>
+              <button
+                type="button"
+                class="dab-match__skill is-fly"
+                data-action="toggle-fly"
+                data-slot="match-fly-toggle"
+                aria-pressed="false"
+                title="Fly (F)"
+              >
+                <span class="dab-match__skill-icon" data-slot="match-skill-slot-fly-icon" aria-hidden="true"></span>
+                <small class="dab-match__skill-key">F</small>
+              </button>
+              <div class="dab-match__skill is-ultimate" data-slot="match-skill-slot-ultimate" title="Ultimate skill">
+                <span class="dab-match__skill-charge"></span>
+                <span class="dab-match__skill-icon" data-slot="match-skill-slot-ultimate-icon"></span>
+                <small class="dab-match__skill-key is-ultimate" data-slot="match-skill-slot-ultimate-key">G</small>
+              </div>
+            </div>
           </div>
-          <div class="dab-match__skill" data-slot="match-skill-slot-secondary" title="Secondary skill">
-            <span class="dab-match__skill-icon" data-slot="match-skill-slot-secondary-icon">DS</span>
-            <small class="dab-match__skill-key" data-slot="match-skill-slot-secondary-key">2</small>
-          </div>
-          <div class="dab-match__skill is-ultimate" data-slot="match-skill-slot-ultimate" title="Ultimate skill">
-            <span class="dab-match__skill-icon" data-slot="match-skill-slot-ultimate-icon">OV</span>
-            <small class="dab-match__skill-key" data-slot="match-skill-slot-ultimate-key">G</small>
-          </div>
-          <button
-            type="button"
-            class="dab-match__skill is-fly"
-            data-action="toggle-fly"
-            data-slot="match-fly-toggle"
-            aria-pressed="false"
-            title="Fly (F)"
-          >
-            <span class="dab-match__skill-icon" aria-hidden="true">&#9992;</span>
-            <small class="dab-match__skill-key">F</small>
-          </button>
         </section>
       </div>
 
-      <div class="dab-match__hud-zone dab-match__hud-zone--bottom-center">
+      <div class="dab-match__hud-frame dab-match__hud-frame--bottom-right">
+        <aside class="dab-match__weapon-stack" aria-hidden="true">
+          <div class="dab-match__controls-heading">Controls</div>
+          <div class="dab-match__controls-list">
+            <div class="dab-match__control-row">
+              <span class="dab-match__control-copy">Attack</span>
+              <span class="dab-match__control-key">
+                <span class="dab-match__control-keycap">
+                  <span class="dab-match__control-keycap-icon" data-slot="match-control-icon-attack"></span>
+                  <span class="dab-match__control-keycap-label">L</span>
+                </span>
+              </span>
+            </div>
+            <div class="dab-match__control-row">
+              <span class="dab-match__control-copy">Heavy</span>
+              <span class="dab-match__control-key">
+                <span class="dab-match__control-keycap is-accent">
+                  <span class="dab-match__control-keycap-icon" data-slot="match-control-icon-heavy"></span>
+                  <span class="dab-match__control-keycap-label">R</span>
+                </span>
+              </span>
+            </div>
+            <div class="dab-match__control-row">
+              <span class="dab-match__control-copy">Sprint</span>
+              <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text">Shift</span></span>
+            </div>
+            <div class="dab-match__control-row">
+              <span class="dab-match__control-copy">Jump</span>
+              <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text">Space</span></span>
+            </div>
+            <div class="dab-match__control-row">
+              <span class="dab-match__control-copy">Roll</span>
+              <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text">C</span></span>
+            </div>
+            <div class="dab-match__control-row">
+              <span class="dab-match__control-copy">Fly Mode</span>
+              <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text">F</span></span>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="dab-match__hud-frame dab-match__hud-frame--bottom-center">
         <small class="dab-match__pointer-hint" data-slot="match-pointer-lock-hint">
           Clique no jogo para capturar o mouse
         </small>

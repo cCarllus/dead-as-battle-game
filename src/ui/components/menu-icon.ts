@@ -1,9 +1,11 @@
 import bagFillSvg from "bootstrap-icons/icons/bag-fill.svg?raw";
+import activitySvg from "bootstrap-icons/icons/activity.svg?raw";
 import bellFillSvg from "bootstrap-icons/icons/bell-fill.svg?raw";
 import boxArrowLeftSvg from "bootstrap-icons/icons/box-arrow-left.svg?raw";
 import chatSquareTextFillSvg from "bootstrap-icons/icons/chat-square-text-fill.svg?raw";
 import checkCircleFillSvg from "bootstrap-icons/icons/check-circle-fill.svg?raw";
 import chevronDownSvg from "bootstrap-icons/icons/chevron-down.svg?raw";
+import fireSvg from "bootstrap-icons/icons/fire.svg?raw";
 import coinSvg from "bootstrap-icons/icons/coin.svg?raw";
 import discordSvg from "bootstrap-icons/icons/discord.svg?raw";
 import gearFillSvg from "bootstrap-icons/icons/gear-fill.svg?raw";
@@ -11,12 +13,16 @@ import gridFillSvg from "bootstrap-icons/icons/grid-fill.svg?raw";
 import houseDoorFillSvg from "bootstrap-icons/icons/house-door-fill.svg?raw";
 import journalTextSvg from "bootstrap-icons/icons/journal-text.svg?raw";
 import lightningChargeFillSvg from "bootstrap-icons/icons/lightning-charge-fill.svg?raw";
+import lightningFillSvg from "bootstrap-icons/icons/lightning-fill.svg?raw";
 import lockFillSvg from "bootstrap-icons/icons/lock-fill.svg?raw";
+import mouseSvg from "bootstrap-icons/icons/mouse.svg?raw";
 import peopleFillSvg from "bootstrap-icons/icons/people-fill.svg?raw";
 import personPlusFillSvg from "bootstrap-icons/icons/person-plus-fill.svg?raw";
 import playFillSvg from "bootstrap-icons/icons/play-fill.svg?raw";
+import shieldFillSvg from "bootstrap-icons/icons/shield-fill.svg?raw";
 import trophyFillSvg from "bootstrap-icons/icons/trophy-fill.svg?raw";
 import twitterXSvg from "bootstrap-icons/icons/twitter-x.svg?raw";
+import windSvg from "bootstrap-icons/icons/wind.svg?raw";
 import xOctagonFillSvg from "bootstrap-icons/icons/x-octagon-fill.svg?raw";
 
 export type MenuIconId =
@@ -31,6 +37,12 @@ export type MenuIconId =
   | "deaths"
   | "filter"
   | "home"
+  | "hudAbilityPrimary"
+  | "hudAbilitySecondary"
+  | "hudAbilityTertiary"
+  | "hudAbilityUtility"
+  | "hudControlMouse"
+  | "hudUltimate"
   | "kills"
   | "lock"
   | "notes"
@@ -54,6 +66,12 @@ const ICON_MARKUP_BY_ID: Record<MenuIconId, string> = {
   deaths: xOctagonFillSvg,
   filter: gridFillSvg,
   home: houseDoorFillSvg,
+  hudAbilityPrimary: activitySvg,
+  hudAbilitySecondary: shieldFillSvg,
+  hudAbilityTertiary: fireSvg,
+  hudAbilityUtility: windSvg,
+  hudControlMouse: mouseSvg,
+  hudUltimate: lightningFillSvg,
   kills: trophyFillSvg,
   lock: lockFillSvg,
   notes: journalTextSvg,
