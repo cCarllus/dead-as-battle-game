@@ -6,13 +6,12 @@ export const CHARACTER_AUDIO_EVENTS = [
   "land",
   "crouchEnter",
   "crouchExit",
-  "slideStart",
-  "slideLoop",
-  "slideEnd",
+  "rollingStart",
+  "rollingLoop",
+  "rollingEnd",
   "wallRunStart",
   "wallRunLoop",
   "wallRunEnd"
 ] as const;
 
 export type CharacterAudioEvent = (typeof CHARACTER_AUDIO_EVENTS)[number];
-

@@ -5,14 +5,11 @@ export type CharacterLocomotionState =
   | "Idle"
   | "Walk"
   | "Run"
-  | "RunStop"
   | "JumpStart"
   | "InAir"
   | "Fall"
-  | "Land"
   | "Crouch"
-  | "CrouchWalk"
-  | "Slide"
+  | "Rolling"
   | "WallRun"
   | "DoubleJump"
   | "Attack"
@@ -31,6 +28,7 @@ export type CharacterMovementInputState = {
   jump: boolean;
   sprint: boolean;
   crouch: boolean;
+  rollPressed: boolean;
   descend: boolean;
 };
 
@@ -43,7 +41,7 @@ export type CharacterLocomotionSnapshot = {
   isMoving: boolean;
   isSprinting: boolean;
   isCrouching: boolean;
-  isSliding: boolean;
+  isRolling: boolean;
   isWallRunning: boolean;
   wallRunSide: WallRunSide;
   didGroundJump: boolean;
@@ -51,15 +49,15 @@ export type CharacterLocomotionSnapshot = {
   didLand: boolean;
   didCrouchEnter: boolean;
   didCrouchExit: boolean;
-  didSlideStart: boolean;
-  didSlideEnd: boolean;
+  didRollingStart: boolean;
+  didRollingEnd: boolean;
   didWallRunStart: boolean;
   didWallRunEnd: boolean;
   speedNormalized: number;
   lateralInput: number;
   forwardInput: number;
   crouchAlpha: number;
-  slideAlpha: number;
+  rollingAlpha: number;
   verticalVelocity: number;
   landingImpact: number;
   sprintIntent: {
@@ -68,7 +66,7 @@ export type CharacterLocomotionSnapshot = {
   };
   cameraProfile: {
     crouchOffsetY: number;
-    slideOffsetY: number;
+    rollingOffsetY: number;
     sprintFovBoostRadians: number;
     wallRunFovBoostRadians: number;
     wallRunTiltRadians: number;

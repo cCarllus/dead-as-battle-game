@@ -1,6 +1,7 @@
 // Responsável por renderizar e ajustar preview 3D do campeão usando Babylon.js.
 import {
   ArcRotateCamera,
+  type AbstractMesh,
   Color3,
   Color4,
   Engine,
@@ -13,15 +14,33 @@ import {
   Vector3
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
+import type { ChampionPreviewAnimation } from "../../models/champion.model";
+import {
+  createAnimationBindingTargetResolver,
+  loadBoundAnimationCommandFromAsset
+} from "../../game/animation/animation-binding";
+import { SHARED_ANIMATION_BASE_URL } from "../../game/animation/shared-animation-library";
 
 export type ChampionPreviewOptions = {
   modelUrl?: string | null;
+  previewAnimation?: ChampionPreviewAnimation | null;
   themeColor?: string;
 };
 
 type ChampionPreviewFrame = {
   size: Vector3;
   focusY: number;
+};
+
+type ImportedPreviewAsset = {
+  meshes: AbstractMesh[];
+  transformNodes: TransformNode[];
+  animationGroups: readonly {
+    name?: string;
+    start: (loop?: boolean, speedRatio?: number) => unknown;
+    reset: () => unknown;
+    stop?: () => unknown;
+  }[];
 };
 
 // Default framing profile for all character models. This keeps a stable visual
@@ -56,18 +75,116 @@ function splitModelPath(modelUrl: string): { rootUrl: string; fileName: string }
   };
 }
 
+function resolvePreviewAnimationAsset(
+  previewAnimation: ChampionPreviewAnimation | null | undefined
+): {
+  assetUrl: string;
+  groupName?: string;
+  loop: boolean;
+} {
+  return {
+    assetUrl: previewAnimation?.assetUrl?.trim() || `${SHARED_ANIMATION_BASE_URL}/idle.glb`,
+    groupName: previewAnimation?.groupName?.trim() || undefined,
+    loop: previewAnimation?.loop ?? true
+  };
+}
+
 function playAnimationGroups(
   groups: readonly { name?: string; start: (loop?: boolean, speedRatio?: number) => unknown; reset: () => unknown; stop?: () => unknown }[],
-  preferredName: string
+  preferredName: string | undefined,
+  loop = true
 ): void {
-  const target = groups.find((g) => (g.name ?? "").toLowerCase() === preferredName.toLowerCase());
+  const normalizedPreferredName = preferredName?.trim().toLowerCase();
+  const target = normalizedPreferredName
+    ? groups.find((g) => (g.name ?? "").toLowerCase() === normalizedPreferredName)
+    : undefined;
   const fallback = groups[0];
   const selected = target ?? fallback;
   if (!selected) return;
 
   groups.forEach((g) => g.stop?.());
   selected.reset();
-  selected.start(true, 1);
+  selected.start(loop, 1);
+}
+
+function attachImportedRootNodes(
+  importedAsset: ImportedPreviewAsset,
+  modelRoot: TransformNode
+): TransformNode[] {
+  const rootNodes: TransformNode[] = [];
+  const seenRootNodeIds = new Set<number>();
+  const registerRootNode = (node: TransformNode): void => {
+    if (seenRootNodeIds.has(node.uniqueId)) {
+      return;
+    }
+
+    seenRootNodeIds.add(node.uniqueId);
+    rootNodes.push(node);
+  };
+
+  importedAsset.transformNodes.forEach((node) => {
+    if (node.parent) {
+      return;
+    }
+
+    node.parent = modelRoot;
+    registerRootNode(node);
+  });
+
+  importedAsset.meshes.forEach((mesh) => {
+    if (mesh.parent) {
+      return;
+    }
+
+    mesh.parent = modelRoot;
+    registerRootNode(mesh);
+  });
+
+  if (rootNodes.length === 0) {
+    registerRootNode(modelRoot);
+  }
+
+  return rootNodes;
+}
+
+async function playConfiguredPreviewAnimation(params: {
+  scene: Scene;
+  rootNodes: TransformNode[];
+  previewAnimation: ChampionPreviewAnimation | null | undefined;
+  embeddedAnimationGroups: ImportedPreviewAsset["animationGroups"];
+}): Promise<void> {
+  const previewAnimationAsset = resolvePreviewAnimationAsset(params.previewAnimation);
+  const { rootUrl, fileName } = splitModelPath(previewAnimationAsset.assetUrl);
+  const binding = createAnimationBindingTargetResolver({
+    rootNodes: params.rootNodes,
+    sessionId: "champion_preview",
+    loadVersion: 1
+  });
+
+  const boundGroup = await loadBoundAnimationCommandFromAsset({
+    scene: params.scene,
+    command: "idle",
+    assetDefinition: previewAnimationAsset.groupName
+      ? { fileName, groupName: previewAnimationAsset.groupName }
+      : fileName,
+    baseUrl: rootUrl,
+    binding,
+    loggerPrefix: "[preview-animation]",
+    sourceLabel: "shared"
+  });
+
+  if (boundGroup) {
+    params.embeddedAnimationGroups.forEach((group) => group.stop?.());
+    boundGroup.reset();
+    boundGroup.start(previewAnimationAsset.loop, 1);
+    return;
+  }
+
+  playAnimationGroups(
+    params.embeddedAnimationGroups,
+    previewAnimationAsset.groupName,
+    previewAnimationAsset.loop
+  );
 }
 
 function normalizeModel(root: TransformNode): ChampionPreviewFrame {
@@ -228,15 +345,23 @@ export function mountChampionPreview(container: HTMLElement, options: ChampionPr
     const { rootUrl, fileName } = splitModelPath(options.modelUrl);
     void SceneLoader.ImportMeshAsync("", rootUrl, fileName, scene)
       .then((result) => {
-        result.meshes.forEach((mesh) => {
-          if (!mesh.parent) {
-            mesh.parent = modelRoot;
-          }
-        });
+        const importedRootNodes = attachImportedRootNodes(
+          {
+            meshes: result.meshes,
+            transformNodes: result.transformNodes,
+            animationGroups: result.animationGroups
+          },
+          modelRoot
+        );
 
         modelFrame = normalizeModel(modelRoot);
         frameCamera(camera, engine, modelFrame);
-        playAnimationGroups(result.animationGroups, "Left_Jab_from_Guard");
+        void playConfiguredPreviewAnimation({
+          scene,
+          rootNodes: importedRootNodes,
+          previewAnimation: options.previewAnimation,
+          embeddedAnimationGroups: result.animationGroups
+        });
 
         if (fallbackIcon && !isDisposed) {
           fallbackIcon.style.display = "none";

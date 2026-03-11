@@ -35,10 +35,8 @@ const VALID_LOCOMOTION_STATES = new Set<MatchPlayerLocomotionState>([
   "JumpStart",
   "InAir",
   "Fall",
-  "Land",
   "Crouch",
-  "CrouchWalk",
-  "Slide",
+  "Rolling",
   "WallRun",
   "DoubleJump",
   "Attack",
@@ -84,7 +82,7 @@ export type MatchService = {
     rotationY: number;
     locomotionState: MatchPlayerLocomotionState;
     isCrouching: boolean;
-    isSliding: boolean;
+    isRolling: boolean;
     isWallRunning: boolean;
     wallRunSide: MatchPlayerWallRunSide;
     verticalVelocity: number;
@@ -188,7 +186,7 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const isSprinting = normalizeBoolean(candidate.isSprinting) ?? false;
   const locomotionState = normalizeLocomotionState(candidate.locomotionState);
   const isCrouching = normalizeBoolean(candidate.isCrouching) ?? false;
-  const isSliding = normalizeBoolean(candidate.isSliding) ?? false;
+  const isRolling = normalizeBoolean(candidate.isRolling) ?? false;
   const isWallRunning = normalizeBoolean(candidate.isWallRunning) ?? false;
   const wallRunSide = normalizeWallRunSide(candidate.wallRunSide);
   const verticalVelocity = normalizeNumber(candidate.verticalVelocity) ?? 0;
@@ -251,7 +249,7 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
     isSprinting: safeIsSprinting,
     locomotionState,
     isCrouching: safeIsAlive ? isCrouching : false,
-    isSliding: safeIsAlive ? isSliding : false,
+    isRolling: safeIsAlive ? isRolling : false,
     isWallRunning: safeIsAlive ? isWallRunning : false,
     wallRunSide: safeIsAlive ? wallRunSide : "none",
     verticalVelocity: safeIsAlive ? verticalVelocity : 0,
@@ -317,7 +315,7 @@ function normalizeMovedPayload(payload: unknown): MatchPlayerMovedPayload | null
   const rotationY = normalizeNumber(candidate.rotationY);
   const locomotionState = normalizeLocomotionState(candidate.locomotionState);
   const isCrouching = normalizeBoolean(candidate.isCrouching) ?? false;
-  const isSliding = normalizeBoolean(candidate.isSliding) ?? false;
+  const isRolling = normalizeBoolean(candidate.isRolling) ?? false;
   const isWallRunning = normalizeBoolean(candidate.isWallRunning) ?? false;
   const wallRunSide = normalizeWallRunSide(candidate.wallRunSide);
   const verticalVelocity = normalizeNumber(candidate.verticalVelocity) ?? 0;
@@ -334,7 +332,7 @@ function normalizeMovedPayload(payload: unknown): MatchPlayerMovedPayload | null
     rotationY,
     locomotionState,
     isCrouching,
-    isSliding,
+    isRolling,
     isWallRunning,
     wallRunSide,
     verticalVelocity
@@ -646,7 +644,7 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     isSprinting: player.isSprinting,
     locomotionState: player.locomotionState,
     isCrouching: player.isCrouching,
-    isSliding: player.isSliding,
+    isRolling: player.isRolling,
     isWallRunning: player.isWallRunning,
     wallRunSide: player.wallRunSide,
     verticalVelocity: player.verticalVelocity,
@@ -875,7 +873,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         rotationY: movedPlayer.rotationY,
         locomotionState: movedPlayer.locomotionState,
         isCrouching: movedPlayer.isCrouching,
-        isSliding: movedPlayer.isSliding,
+        isRolling: movedPlayer.isRolling,
         isWallRunning: movedPlayer.isWallRunning,
         wallRunSide: movedPlayer.wallRunSide,
         verticalVelocity: movedPlayer.verticalVelocity
@@ -888,7 +886,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         existingPlayer.rotationY !== updatedPlayer.rotationY ||
         existingPlayer.locomotionState !== updatedPlayer.locomotionState ||
         existingPlayer.isCrouching !== updatedPlayer.isCrouching ||
-        existingPlayer.isSliding !== updatedPlayer.isSliding ||
+        existingPlayer.isRolling !== updatedPlayer.isRolling ||
         existingPlayer.isWallRunning !== updatedPlayer.isWallRunning ||
         existingPlayer.wallRunSide !== updatedPlayer.wallRunSide ||
         existingPlayer.verticalVelocity !== updatedPlayer.verticalVelocity;
@@ -1311,7 +1309,7 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         rotationY: movement.rotationY,
         locomotionState: movement.locomotionState,
         isCrouching: movement.isCrouching,
-        isSliding: movement.isSliding,
+        isRolling: movement.isRolling,
         isWallRunning: movement.isWallRunning,
         wallRunSide: movement.wallRunSide,
         verticalVelocity: movement.verticalVelocity

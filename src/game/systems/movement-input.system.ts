@@ -1,4 +1,4 @@
-// Responsável por rastrear entrada local de locomoção com crouch por hold no Ctrl e toggle no C.
+// Responsável por rastrear entrada local de locomoção com crouch por hold no Ctrl, toggle no C e rolling por toque.
 export type MovementInputState = {
   forward: boolean;
   left: boolean;
@@ -7,6 +7,7 @@ export type MovementInputState = {
   jump: boolean;
   sprint: boolean;
   crouch: boolean;
+  rollPressed: boolean;
   descend: boolean;
 };
 
@@ -38,6 +39,7 @@ function createInitialState(): MovementInputState {
     jump: false,
     sprint: false,
     crouch: false,
+    rollPressed: false,
     descend: false
   };
 }
@@ -51,6 +53,7 @@ function cloneState(state: MovementInputState): MovementInputState {
     jump: state.jump,
     sprint: state.sprint,
     crouch: state.crouch,
+    rollPressed: state.rollPressed,
     descend: state.descend
   };
 }
@@ -78,6 +81,16 @@ export function createMovementInputSystem(): MovementInputSystem {
     }
 
     if (event.code === "KeyC") {
+      const wantsRolling = state.forward && state.sprint;
+      if (wantsRolling) {
+        state = {
+          ...state,
+          rollPressed: true
+        };
+        event.preventDefault();
+        return;
+      }
+
       crouchToggled = !crouchToggled;
       event.preventDefault();
       return;
@@ -151,6 +164,10 @@ export function createMovementInputSystem(): MovementInputSystem {
     getState: () => {
       const nextState = cloneState(state);
       nextState.crouch = crouchHeld || crouchToggled;
+      state = {
+        ...state,
+        rollPressed: false
+      };
       return nextState;
     },
     dispose: () => {

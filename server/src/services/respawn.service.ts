@@ -54,7 +54,7 @@ export function respawnPlayer(options: {
   player.isSprinting = false;
   player.locomotionState = "Idle";
   player.isCrouching = false;
-  player.isSliding = false;
+  player.isRolling = false;
   player.isWallRunning = false;
   player.wallRunSide = "none";
   player.verticalVelocity = 0;

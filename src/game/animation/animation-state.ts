@@ -12,13 +12,14 @@ export type AnimationGameplayState = {
   isSprinting: boolean;
   isJumping: boolean;
   isCrouching: boolean;
-  isSliding: boolean;
+  isRolling: boolean;
   isWallRunning: boolean;
   isUltimateActive: boolean;
   isBlocking: boolean;
   attackComboIndex: 0 | 1 | 2 | 3;
   isHitReacting: boolean;
   locomotionState?: CharacterLocomotionState | LocomotionAnimationState;
+  restartCommand?: AnimationCommand | null;
 };
 
 export function createDefaultAnimationGameplayState(): AnimationGameplayState {
@@ -29,13 +30,14 @@ export function createDefaultAnimationGameplayState(): AnimationGameplayState {
     isSprinting: false,
     isJumping: false,
     isCrouching: false,
-    isSliding: false,
+    isRolling: false,
     isWallRunning: false,
     isUltimateActive: false,
     isBlocking: false,
     attackComboIndex: 0,
     isHitReacting: false,
-    locomotionState: "Idle"
+    locomotionState: "Idle",
+    restartCommand: null
   };
 }
 
@@ -77,7 +79,6 @@ export function resolveAnimationCommandFromGameplay(
   if (gameplayState.locomotionState) {
     switch (gameplayState.locomotionState) {
       case "JumpStart":
-      case "jumpStart":
         return "jump";
       case "DoubleJump":
         return "doubleJump";
@@ -85,17 +86,10 @@ export function resolveAnimationCommandFromGameplay(
       case "inAir":
       case "Fall":
         return "inAir";
-      case "Land":
-      case "land":
-        return "land";
-      case "RunStop":
-        return "runStop";
-      case "Slide":
-        return "slideLoop";
+      case "Rolling":
+        return "rolling";
       case "Crouch":
         return "crouchIdle";
-      case "CrouchWalk":
-        return "crouchWalk";
       case "Run":
       case "run":
         return "run";

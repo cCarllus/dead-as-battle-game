@@ -15,6 +15,7 @@ export const DEFAULT_CHAMPION_TEMPLATE: ChampionCatalogItem = {
   universeName: "Dead as Battle",
   modelUrl: "public/local/models/heroes/default/default.glb",
   animationOverrideBaseUrl: "public/local/animations/heroes/default",
+  previewAnimation: null,
   cardImageUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/images/champions/default/default_champ_card.png",
   splashImageUrl: "https://imgs.search.brave.com/aenZAYJGTuXL89r7XCaO2E788nw3F7osgmTKkUj5-2Y/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pMS5z/bmRjZG4uY29tL2Fy/dHdvcmtzLWl5VXZT/UDVvSDBPQS0wLXQx/MDgweDEwODAuanBn",
   selectAudioUrl: "https://cdn.jsdelivr.net/gh/cCarllus/dead-as-battle-assets@main/sounds/champions/default/default_audio_lobby.mp3",

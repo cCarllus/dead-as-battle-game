@@ -14,7 +14,7 @@ export function resolveLocomotionCameraHooks(
   return {
     targetOffsetY:
       snapshot.crouchAlpha * snapshot.cameraProfile.crouchOffsetY +
-      snapshot.slideAlpha * snapshot.cameraProfile.slideOffsetY,
+      snapshot.rollingAlpha * snapshot.cameraProfile.rollingOffsetY,
     lateralOffset: snapshot.isWallRunning ? 0.06 : 0,
     additionalFovRadians:
       (snapshot.isSprinting ? snapshot.cameraProfile.sprintFovBoostRadians : 0) +
@@ -25,4 +25,3 @@ export function resolveLocomotionCameraHooks(
         : 0
   };
 }
-

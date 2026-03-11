@@ -6,14 +6,10 @@ export const DEFAULT_HERO_ANIMATION_CONFIG: HeroAnimationConfig = {
   embeddedCommandToGroupName: {
     idle: "Left_Jab_from_Guard",
     walk: "Skill_01",
-    walkBack: "Skill_01",
-    walkLeft: "Walking",
-    walkRight: "Idle_5",
     run: "ForwardRight_Run_Fight",
     jump: "ForwardLeft_Run_Fight",
-    jumpStart: "ForwardLeft_Run_Fight",
     inAir: "ForwardLeft_Run_Fight",
-    land: "ForwardLeft_Run_Fight",
+    rolling: "Regular_Jump",
     death: "Walk_Backward",
     ultimate: "Regular_Jump",
     attack1: "Charged_Slash",
@@ -22,5 +18,5 @@ export const DEFAULT_HERO_ANIMATION_CONFIG: HeroAnimationConfig = {
     block: "Hit_Reaction_1",
     hit: "Left_Hook_from_Guard"
   },
-  loopedCommands: ["idle", "walk", "walkBack", "walkLeft", "walkRight", "run", "inAir", "block"]
+  loopedCommands: ["idle", "walk", "run", "inAir", "block"]
 };

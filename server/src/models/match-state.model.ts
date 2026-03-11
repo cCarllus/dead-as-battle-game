@@ -36,7 +36,7 @@ export type MatchPlayerStructuredState = {
   locomotion: {
     state: MatchPlayerState["locomotionState"];
     isCrouching: boolean;
-    isSliding: boolean;
+    isRolling: boolean;
     isWallRunning: boolean;
     wallRunSide: MatchPlayerState["wallRunSide"];
     verticalVelocity: number;
@@ -79,7 +79,7 @@ export function toStructuredPlayerState(player: MatchPlayerState): MatchPlayerSt
     locomotion: {
       state: player.locomotionState,
       isCrouching: player.isCrouching,
-      isSliding: player.isSliding,
+      isRolling: player.isRolling,
       isWallRunning: player.isWallRunning,
       wallRunSide: player.wallRunSide,
       verticalVelocity: player.verticalVelocity
@@ -113,7 +113,7 @@ export function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     isSprinting: player.isSprinting,
     locomotionState: player.locomotionState,
     isCrouching: player.isCrouching,
-    isSliding: player.isSliding,
+    isRolling: player.isRolling,
     isWallRunning: player.isWallRunning,
     wallRunSide: player.wallRunSide,
     verticalVelocity: player.verticalVelocity,

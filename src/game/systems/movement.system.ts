@@ -237,8 +237,7 @@ export function createMovementSystem(options: CreateMovementSystemOptions): Move
         isGrounded: input.isFlyModeEnabled ? false : groundedAfterMove.isGrounded,
         isMoving: motorOutput.isMoving,
         isSprinting: canUseSprint,
-        didStartJump,
-        didLand
+        didStartJump
       });
 
       const animationState = options.animationStateSystem.resolve({

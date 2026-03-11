@@ -79,7 +79,7 @@ export function createMovementSystem(options: {
           rotationY: moveResult.rotationY,
           locomotionState: player.locomotionState,
           isCrouching: player.isCrouching,
-          isSliding: player.isSliding,
+          isRolling: player.isRolling,
           isWallRunning: player.isWallRunning,
           wallRunSide: player.wallRunSide,
           verticalVelocity: player.verticalVelocity

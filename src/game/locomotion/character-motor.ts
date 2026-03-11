@@ -1,4 +1,4 @@
-// Responsável por aplicar aceleração planar, controle aéreo, slide e rotação suave em um único motor.
+// Responsável por aplicar aceleração planar, controle aéreo, rolling e rotação suave em um único motor.
 import { Vector3 } from "@babylonjs/core";
 
 export type CharacterMotorOutput = {

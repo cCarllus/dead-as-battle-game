@@ -56,7 +56,7 @@ export type GlobalMatchSceneOptions = {
     rotationY: number;
     locomotionState: MatchPlayerLocomotionState;
     isCrouching: boolean;
-    isSliding: boolean;
+    isRolling: boolean;
     isWallRunning: boolean;
     wallRunSide: MatchPlayerWallRunSide;
     verticalVelocity: number;
@@ -216,7 +216,7 @@ export async function createGlobalMatchScene(
     rotationY: number;
     locomotionState: MatchPlayerLocomotionState;
     isCrouching: boolean;
-    isSliding: boolean;
+    isRolling: boolean;
     isWallRunning: boolean;
     wallRunSide: MatchPlayerWallRunSide;
     verticalVelocity: number;
@@ -486,7 +486,7 @@ export async function createGlobalMatchScene(
     rotationY: number;
     locomotionState: MatchPlayerLocomotionState;
     isCrouching: boolean;
-    isSliding: boolean;
+    isRolling: boolean;
     isWallRunning: boolean;
     wallRunSide: MatchPlayerWallRunSide;
     verticalVelocity: number;
@@ -507,7 +507,7 @@ export async function createGlobalMatchScene(
       !lastSyncedLocalMovement ||
       lastSyncedLocalMovement.locomotionState !== movement.locomotionState ||
       lastSyncedLocalMovement.isCrouching !== movement.isCrouching ||
-      lastSyncedLocalMovement.isSliding !== movement.isSliding ||
+      lastSyncedLocalMovement.isRolling !== movement.isRolling ||
       lastSyncedLocalMovement.isWallRunning !== movement.isWallRunning ||
       lastSyncedLocalMovement.wallRunSide !== movement.wallRunSide ||
       Math.abs(lastSyncedLocalMovement.verticalVelocity - movement.verticalVelocity) >= 0.15;
@@ -655,7 +655,7 @@ export async function createGlobalMatchScene(
       ...frameOutput.transform,
       locomotionState: frameOutput.snapshot.state,
       isCrouching: frameOutput.snapshot.isCrouching,
-      isSliding: frameOutput.snapshot.isSliding,
+      isRolling: frameOutput.snapshot.isRolling,
       isWallRunning: frameOutput.snapshot.isWallRunning,
       wallRunSide: frameOutput.snapshot.wallRunSide,
       verticalVelocity: frameOutput.snapshot.verticalVelocity

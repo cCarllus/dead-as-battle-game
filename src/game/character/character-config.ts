@@ -3,10 +3,10 @@ export type CharacterLocomotionConfig = {
   walkSpeed: number;
   runSpeed: number;
   crouchSpeed: number;
-  slideInitialSpeed: number;
-  slideMinSpeed: number;
-  slideDurationMs: number;
-  slideCooldownMs: number;
+  rollingInitialSpeed: number;
+  rollingMinSpeed: number;
+  rollingDurationMs: number;
+  rollingCooldownMs: number;
   wallRunSpeed: number;
   wallRunDurationMs: number;
   wallRunGravityMultiplier: number;
@@ -32,7 +32,7 @@ export type CharacterLocomotionConfig = {
   sprintBurstDurationMs: number;
   sprintBurstSpeedMultiplier: number;
   crouchCameraOffsetY: number;
-  slideCameraOffsetY: number;
+  rollingCameraOffsetY: number;
   sprintFovBoostRadians: number;
   wallRunFovBoostRadians: number;
   wallRunTiltRadians: number;
@@ -42,7 +42,7 @@ export type CharacterRuntimeConfig = {
   colliderHeight: number;
   colliderRadius: number;
   crouchColliderHeight: number;
-  slideColliderHeight: number;
+  rollingColliderHeight: number;
   collisionClearanceY: number;
   cameraTargetOffsetY: number;
   nameplateOffsetY: number;
@@ -57,7 +57,7 @@ export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> 
   colliderHeight: 2.4,
   colliderRadius: 0.44,
   crouchColliderHeight: 1.72,
-  slideColliderHeight: 1.42,
+  rollingColliderHeight: 1.42,
   collisionClearanceY: 0.02,
   cameraTargetOffsetY: 1.28,
   nameplateOffsetY: 2.92,
@@ -69,10 +69,10 @@ export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> 
     walkSpeed: 4.8,
     runSpeed: 8.9,
     crouchSpeed: 2.45,
-    slideInitialSpeed: 10.8,
-    slideMinSpeed: 3.8,
-    slideDurationMs: 620,
-    slideCooldownMs: 280,
+    rollingInitialSpeed: 10.8,
+    rollingMinSpeed: 3.8,
+    rollingDurationMs: 620,
+    rollingCooldownMs: 280,
     wallRunSpeed: 7.4,
     wallRunDurationMs: 860,
     wallRunGravityMultiplier: 0.24,
@@ -98,10 +98,9 @@ export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> 
     sprintBurstDurationMs: 180,
     sprintBurstSpeedMultiplier: 1.12,
     crouchCameraOffsetY: -0.26,
-    slideCameraOffsetY: -0.38,
+    rollingCameraOffsetY: -0.38,
     sprintFovBoostRadians: (10 * Math.PI) / 180,
     wallRunFovBoostRadians: (6 * Math.PI) / 180,
     wallRunTiltRadians: (8 * Math.PI) / 180
   }
 };
-

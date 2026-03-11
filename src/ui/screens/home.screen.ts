@@ -21,6 +21,7 @@ import type { RewardService } from "../../services/reward.service";
 import type { UserService } from "../../services/user.service";
 import { mountHomeHud } from "../components/home-hud";
 import type { MatchPresenceService } from "../../services/match-presence.service";
+import type { ChampionPreviewAnimation } from "../../models/champion.model";
 
 export type HomeActions = {
   onOpenMultiplayer: () => void;
@@ -44,6 +45,7 @@ export type HomeActions = {
   selectedChampionName: string;
   selectedChampionLevel: number;
   selectedChampionModelUrl: string | null;
+  selectedChampionPreviewAnimation: ChampionPreviewAnimation | null;
   selectedChampionSplashImageUrl: string;
   selectedChampionThemeColor: string;
   isDefaultChampion: boolean;
@@ -80,6 +82,7 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     selectedChampionName: actions.selectedChampionName,
     selectedChampionLevel: actions.selectedChampionLevel,
     selectedChampionModelUrl: actions.selectedChampionModelUrl,
+    selectedChampionPreviewAnimation: actions.selectedChampionPreviewAnimation,
     selectedChampionSplashImageUrl: actions.selectedChampionSplashImageUrl,
     selectedChampionThemeColor: actions.selectedChampionThemeColor,
     isDefaultChampion: actions.isDefaultChampion,

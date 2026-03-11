@@ -1,5 +1,6 @@
 // Responsável por montar a estrutura visual e conteúdo estático da tela Home.
 import { t, type Locale } from "../../i18n";
+import type { ChampionPreviewAnimation } from "../../models/champion.model";
 import { createMenuIcon } from "../components/menu-icon";
 import { qs } from "../components/dom";
 import { mountChampionPreview } from "../components/champion-preview";
@@ -22,6 +23,7 @@ export type HomeViewOptions = {
   selectedChampionName: string;
   selectedChampionLevel: number;
   selectedChampionModelUrl: string | null;
+  selectedChampionPreviewAnimation: ChampionPreviewAnimation | null;
   selectedChampionSplashImageUrl: string;
   selectedChampionThemeColor: string;
   isDefaultChampion: boolean;
@@ -185,6 +187,7 @@ export function renderHomeView(options: HomeViewOptions): HomeViewResult {
   const championPreview = qs<HTMLElement>(menu, "#champion-preview");
   const disposeChampionPreview = mountChampionPreview(championPreview, {
     modelUrl: options.selectedChampionModelUrl,
+    previewAnimation: options.selectedChampionPreviewAnimation,
     themeColor: options.selectedChampionThemeColor
   });
 

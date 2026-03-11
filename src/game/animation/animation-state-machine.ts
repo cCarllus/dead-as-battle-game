@@ -18,12 +18,19 @@ export function resolveAnimationGameplayState(params: {
       params.snapshot.state === "Fall" ||
       params.snapshot.state === "DoubleJump",
     isCrouching: params.snapshot.isCrouching,
-    isSliding: params.snapshot.isSliding,
+    isRolling: params.snapshot.isRolling,
     isWallRunning: false,
     isUltimateActive: params.combat.isUltimateActive,
     isBlocking: params.combat.isBlocking && params.combat.attackComboIndex === 0,
     attackComboIndex: params.combat.attackComboIndex,
     isHitReacting: params.snapshot.state === "Hit" || params.snapshot.state === "Stunned",
-    locomotionState: params.snapshot.state
+    locomotionState: params.snapshot.state,
+    restartCommand: params.snapshot.didGroundJump
+      ? "jump"
+      : params.snapshot.didDoubleJump
+        ? "doubleJump"
+        : params.snapshot.didRollingStart
+          ? "rolling"
+          : null
   };
 }

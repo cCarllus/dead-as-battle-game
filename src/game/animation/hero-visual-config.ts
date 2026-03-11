@@ -17,6 +17,7 @@ export type HeroVisualConfig = {
     z: number;
   };
   visualYaw: number;
+  crouchVisualOffsetY: number;
 };
 
 type HeroVisualSetup = {
@@ -27,6 +28,7 @@ type HeroVisualSetup = {
     z: number;
   };
   visualYaw: number;
+  crouchVisualOffsetY: number;
 };
 
 const DEFAULT_VISUAL_SETUP: HeroVisualSetup = {
@@ -36,14 +38,16 @@ const DEFAULT_VISUAL_SETUP: HeroVisualSetup = {
     y: 0,
     z: 0
   },
-  visualYaw: 0
+  visualYaw: 0,
+  crouchVisualOffsetY: 0
 };
 
 const HERO_VISUAL_SETUP_BY_ID: Record<ChampionId, HeroVisualSetup> = {
   default_champion: {
     visualScale: 1,
     visualOffset: { x: 0, y: 0, z: 0 },
-    visualYaw: 0
+    visualYaw: 0,
+    crouchVisualOffsetY: -0.4
   }
 };
 
@@ -62,6 +66,7 @@ export function resolveHeroVisualConfig(heroId: string): HeroVisualConfig {
       y: visualSetup.visualOffset.y,
       z: visualSetup.visualOffset.z
     },
-    visualYaw: visualSetup.visualYaw
+    visualYaw: visualSetup.visualYaw,
+    crouchVisualOffsetY: visualSetup.crouchVisualOffsetY
   };
 }

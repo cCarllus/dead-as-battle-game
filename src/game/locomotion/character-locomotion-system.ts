@@ -1,4 +1,4 @@
-// Responsável por orquestrar motor, salto, crouch, slide, câmera e áudio em um pipeline único de personagem.
+// Responsável por orquestrar motor, salto, crouch, rolling, câmera e áudio em um pipeline único de personagem.
 import { Vector3 } from "@babylonjs/core";
 import type { AnimationGameplayState } from "../animation/animation-state";
 import { resolveAnimationGameplayState } from "../animation/animation-state-machine";
@@ -17,7 +17,7 @@ import type {
   CharacterMovementInputState,
   MovementDirection
 } from "./locomotion-state";
-import { createSlideSystem } from "./slide-system";
+import { createRollingSystem } from "./rolling-system";
 
 export type CharacterLocomotionFrameInput = {
   nowMs: number;
@@ -102,7 +102,7 @@ export function createCharacterLocomotionSystem(
   });
   const doubleJumpSystem = createDoubleJumpSystem();
   const crouchSystem = createCrouchSystem();
-  const slideSystem = createSlideSystem();
+  const rollingSystem = createRollingSystem();
   const stateMachine = createCharacterStateMachine();
 
   let wasJumpPressed = false;
@@ -165,18 +165,24 @@ export function createCharacterLocomotionSystem(
       const isSprintBurstActive = canSprint && input.nowMs <= sprintBurstUntilMs;
       const sprintMultiplier = isSprintBurstActive ? locomotionConfig.sprintBurstSpeedMultiplier : 1;
 
-      const slideOutput = slideSystem.step({
+      const rollingOutput = rollingSystem.step({
         nowMs: input.nowMs,
         deltaSeconds: input.deltaSeconds,
-        wantsSlide: movementEnabled && input.inputState.crouch,
-        canSlide: groundedBefore.isGrounded && canSprint && hasDirectionalIntent,
+        wantsRolling: movementEnabled && input.inputState.rollPressed,
+        canRoll: groundedBefore.isGrounded && canSprint && hasDirectionalIntent,
         currentSpeed: canSprint ? locomotionConfig.runSpeed * sprintMultiplier : locomotionConfig.walkSpeed,
         forwardDirection: hasDirectionalIntent ? desiredDirection.clone() : fallbackForward,
-        minSpeed: locomotionConfig.slideMinSpeed,
-        initialSpeed: locomotionConfig.slideInitialSpeed,
-        durationMs: locomotionConfig.slideDurationMs,
-        cooldownMs: locomotionConfig.slideCooldownMs
+        minSpeed: locomotionConfig.rollingMinSpeed,
+        initialSpeed: locomotionConfig.rollingInitialSpeed,
+        durationMs: locomotionConfig.rollingDurationMs,
+        cooldownMs: locomotionConfig.rollingCooldownMs
       });
+
+      const wantsStationaryCrouch =
+        movementEnabled &&
+        input.inputState.crouch &&
+        !rollingOutput.isRolling &&
+        !hasDirectionalIntent;
 
       let didGroundJump = false;
       let didDoubleJump = false;
@@ -198,12 +204,14 @@ export function createCharacterLocomotionSystem(
 
       const crouchOutput = crouchSystem.step({
         deltaSeconds: input.deltaSeconds,
-        wantsCrouch: movementEnabled && input.inputState.crouch && !slideOutput.isSliding,
-        forcedCrouch: slideOutput.forcedCrouch
+        wantsCrouch: wantsStationaryCrouch,
+        forcedCrouch: rollingOutput.forcesCompactCollider
       });
+      const isCrouchStateActive =
+        crouchOutput.isCrouched && wantsStationaryCrouch && !rollingOutput.forcesCompactCollider;
 
-      const colliderHeight = slideOutput.isSliding
-        ? options.runtimeConfig.slideColliderHeight
+      const colliderHeight = rollingOutput.isRolling
+        ? options.runtimeConfig.rollingColliderHeight
         : crouchOutput.alpha > 0.05
           ? options.runtimeConfig.colliderHeight +
             (options.runtimeConfig.crouchColliderHeight - options.runtimeConfig.colliderHeight) *
@@ -212,14 +220,14 @@ export function createCharacterLocomotionSystem(
       options.collisionSystem.setColliderHeight(colliderHeight, options.runtimeConfig.colliderRadius);
 
       let desiredSpeed = locomotionConfig.walkSpeed;
-      if (crouchOutput.isCrouched) {
+      if (isCrouchStateActive) {
         desiredSpeed = locomotionConfig.crouchSpeed;
       } else if (canSprint) {
         desiredSpeed = locomotionConfig.runSpeed * sprintMultiplier;
       }
 
-      const forcedVelocity = slideOutput.isSliding && slideOutput.direction
-        ? slideOutput.direction.scale(slideOutput.speed)
+      const forcedVelocity = rollingOutput.isRolling && rollingOutput.direction
+        ? rollingOutput.direction.scale(rollingOutput.speed)
         : null;
 
       const motorOutput = motor.step({
@@ -227,7 +235,7 @@ export function createCharacterLocomotionSystem(
         desiredDirection: hasDirectionalIntent ? desiredDirection : Vector3.Zero(),
         desiredSpeed,
         currentRotationY: input.currentTransform.rotationY,
-        rotationDirection: slideOutput.direction ?? desiredDirection,
+        rotationDirection: rollingOutput.direction ?? desiredDirection,
         isGrounded: groundedBefore.isGrounded,
         canMove: movementEnabled && !input.isFlyModeEnabled,
         airControl: locomotionConfig.airControl,
@@ -268,7 +276,11 @@ export function createCharacterLocomotionSystem(
       const groundedAfter = input.isFlyModeEnabled
         ? {
             isGrounded: false,
-            groundY: projectedNextY
+            groundY: projectedNextY,
+            distanceToGround: Number.POSITIVE_INFINITY,
+            slopeAngleDegrees: 90,
+            groundNormal: null,
+            hitMesh: null
           }
         : options.groundedSystem.detect({
             position: {
@@ -278,17 +290,28 @@ export function createCharacterLocomotionSystem(
             },
             wasGrounded: groundedBefore.isGrounded
           });
+      const shouldSnapToGround =
+        !input.isFlyModeEnabled &&
+        !!groundedAfter.hitMesh &&
+        verticalVelocity <= 0 &&
+        projectedNextY <=
+          groundedAfter.groundY +
+            Math.max(
+              options.runtimeConfig.collisionClearanceY,
+              options.runtimeConfig.locomotion.groundedStickDistance
+            );
+      const isGroundedResolved = groundedAfter.isGrounded || shouldSnapToGround;
 
       let nextY = projectedNextY;
-      if (!input.isFlyModeEnabled && groundedAfter.isGrounded && verticalVelocity <= 0.01) {
+      if (!input.isFlyModeEnabled && isGroundedResolved && verticalVelocity <= 0.01) {
         nextY = groundedAfter.groundY + options.runtimeConfig.collisionClearanceY;
         jumpSystem.setVerticalVelocity(0);
         verticalVelocity = 0;
       }
 
-      const didLand = !wasGrounded && groundedAfter.isGrounded && !didGroundJump && !didDoubleJump;
+      const didLand = !wasGrounded && isGroundedResolved && !didGroundJump && !didDoubleJump;
       let landingImpact = 0;
-      if (groundedAfter.isGrounded) {
+      if (isGroundedResolved) {
         if (didLand) {
           landingImpact = resolveLandingImpactFromAirTime(airborneTimeMs);
         }
@@ -296,7 +319,7 @@ export function createCharacterLocomotionSystem(
       } else {
         airborneTimeMs += input.deltaSeconds * 1000;
       }
-      wasGrounded = groundedAfter.isGrounded;
+      wasGrounded = isGroundedResolved;
 
       const transform = {
         x: collisionResult.transform.x,
@@ -307,7 +330,7 @@ export function createCharacterLocomotionSystem(
 
       const speedCap = Math.max(
         locomotionConfig.runSpeed * locomotionConfig.sprintBurstSpeedMultiplier,
-        locomotionConfig.slideInitialSpeed
+        locomotionConfig.rollingInitialSpeed
       );
       const speedNormalized = speedCap > 0 ? Math.max(0, Math.min(1, motorOutput.speed / speedCap)) : 0;
 
@@ -317,15 +340,13 @@ export function createCharacterLocomotionSystem(
         isStunned: input.combat.isStunned,
         isAttacking: input.combat.attackComboIndex > 0,
         isBlocking: input.combat.isBlocking && input.combat.attackComboIndex === 0,
-        isGrounded: groundedAfter.isGrounded,
+        isGrounded: isGroundedResolved,
         isMoving: motorOutput.isMoving,
         isSprinting: canSprint,
-        isCrouching: crouchOutput.isCrouched,
-        isSliding: slideOutput.isSliding,
+        isCrouching: isCrouchStateActive,
+        isRolling: rollingOutput.isRolling,
         didGroundJump,
         didDoubleJump,
-        didLand,
-        landingImpact,
         verticalVelocity
       });
 
@@ -334,11 +355,11 @@ export function createCharacterLocomotionSystem(
         state,
         movementDirection,
         transform,
-        isGrounded: groundedAfter.isGrounded,
+        isGrounded: isGroundedResolved,
         isMoving: motorOutput.isMoving,
         isSprinting: canSprint,
-        isCrouching: crouchOutput.isCrouched,
-        isSliding: slideOutput.isSliding,
+        isCrouching: isCrouchStateActive,
+        isRolling: rollingOutput.isRolling,
         isWallRunning: false,
         wallRunSide: "none",
         didGroundJump,
@@ -346,15 +367,15 @@ export function createCharacterLocomotionSystem(
         didLand,
         didCrouchEnter: crouchOutput.didEnter,
         didCrouchExit: crouchOutput.didExit,
-        didSlideStart: slideOutput.didStart,
-        didSlideEnd: slideOutput.didEnd,
+        didRollingStart: rollingOutput.didStart,
+        didRollingEnd: rollingOutput.didEnd,
         didWallRunStart: false,
         didWallRunEnd: false,
         speedNormalized,
         lateralInput,
         forwardInput,
         crouchAlpha: crouchOutput.alpha,
-        slideAlpha: slideOutput.alpha,
+        rollingAlpha: rollingOutput.alpha,
         verticalVelocity,
         landingImpact,
         sprintIntent: {
@@ -363,7 +384,7 @@ export function createCharacterLocomotionSystem(
         },
         cameraProfile: {
           crouchOffsetY: locomotionConfig.crouchCameraOffsetY,
-          slideOffsetY: locomotionConfig.slideCameraOffsetY,
+          rollingOffsetY: locomotionConfig.rollingCameraOffsetY,
           sprintFovBoostRadians: locomotionConfig.sprintFovBoostRadians,
           wallRunFovBoostRadians: 0,
           wallRunTiltRadians: 0
@@ -377,7 +398,7 @@ export function createCharacterLocomotionSystem(
           combat: input.combat
         }),
         snapshot,
-        isGrounded: groundedAfter.isGrounded,
+        isGrounded: isGroundedResolved,
         isMoving: motorOutput.isMoving,
         isSprinting: canSprint,
         isSprintBurstActive,
@@ -394,7 +415,7 @@ export function createCharacterLocomotionSystem(
       jumpSystem.reset();
       doubleJumpSystem.reset();
       crouchSystem.reset();
-      slideSystem.reset();
+      rollingSystem.reset();
       stateMachine.reset();
       wasJumpPressed = false;
       wasGrounded = false;

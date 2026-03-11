@@ -3,14 +3,11 @@ export type MatchPlayerLocomotionState =
   | "Idle"
   | "Walk"
   | "Run"
-  | "RunStop"
   | "JumpStart"
   | "InAir"
   | "Fall"
-  | "Land"
   | "Crouch"
-  | "CrouchWalk"
-  | "Slide"
+  | "Rolling"
   | "WallRun"
   | "DoubleJump"
   | "Attack"
@@ -46,7 +43,7 @@ export type MatchPlayerState = {
   isSprinting: boolean;
   locomotionState: MatchPlayerLocomotionState;
   isCrouching: boolean;
-  isSliding: boolean;
+  isRolling: boolean;
   isWallRunning: boolean;
   wallRunSide: MatchPlayerWallRunSide;
   verticalVelocity: number;
@@ -87,7 +84,7 @@ export type MatchPlayerMovedPayload = {
   rotationY: number;
   locomotionState: MatchPlayerLocomotionState;
   isCrouching: boolean;
-  isSliding: boolean;
+  isRolling: boolean;
   isWallRunning: boolean;
   wallRunSide: MatchPlayerWallRunSide;
   verticalVelocity: number;

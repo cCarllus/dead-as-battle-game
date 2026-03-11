@@ -47,12 +47,12 @@ export function createCharacterAudioController(): CharacterAudioController {
         emit("crouchExit", snapshot);
       }
 
-      if (snapshot.didSlideStart) {
-        emit("slideStart", snapshot);
+      if (snapshot.didRollingStart) {
+        emit("rollingStart", snapshot);
       }
 
-      if (snapshot.didSlideEnd) {
-        emit("slideEnd", snapshot);
+      if (snapshot.didRollingEnd) {
+        emit("rollingEnd", snapshot);
       }
 
       if (snapshot.didWallRunStart) {
@@ -66,19 +66,19 @@ export function createCharacterAudioController(): CharacterAudioController {
       const shouldEmitFootstep =
         snapshot.isGrounded &&
         snapshot.isMoving &&
-        !snapshot.isSliding &&
+        !snapshot.isRolling &&
         !snapshot.isWallRunning &&
-        (snapshot.state === "Walk" || snapshot.state === "Run" || snapshot.state === "CrouchWalk");
+        (snapshot.state === "Walk" || snapshot.state === "Run");
 
-      const footstepIntervalMs = snapshot.isSprinting ? 240 : snapshot.state === "CrouchWalk" ? 420 : 330;
+      const footstepIntervalMs = snapshot.isSprinting ? 240 : 330;
 
       if (shouldEmitFootstep && now - lastFootstepAt >= footstepIntervalMs) {
         emit(snapshot.isSprinting ? "sprintFootstep" : "footstep", snapshot);
         lastFootstepAt = now;
       }
 
-      if (snapshot.isSliding && lastState !== "Slide") {
-        emit("slideLoop", snapshot);
+      if (snapshot.isRolling && lastState !== "Rolling") {
+        emit("rollingLoop", snapshot);
       }
 
       if (snapshot.isWallRunning && !snapshot.didWallRunStart) {
@@ -94,4 +94,3 @@ export function createCharacterAudioController(): CharacterAudioController {
     }
   };
 }
-

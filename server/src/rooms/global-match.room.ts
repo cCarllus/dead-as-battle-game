@@ -221,7 +221,7 @@ export class GlobalMatchRoom extends Room {
         rotationY: player.rotationY,
         locomotionState: player.locomotionState,
         isCrouching: player.isCrouching,
-        isSliding: player.isSliding,
+        isRolling: player.isRolling,
         isWallRunning: player.isWallRunning,
         wallRunSide: player.wallRunSide,
         verticalVelocity: player.verticalVelocity
@@ -340,7 +340,7 @@ export class GlobalMatchRoom extends Room {
       isSprinting: false,
       locomotionState: "Idle",
       isCrouching: false,
-      isSliding: false,
+      isRolling: false,
       isWallRunning: false,
       wallRunSide: "none",
       verticalVelocity: 0,
@@ -379,7 +379,7 @@ export class GlobalMatchRoom extends Room {
         rotationY: player.rotationY,
         locomotionState: player.locomotionState,
         isCrouching: player.isCrouching,
-        isSliding: player.isSliding,
+        isRolling: player.isRolling,
         isWallRunning: player.isWallRunning,
         wallRunSide: player.wallRunSide,
         verticalVelocity: player.verticalVelocity
@@ -390,7 +390,7 @@ export class GlobalMatchRoom extends Room {
         rotationY: player.rotationY,
         locomotionState: player.locomotionState,
         isCrouching: player.isCrouching,
-        isSliding: player.isSliding,
+        isRolling: player.isRolling,
         isWallRunning: player.isWallRunning,
         wallRunSide: player.wallRunSide,
         verticalVelocity: player.verticalVelocity

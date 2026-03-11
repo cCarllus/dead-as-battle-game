@@ -65,7 +65,7 @@ function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     isSprinting: player.isSprinting,
     locomotionState: player.locomotionState,
     isCrouching: player.isCrouching,
-    isSliding: player.isSliding,
+    isRolling: player.isRolling,
     isWallRunning: player.isWallRunning,
     wallRunSide: player.wallRunSide,
     verticalVelocity: player.verticalVelocity,
@@ -98,7 +98,7 @@ function didPlayerStateChange(previous: MatchPlayerState | undefined, next: Matc
     previous.isSprinting !== next.isSprinting ||
     previous.locomotionState !== next.locomotionState ||
     previous.isCrouching !== next.isCrouching ||
-    previous.isSliding !== next.isSliding ||
+    previous.isRolling !== next.isRolling ||
     previous.isWallRunning !== next.isWallRunning ||
     previous.wallRunSide !== next.wallRunSide ||
     previous.verticalVelocity !== next.verticalVelocity ||

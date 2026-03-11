@@ -43,7 +43,7 @@ export type NormalizedMoveIntent = {
   rotationY: number;
   locomotionState: MatchPlayerLocomotionState;
   isCrouching: boolean;
-  isSliding: boolean;
+  isRolling: boolean;
   isWallRunning: boolean;
   wallRunSide: MatchPlayerWallRunSide;
   verticalVelocity: number;
@@ -53,14 +53,11 @@ const VALID_LOCOMOTION_STATES = new Set<MatchPlayerLocomotionState>([
   "Idle",
   "Walk",
   "Run",
-  "RunStop",
   "JumpStart",
   "InAir",
   "Fall",
-  "Land",
   "Crouch",
-  "CrouchWalk",
-  "Slide",
+  "Rolling",
   "WallRun",
   "DoubleJump",
   "Attack",
@@ -102,7 +99,7 @@ export function normalizeMoveIntent(payload: MatchMovePayload | undefined): Norm
     rotationY,
     locomotionState: normalizeLocomotionState(payload?.locomotionState),
     isCrouching: normalizeBoolean(payload?.isCrouching) ?? false,
-    isSliding: normalizeBoolean(payload?.isSliding) ?? false,
+    isRolling: normalizeBoolean(payload?.isRolling) ?? false,
     isWallRunning: normalizeBoolean(payload?.isWallRunning) ?? false,
     wallRunSide: normalizeWallRunSide(payload?.wallRunSide),
     verticalVelocity
@@ -243,7 +240,7 @@ export function applyAuthoritativeMove(options: {
   const locomotionChanged =
     options.player.locomotionState !== options.moveIntent.locomotionState ||
     options.player.isCrouching !== options.moveIntent.isCrouching ||
-    options.player.isSliding !== options.moveIntent.isSliding ||
+    options.player.isRolling !== options.moveIntent.isRolling ||
     options.player.isWallRunning !== options.moveIntent.isWallRunning ||
     options.player.wallRunSide !== options.moveIntent.wallRunSide ||
     options.player.verticalVelocity !== options.moveIntent.verticalVelocity;
@@ -258,7 +255,7 @@ export function applyAuthoritativeMove(options: {
   if (moved || locomotionChanged) {
     options.player.locomotionState = options.moveIntent.locomotionState;
     options.player.isCrouching = options.moveIntent.isCrouching;
-    options.player.isSliding = options.moveIntent.isSliding;
+    options.player.isRolling = options.moveIntent.isRolling;
     options.player.isWallRunning = options.moveIntent.isWallRunning;
     options.player.wallRunSide = options.moveIntent.wallRunSide;
     options.player.verticalVelocity = options.moveIntent.verticalVelocity;

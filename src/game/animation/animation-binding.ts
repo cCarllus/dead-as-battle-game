@@ -3,10 +3,10 @@ import {
   AnimationGroup,
   Scene,
   SceneLoader,
+  TransformNode,
   type AssetContainer,
   type AbstractMesh,
   type Node,
-  type TransformNode
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import type { AnimationCommand } from "./animation-command";
@@ -184,15 +184,26 @@ function resolveSourceAnimationGroup(
   return container.animationGroups[0] ?? null;
 }
 
-function resolveBlockedRootTargetNames(container: AssetContainer): Set<string> {
+function resolveBlockedPositionTargetNames(container: AssetContainer): Set<string> {
   const blockedTargetNames = new Set<string>();
   container.rootNodes.forEach((rootNode) => {
     const rootNodeName = getNamedTargetName(rootNode);
-    if (!rootNodeName) {
+    if (rootNodeName) {
+      blockedTargetNames.add(normalizeNameForMatch(rootNodeName));
+    }
+
+    if (!(rootNode instanceof TransformNode)) {
       return;
     }
 
-    blockedTargetNames.add(normalizeNameForMatch(rootNodeName));
+    rootNode.getDescendants(false).forEach((descendant) => {
+      const descendantName = getNamedTargetName(descendant);
+      if (!descendantName) {
+        return;
+      }
+
+      blockedTargetNames.add(normalizeNameForMatch(descendantName));
+    });
   });
   return blockedTargetNames;
 }
@@ -270,7 +281,7 @@ export async function loadBoundAnimationCommandFromAsset(
     return null;
   }
 
-  const blockedRootTargetNames = resolveBlockedRootTargetNames(container);
+  const blockedPositionTargetNames = resolveBlockedPositionTargetNames(container);
   const boundGroup = new AnimationGroup(
     `${options.sourceLabel}_${options.command}_${options.binding.bindingId}`,
     options.scene
@@ -289,7 +300,7 @@ export async function loadBoundAnimationCommandFromAsset(
     const targetProperty = targetedAnimation.animation.targetProperty;
     if (
       sourceTargetName &&
-      blockedRootTargetNames.has(normalizeNameForMatch(sourceTargetName)) &&
+      blockedPositionTargetNames.has(normalizeNameForMatch(sourceTargetName)) &&
       typeof targetProperty === "string" &&
       isPositionAnimationTargetProperty(targetProperty)
     ) {

@@ -41,11 +41,7 @@ function shouldLoopCommand(command: AnimationCommand, animationConfig: HeroAnima
 const DEFAULT_BLENDING_DURATION_SECONDS = 0.18;
 const NON_RESTARTABLE_SAME_COMMANDS: readonly AnimationCommand[] = [
   "ultimate",
-  "jump",
-  "jumpStart",
   "inAir",
-  "land",
-  "runStop",
   "death"
 ] as const;
 const DIRECT_SOURCE_PRIORITY: readonly AnimationSource[] = ["override", "shared"] as const;
@@ -69,7 +65,7 @@ function startGroupForCommand(
 ): void {
   const speedRatio = resolvePlaybackSpeedRatio(command);
 
-  if (command !== "jump" && command !== "jumpStart") {
+  if (command !== "jump" && command !== "doubleJump") {
     group.start(shouldLoop, speedRatio);
     return;
   }
@@ -100,18 +96,13 @@ function resolveCommandPriority(command: AnimationCommand): number {
     case "block":
       return 4;
     case "jump":
-    case "jumpStart":
+    case "doubleJump":
     case "inAir":
-    case "land":
       return 3;
-    case "runStop":
-      return 2;
+    case "rolling":
     case "run":
       return 2;
     case "walk":
-    case "walkBack":
-    case "walkLeft":
-    case "walkRight":
       return 1;
     case "idle":
     default:
@@ -121,29 +112,10 @@ function resolveCommandPriority(command: AnimationCommand): number {
 
 function resolveAliasCommands(command: AnimationCommand): AnimationCommand[] {
   switch (command) {
-    case "walkBack":
-    case "walkLeft":
-    case "walkRight":
-      return ["walk"];
-    case "runBack":
-    case "runLeft":
-    case "runRight":
-      return ["run"];
     case "death":
       return ["hit"];
-    case "jumpStart":
-      return ["jump"];
     case "inAir":
-    case "fallLoop":
       return ["inAir", "jump"];
-    case "land":
-      return ["idle"];
-    case "slideStart":
-    case "slideEnd":
-      return ["slideLoop"];
-    case "turnLeft":
-    case "turnRight":
-      return ["idle"];
     default:
       return [];
   }
@@ -201,7 +173,7 @@ export function createAnimationController(options: CreateAnimationControllerOpti
       }
     }
 
-    if (command === "jumpStart" || command === "inAir" || command === "fallLoop") {
+    if (command === "inAir" || command === "doubleJump") {
       const jumpFallback = options.animationConfig.embeddedCommandToGroupName.jump;
       if (jumpFallback) {
         return jumpFallback;
@@ -317,17 +289,31 @@ export function createAnimationController(options: CreateAnimationControllerOpti
   let currentPlaybackCommand: AnimationCommand | null = null;
   let currentGroup: AnimationGroup | null = null;
 
-  const play = (requestedCommand: AnimationCommand): void => {
+  const restartCurrentGroup = (): void => {
+    if (!currentGroup || !currentPlaybackCommand) {
+      return;
+    }
+
+    currentGroup.stop();
+    currentGroup.reset();
+    startGroupForCommand(
+      currentGroup,
+      currentPlaybackCommand,
+      shouldLoopCommand(currentPlaybackCommand, options.animationConfig)
+    );
+  };
+
+  const play = (requestedCommand: AnimationCommand, forceRestart = false): void => {
     if (currentRequestedCommand === requestedCommand) {
       if (currentGroup && currentPlaybackCommand) {
-        if (NON_RESTARTABLE_SAME_COMMANDS.includes(currentPlaybackCommand)) {
+        if (!forceRestart && NON_RESTARTABLE_SAME_COMMANDS.includes(currentPlaybackCommand)) {
           return;
         }
 
         const isLooping = shouldLoopCommand(currentPlaybackCommand, options.animationConfig);
-        if (!isLooping && !currentGroup.isPlaying) {
-          currentGroup.reset();
-          currentGroup.start(false);
+        if (forceRestart) {
+          restartCurrentGroup();
+          return;
         }
       }
       return;
@@ -337,7 +323,17 @@ export function createAnimationController(options: CreateAnimationControllerOpti
       const currentIsLooping = shouldLoopCommand(currentPlaybackCommand, options.animationConfig);
 
       if (!currentIsLooping && currentGroup.isPlaying) {
+        const protectedCommands: readonly AnimationCommand[] = [
+          "rolling",
+          "ultimate",
+          "attack1",
+          "attack2",
+          "attack3",
+          "hit",
+          "death"
+        ] as const;
         const canOverrideByPriority =
+          !protectedCommands.includes(currentPlaybackCommand) ||
           resolveCommandPriority(requestedCommand) > resolveCommandPriority(currentPlaybackCommand);
 
         if (!canOverrideByPriority) {
@@ -352,6 +348,13 @@ export function createAnimationController(options: CreateAnimationControllerOpti
     }
 
     if (currentGroup === playableAnimation.group) {
+      if (forceRestart) {
+        currentRequestedCommand = requestedCommand;
+        currentPlaybackCommand = playableAnimation.playbackCommand;
+        restartCurrentGroup();
+        return;
+      }
+
       currentRequestedCommand = requestedCommand;
       currentPlaybackCommand = playableAnimation.playbackCommand;
       return;
@@ -377,7 +380,7 @@ export function createAnimationController(options: CreateAnimationControllerOpti
     play,
     syncFromGameplay: (gameplayState) => {
       const nextCommand = resolveAnimationCommandFromGameplay(gameplayState);
-      play(nextCommand);
+      play(nextCommand, gameplayState.restartCommand === nextCommand);
     },
     stop: () => {
       if (!currentGroup) {

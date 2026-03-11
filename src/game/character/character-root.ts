@@ -20,7 +20,7 @@ export type CharacterRuntimeRig = {
   vfxRoot: TransformNode;
   vfxAnchors: {
     sprint: TransformNode;
-    slide: TransformNode;
+    rolling: TransformNode;
     ultimate: TransformNode;
   };
   audioRoot: TransformNode;
@@ -88,10 +88,10 @@ export function createCharacterRoot(options: CreateCharacterRootOptions): Charac
   sprintAnchor.parent = vfxRoot;
   sprintAnchor.position.z = -0.28;
 
-  const slideAnchor = new TransformNode(`SlideVFXAnchor_${options.sessionId}`, options.scene);
-  slideAnchor.parent = vfxRoot;
-  slideAnchor.position.y = 0.18;
-  slideAnchor.position.z = 0.36;
+  const rollingAnchor = new TransformNode(`RollingVFXAnchor_${options.sessionId}`, options.scene);
+  rollingAnchor.parent = vfxRoot;
+  rollingAnchor.position.y = 0.18;
+  rollingAnchor.position.z = 0.36;
 
   const ultimateAnchor = new TransformNode(`UltimateVFXAnchor_${options.sessionId}`, options.scene);
   ultimateAnchor.parent = vfxRoot;
@@ -120,7 +120,7 @@ export function createCharacterRoot(options: CreateCharacterRootOptions): Charac
     vfxRoot,
     vfxAnchors: {
       sprint: sprintAnchor,
-      slide: slideAnchor,
+      rolling: rollingAnchor,
       ultimate: ultimateAnchor
     },
     audioRoot,
@@ -132,4 +132,3 @@ export function createCharacterRoot(options: CreateCharacterRootOptions): Charac
     }
   };
 }
-

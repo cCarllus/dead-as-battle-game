@@ -35,13 +35,14 @@ export function createAnimationStateSystem(): AnimationStateSystem {
           isSprinting: false,
           isJumping: false,
           isCrouching: false,
-          isSliding: false,
+          isRolling: false,
           isWallRunning: false,
           isUltimateActive: false,
           isBlocking: false,
           attackComboIndex: 0,
           isHitReacting: false,
-          locomotionState: "idle"
+          locomotionState: "idle",
+          restartCommand: null
         };
       }
 
@@ -55,13 +56,14 @@ export function createAnimationStateSystem(): AnimationStateSystem {
         isSprinting: input.locomotionState === "run",
         isJumping: resolveIsJumping(input.locomotionState),
         isCrouching: false,
-        isSliding: false,
+        isRolling: false,
         isWallRunning: false,
         isUltimateActive: input.isUltimateActive,
         isBlocking,
         attackComboIndex: input.attackComboIndex,
         isHitReacting,
-        locomotionState: input.locomotionState
+        locomotionState: input.locomotionState,
+        restartCommand: null
       };
     }
   };

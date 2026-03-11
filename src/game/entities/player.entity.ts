@@ -44,6 +44,11 @@ type HeroSkinHandle = {
   dispose: () => void;
 };
 
+type HeroRuntimeCalibration = {
+  normalizedScale: number;
+  normalizedOffsetY: number;
+};
+
 function createPlayerLabel(scene: Scene, sessionId: string): PlayerLabelHandle {
   const texture = new DynamicTexture(
     `matchPlayerLabelTexture_${sessionId}`,
@@ -96,10 +101,8 @@ function createPlayerLabel(scene: Scene, sessionId: string): PlayerLabelHandle {
 function applyHeroVisualConfig(
   visualRoot: TransformNode,
   heroConfig: HeroVisualConfig,
-  calibration?: {
-    normalizedScale: number;
-    normalizedOffsetY: number;
-  } | null
+  calibration?: HeroRuntimeCalibration | null,
+  poseOffsetY = 0
 ): void {
   const safeScale =
     Number.isFinite(heroConfig.visualScale) && heroConfig.visualScale > 0
@@ -117,7 +120,7 @@ function applyHeroVisualConfig(
 
   visualRoot.position.set(
     heroConfig.visualOffset.x,
-    heroConfig.visualOffset.y + normalizedOffsetY,
+    heroConfig.visualOffset.y + normalizedOffsetY + poseOffsetY,
     heroConfig.visualOffset.z
   );
   visualRoot.rotation.set(0, heroConfig.visualYaw, 0);
@@ -241,6 +244,8 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     labelPrefix: options.labelPrefix
   };
   let nickname = options.player.nickname;
+  let currentHeroConfig = resolveHeroVisualConfig(options.player.heroId);
+  let currentHeroCalibration: HeroRuntimeCalibration | null = getHeroRuntimeCalibration(currentHeroConfig.id);
 
   const disposeSkinHandle = (): void => {
     if (!skinHandle) {
@@ -256,6 +261,11 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     skinHandle?.animationController?.syncFromGameplay(animationGameplayState);
   };
 
+  const applyCurrentVisualPose = (): void => {
+    const poseOffsetY = animationGameplayState.isCrouching ? currentHeroConfig.crouchVisualOffsetY : 0;
+    applyHeroVisualConfig(visualRoot, currentHeroConfig, currentHeroCalibration, poseOffsetY);
+  };
+
   const applyDisplay = (): void => {
     const accentColor = Color3.FromHexString(style.accentColorHex);
     collisionMaterial.diffuseColor = accentColor;
@@ -268,8 +278,9 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   const applyHeroSkin = (heroConfig: HeroVisualConfig): void => {
     runtimeConfig = resolveCharacterDefinition(heroConfig.id).runtimeConfig;
     const animationConfig = resolveHeroAnimationConfig(heroConfig.id);
-    const cachedCalibration = getHeroRuntimeCalibration(heroConfig.id);
-    applyHeroVisualConfig(visualRoot, heroConfig, cachedCalibration);
+    currentHeroConfig = heroConfig;
+    currentHeroCalibration = getHeroRuntimeCalibration(heroConfig.id);
+    applyCurrentVisualPose();
     skinLoadVersion += 1;
     const currentLoadVersion = skinLoadVersion;
     disposeSkinHandle();
@@ -300,11 +311,12 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
           visualRoot.scaling.x,
           runtimeConfig.colliderHeight
         );
-        const effectiveCalibration = runtimeCalibration ?? cachedCalibration;
+        const effectiveCalibration = runtimeCalibration ?? currentHeroCalibration;
         if (runtimeCalibration) {
           setHeroRuntimeCalibration(heroConfig.id, runtimeCalibration);
         }
-        applyHeroVisualConfig(visualRoot, heroConfig, effectiveCalibration);
+        currentHeroCalibration = effectiveCalibration;
+        applyCurrentVisualPose();
 
         if (isDisposed || currentLoadVersion !== skinLoadVersion) {
           loadedVisual.dispose();
@@ -341,7 +353,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   };
 
   applyDisplay();
-  applyHeroSkin(resolveHeroVisualConfig(options.player.heroId));
+  applyHeroSkin(currentHeroConfig);
 
   gameplayRoot.position.set(options.player.x, options.player.y, options.player.z);
   gameplayRoot.rotation.y = options.player.rotationY;
@@ -398,14 +410,16 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
         isSprinting: nextState.isSprinting,
         isJumping: nextState.isJumping,
         isCrouching: nextState.isCrouching,
-        isSliding: nextState.isSliding,
+        isRolling: nextState.isRolling,
         isWallRunning: nextState.isWallRunning,
         isUltimateActive: nextState.isUltimateActive,
         isBlocking: nextState.isBlocking,
         attackComboIndex: nextState.attackComboIndex,
         isHitReacting: nextState.isHitReacting,
-        locomotionState: nextState.locomotionState
+        locomotionState: nextState.locomotionState,
+        restartCommand: nextState.restartCommand ?? null
       };
+      applyCurrentVisualPose();
       syncAnimationFromGameplay();
     },
     playAnimationCommand: (command) => {

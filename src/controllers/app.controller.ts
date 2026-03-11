@@ -198,6 +198,7 @@ function createScreenRegistry(
         selectedChampionName: selectedChampion.displayName,
         selectedChampionLevel: selectedChampionProgress.level,
         selectedChampionModelUrl: selectedChampion.modelUrl,
+        selectedChampionPreviewAnimation: selectedChampion.previewAnimation ?? null,
         selectedChampionSplashImageUrl: selectedChampion.splashImageUrl,
         selectedChampionThemeColor: selectedChampion.themeColor,
         isDefaultChampion: selectedChampion.isDefault,
@@ -213,10 +214,7 @@ function createScreenRegistry(
         return;
       }
 
-      menuAudioManager.playPageMusic("champions", {
-        championId: user.selectedChampionId,
-        restart: true
-      });
+      menuAudioManager.playPageMusic("champions");
 
       const cards = getChampionCardsForUser(user).map((champion) => ({
         id: champion.id,
