@@ -21,6 +21,7 @@ import { createMotionLinesEffect } from "../effects/motion-lines";
 import { createWindParticlesSystem } from "../effects/wind-particles";
 import { createEffectManager } from "../effects/effect-manager";
 import { createCameraController } from "../controllers/camera.controller";
+import { isClimbableSurfaceMesh } from "../environment/climbable-surface-utils";
 import {
   createCharacterLocomotionSystem,
   type CharacterLocomotionSystem
@@ -227,6 +228,7 @@ export async function createGlobalMatchScene(
   let lastSprintInputSyncAtMs = 0;
   let lastSentSprintIntent: { isShiftPressed: boolean; isForwardPressed: boolean } | null = null;
   let isLocalVisualHiddenForCamera = false;
+  let lastLocalLocomotionState: MatchPlayerLocomotionState = "Idle";
 
   let localGameplayRuntime: LocalGameplayRuntime | null = null;
 
@@ -254,6 +256,7 @@ export async function createGlobalMatchScene(
     }
 
     localGameplayRuntime.audioController.dispose();
+    localGameplayRuntime.locomotionSystem.dispose();
     localGameplayRuntime.collisionSystem.dispose();
     localGameplayRuntime = null;
   };
@@ -293,9 +296,12 @@ export async function createGlobalMatchScene(
     });
 
     const locomotionSystem = createCharacterLocomotionSystem({
+      scene,
       runtimeConfig,
       collisionSystem,
-      groundedSystem
+      groundedSystem,
+      isEnvironmentMesh: (mesh) => mapMeshIds.has(mesh.uniqueId),
+      isClimbableMesh: (mesh) => isClimbableSurfaceMesh(mesh)
     });
     const audioController = createCharacterAudioController();
 
@@ -332,6 +338,7 @@ export async function createGlobalMatchScene(
     if (sessionId === options.localSessionId) {
       disposeLocalGameplayRuntime();
       resetPredictedCombatState();
+      lastLocalLocomotionState = "Idle";
     }
   };
 
@@ -372,6 +379,10 @@ export async function createGlobalMatchScene(
     const localPlayerState = playerViewManager.getLocalPlayerState();
     const now = Date.now();
     if (!inputEnabled || !localPlayerState || !localPlayerState.isAlive) {
+      return false;
+    }
+
+    if (lastLocalLocomotionState === "LedgeHang" || lastLocalLocomotionState === "LedgeClimb") {
       return false;
     }
 
@@ -478,6 +489,7 @@ export async function createGlobalMatchScene(
       resetPredictedCombatState();
       localGameplayRuntime?.locomotionSystem.reset();
       characterLean.reset(playerViewManager.getLocalPlayerView()?.visualRoot ?? null);
+      lastLocalLocomotionState = "Idle";
       exitPointerLock();
     }
   };
@@ -557,6 +569,7 @@ export async function createGlobalMatchScene(
     const localView = playerViewManager.getLocalPlayerView();
 
     if (!runtime || !localView) {
+      lastLocalLocomotionState = "Idle";
       maybeEmitLocalSprintIntent({
         isShiftPressed: false,
         isForwardPressed: false
@@ -653,6 +666,7 @@ export async function createGlobalMatchScene(
     });
 
     runtime.audioController.sync(frameOutput.snapshot);
+    lastLocalLocomotionState = frameOutput.snapshot.state;
     playerViewManager.updateLocalPlayerTransform(frameOutput.transform, frameOutput.animationState);
     maybeEmitLocalMovement({
       ...frameOutput.transform,

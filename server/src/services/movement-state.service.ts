@@ -6,7 +6,8 @@ export const MOVEMENT_STATE_CONFIG = {
   runSpeedMultiplier: 2.3,
   minMoveDeltaSeconds: 1 / 120,
   maxMoveDeltaSeconds: 0.2,
-  horizontalDistanceTolerance: 0.08
+  horizontalDistanceTolerance: 0.08,
+  ledgeSnapDistanceTolerance: 0.95
 } as const;
 
 export type PlayerMovementState = {
@@ -19,6 +20,7 @@ type AuthoritativeMoveValidationOptions = {
   desiredY: number;
   desiredZ: number;
   rotationY: number;
+  targetLocomotionState?: MatchPlayerState["locomotionState"];
   movementState: PlayerMovementState;
   now: number;
 };
@@ -29,6 +31,12 @@ function clamp(value: number, min: number, max: number): number {
 
 function resolveRunSpeed(): number {
   return MOVEMENT_STATE_CONFIG.walkSpeed * MOVEMENT_STATE_CONFIG.runSpeedMultiplier;
+}
+
+function isLedgeLocomotionState(
+  locomotionState: MatchPlayerState["locomotionState"] | undefined
+): boolean {
+  return locomotionState === "LedgeHang" || locomotionState === "LedgeClimb";
 }
 
 function canPlayerMove(player: MatchPlayerState, now: number): boolean {
@@ -89,7 +97,10 @@ export function applyAuthoritativeMovementValidation(
   const desiredHorizontalDistance = Math.hypot(horizontalDeltaX, horizontalDeltaZ);
   const allowedHorizontalDistance =
     resolveMovementSpeed(options.player, options.now) * elapsedSeconds +
-    MOVEMENT_STATE_CONFIG.horizontalDistanceTolerance;
+    MOVEMENT_STATE_CONFIG.horizontalDistanceTolerance +
+    (isLedgeLocomotionState(options.targetLocomotionState)
+      ? MOVEMENT_STATE_CONFIG.ledgeSnapDistanceTolerance
+      : 0);
 
   if (desiredHorizontalDistance <= allowedHorizontalDistance || desiredHorizontalDistance <= 0.000001) {
     return {

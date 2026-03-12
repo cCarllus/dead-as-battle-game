@@ -7,6 +7,9 @@ export function resolveAnimationGameplayState(params: {
   snapshot: CharacterLocomotionSnapshot;
   combat: CombatHookState;
 }): AnimationGameplayState {
+  const isLedgeState =
+    params.snapshot.state === "LedgeHang" || params.snapshot.state === "LedgeClimb";
+
   return {
     isDead: !params.combat.isAlive,
     isMoving: params.snapshot.isMoving,
@@ -21,8 +24,8 @@ export function resolveAnimationGameplayState(params: {
     isRolling: params.snapshot.isRolling,
     isWallRunning: false,
     isUltimateActive: params.combat.isUltimateActive,
-    isBlocking: params.combat.isBlocking && params.combat.attackComboIndex === 0,
-    attackComboIndex: params.combat.attackComboIndex,
+    isBlocking: !isLedgeState && params.combat.isBlocking && params.combat.attackComboIndex === 0,
+    attackComboIndex: isLedgeState ? 0 : params.combat.attackComboIndex,
     isHitReacting: params.snapshot.state === "Hit" || params.snapshot.state === "Stunned",
     locomotionState: params.snapshot.state,
     restartCommand: params.snapshot.didGroundJump

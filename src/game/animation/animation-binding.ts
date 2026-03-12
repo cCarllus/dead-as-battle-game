@@ -123,17 +123,23 @@ function collectMeshSkeletonTargets(rootNodes: TransformNode[]): AbstractMesh[] 
 
 function isPositionAnimationTargetProperty(targetProperty: string): boolean {
   const normalized = targetProperty.trim().toLowerCase();
-  return normalized === "position" || normalized.startsWith("position.");
+  return (
+    normalized === "position" ||
+    normalized.startsWith("position.") ||
+    normalized === "translation" ||
+    normalized.startsWith("translation.")
+  );
 }
 
 function resolveAssetDefinition(
   assetDefinition: AnimationAssetDefinition
-): { fileName: string; groupName?: string } {
+): { fileName: string; groupName?: string; stripPositionTracks: boolean } {
   return typeof assetDefinition === "string"
-    ? { fileName: assetDefinition }
+    ? { fileName: assetDefinition, stripPositionTracks: false }
     : {
         fileName: assetDefinition.fileName,
-        groupName: assetDefinition.groupName
+        groupName: assetDefinition.groupName,
+        stripPositionTracks: assetDefinition.stripPositionTracks === true
       };
 }
 
@@ -298,12 +304,16 @@ export async function loadBoundAnimationCommandFromAsset(
 
     const sourceTargetName = getNamedTargetName(targetedAnimation.target);
     const targetProperty = targetedAnimation.animation.targetProperty;
-    if (
-      sourceTargetName &&
-      blockedPositionTargetNames.has(normalizeNameForMatch(sourceTargetName)) &&
+    const shouldStripPositionTrack =
       typeof targetProperty === "string" &&
-      isPositionAnimationTargetProperty(targetProperty)
+      isPositionAnimationTargetProperty(targetProperty) &&
+      (resolvedAssetDefinition.stripPositionTracks === true ||
+        (sourceTargetName !== null &&
+          blockedPositionTargetNames.has(normalizeNameForMatch(sourceTargetName))));
+    if (
+      shouldStripPositionTrack
     ) {
+      skippedTargetCount += 1;
       return;
     }
 

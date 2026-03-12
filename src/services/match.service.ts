@@ -39,6 +39,8 @@ const VALID_LOCOMOTION_STATES = new Set<MatchPlayerLocomotionState>([
   "Rolling",
   "WallRun",
   "DoubleJump",
+  "LedgeHang",
+  "LedgeClimb",
   "Attack",
   "Block",
   "Hit",

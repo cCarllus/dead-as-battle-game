@@ -12,6 +12,8 @@ export type CharacterStateMachineInput = {
   isSprinting: boolean;
   isCrouching: boolean;
   isRolling: boolean;
+  isLedgeHanging: boolean;
+  isLedgeClimbing: boolean;
   didGroundJump: boolean;
   didDoubleJump: boolean;
   verticalVelocity: number;
@@ -54,6 +56,16 @@ export function createCharacterStateMachine(): CharacterStateMachine {
 
       if (input.isStunned) {
         lastResolvedState = input.nowMs - stunnedStartedAtMs < HIT_HOLD_MS ? "Hit" : "Stunned";
+        return lastResolvedState;
+      }
+
+      if (input.isLedgeClimbing) {
+        lastResolvedState = "LedgeClimb";
+        return lastResolvedState;
+      }
+
+      if (input.isLedgeHanging) {
+        lastResolvedState = "LedgeHang";
         return lastResolvedState;
       }
 

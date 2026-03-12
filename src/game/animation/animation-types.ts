@@ -8,6 +8,7 @@ export type AnimationAssetDefinition =
   | {
       fileName: string;
       groupName?: string;
+      stripPositionTracks?: boolean;
     };
 export type AnimationAssetCommandMap = Partial<Record<AnimationCommand, AnimationAssetDefinition>>;
 export type AnimationCommandGroupMap = Partial<Record<AnimationCommand, AnimationGroup>>;

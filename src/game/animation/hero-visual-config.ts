@@ -18,6 +18,8 @@ export type HeroVisualConfig = {
   };
   visualYaw: number;
   crouchVisualOffsetY: number;
+  ledgeHangVisualOffsetY: number;
+  ledgeClimbVisualOffsetY: number;
 };
 
 type HeroVisualSetup = {
@@ -29,6 +31,8 @@ type HeroVisualSetup = {
   };
   visualYaw: number;
   crouchVisualOffsetY: number;
+  ledgeHangVisualOffsetY: number;
+  ledgeClimbVisualOffsetY: number;
 };
 
 const DEFAULT_VISUAL_SETUP: HeroVisualSetup = {
@@ -39,7 +43,9 @@ const DEFAULT_VISUAL_SETUP: HeroVisualSetup = {
     z: 0
   },
   visualYaw: 0,
-  crouchVisualOffsetY: 0
+  crouchVisualOffsetY: 0,
+  ledgeHangVisualOffsetY: 0,
+  ledgeClimbVisualOffsetY: 0
 };
 
 const HERO_VISUAL_SETUP_BY_ID: Record<ChampionId, HeroVisualSetup> = {
@@ -47,7 +53,9 @@ const HERO_VISUAL_SETUP_BY_ID: Record<ChampionId, HeroVisualSetup> = {
     visualScale: 1,
     visualOffset: { x: 0, y: 0, z: 0 },
     visualYaw: 0,
-    crouchVisualOffsetY: -0.4
+    crouchVisualOffsetY: -0.4,
+    ledgeHangVisualOffsetY: 0,
+    ledgeClimbVisualOffsetY: 0
   }
 };
 
@@ -67,6 +75,8 @@ export function resolveHeroVisualConfig(heroId: string): HeroVisualConfig {
       z: visualSetup.visualOffset.z
     },
     visualYaw: visualSetup.visualYaw,
-    crouchVisualOffsetY: visualSetup.crouchVisualOffsetY
+    crouchVisualOffsetY: visualSetup.crouchVisualOffsetY,
+    ledgeHangVisualOffsetY: visualSetup.ledgeHangVisualOffsetY,
+    ledgeClimbVisualOffsetY: visualSetup.ledgeClimbVisualOffsetY
   };
 }

@@ -5,6 +5,8 @@ export const ANIMATION_COMMANDS = [
   "run",
   "jump",
   "inAir",
+  "ledgeHang",
+  "ledgeClimb",
   "crouchIdle",
   "rolling",
   "doubleJump",
@@ -28,6 +30,7 @@ export const LOOPED_ANIMATION_COMMANDS: readonly AnimationCommand[] = [
   "walk",
   "run",
   "inAir",
+  "ledgeHang",
   "crouchIdle",
   "block"
 ] as const;

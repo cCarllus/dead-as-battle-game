@@ -38,6 +38,22 @@ export type CharacterLocomotionConfig = {
   wallRunTiltRadians: number;
 };
 
+export type CharacterLedgeConfig = {
+  minimumLedgeHeight: number;
+  maximumLedgeHeight: number;
+  ledgeDetectionDistance: number;
+  topClearanceHeight: number;
+  hangForwardOffset: number;
+  hangVerticalOffset: number;
+  hangLateralOffset: number;
+  hangRotationOffsetRadians: number;
+  topStandOffset: number;
+  climbDurationOverrideMs: number;
+  regrabCooldownMs: number;
+  dropFromLedgeEnabled: boolean;
+  dropReleaseVelocity: number;
+};
+
 export type CharacterRuntimeConfig = {
   colliderHeight: number;
   colliderRadius: number;
@@ -51,6 +67,7 @@ export type CharacterRuntimeConfig = {
   wallCheckHorizontalOffset: number;
   audioRootOffsetY: number;
   locomotion: CharacterLocomotionConfig;
+  ledge: CharacterLedgeConfig;
 };
 
 export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> = {
@@ -102,5 +119,20 @@ export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> 
     sprintFovBoostRadians: (10 * Math.PI) / 180,
     wallRunFovBoostRadians: (6 * Math.PI) / 180,
     wallRunTiltRadians: (8 * Math.PI) / 180
+  },
+  ledge: {
+    minimumLedgeHeight: 1.05,
+    maximumLedgeHeight: 2.9,
+    ledgeDetectionDistance: 0.92,
+    topClearanceHeight: 2.1,
+    hangForwardOffset: 0.05,
+    hangVerticalOffset: 2.08,
+    hangLateralOffset: 0,
+    hangRotationOffsetRadians: 0,
+    topStandOffset: 0.28,
+    climbDurationOverrideMs: 780,
+    regrabCooldownMs: 280,
+    dropFromLedgeEnabled: true,
+    dropReleaseVelocity: -4.2
   }
 };

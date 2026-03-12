@@ -10,6 +10,11 @@ export type CollisionMoveResult = {
 export type CollisionSystem = {
   configureStaticMeshes: (meshes: AbstractMesh[]) => void;
   setColliderHeight: (height: number, radius?: number) => void;
+  getDebugState: () => {
+    gameplayRootPosition: Vector3;
+    ellipsoid: Vector3;
+    ellipsoidOffset: Vector3;
+  };
   moveAndSlide: (desiredDisplacement: Vector3) => CollisionMoveResult;
   dispose: () => void;
 };
@@ -52,6 +57,13 @@ export function createCollisionSystem(options: CreateCollisionSystemOptions): Co
       const halfHeight = safeHeight * 0.5 - radius;
       options.collisionBody.ellipsoid = new Vector3(radius, halfHeight, radius);
       options.collisionBody.ellipsoidOffset = new Vector3(0, halfHeight, 0);
+    },
+    getDebugState: () => {
+      return {
+        gameplayRootPosition: options.gameplayRoot.position.clone(),
+        ellipsoid: options.collisionBody.ellipsoid.clone(),
+        ellipsoidOffset: options.collisionBody.ellipsoidOffset.clone()
+      };
     },
     moveAndSlide: (desiredDisplacement) => {
       const beforeLocalPosition = options.collisionBody.position.clone();

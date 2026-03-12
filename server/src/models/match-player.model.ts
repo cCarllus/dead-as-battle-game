@@ -10,6 +10,8 @@ export type MatchPlayerLocomotionState =
   | "Rolling"
   | "WallRun"
   | "DoubleJump"
+  | "LedgeHang"
+  | "LedgeClimb"
   | "Attack"
   | "Block"
   | "Hit"

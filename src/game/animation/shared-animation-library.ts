@@ -5,6 +5,7 @@ import {
   loadBoundAnimationCommandFromAsset,
   type AnimationBindingTargetResolver
 } from "./animation-binding";
+import { LEDGE_ANIMATION_ASSET_BY_COMMAND } from "./ledge-animation-config";
 import type { AnimationAssetCommandMap, AnimationCommandGroupMap } from "./animation-types";
 
 export const SHARED_ANIMATION_BASE_URL = "public/local/animations/shared";
@@ -15,6 +16,8 @@ export const DEFAULT_SHARED_EMBEDDED_GROUP_NAMES: Readonly<Record<AnimationComma
   run: "run",
   jump: "jump",
   inAir: "jump_loop",
+  ledgeHang: "wall-hanging-idle",
+  ledgeClimb: "up-wall",
   crouchIdle: "crouch_idle",
   rolling: "rolling",
   doubleJump: "double_jump",
@@ -33,6 +36,7 @@ export const SHARED_ANIMATION_ASSET_BY_COMMAND: Readonly<AnimationAssetCommandMa
   run: "run.glb",
   jump: "jump.glb",
   inAir: "jump_loop.glb",
+  ...LEDGE_ANIMATION_ASSET_BY_COMMAND,
   crouchIdle: "crouch_idle.glb",
   rolling: "quick-roll.glb",
   doubleJump: "jump.glb"

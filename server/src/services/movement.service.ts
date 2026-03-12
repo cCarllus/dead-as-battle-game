@@ -60,6 +60,8 @@ const VALID_LOCOMOTION_STATES = new Set<MatchPlayerLocomotionState>([
   "Rolling",
   "WallRun",
   "DoubleJump",
+  "LedgeHang",
+  "LedgeClimb",
   "Attack",
   "Block",
   "Hit",
@@ -218,6 +220,7 @@ export function applyAuthoritativeMove(options: {
     desiredY: options.moveIntent.y,
     desiredZ: options.moveIntent.z,
     rotationY: options.moveIntent.rotationY,
+    targetLocomotionState: options.moveIntent.locomotionState,
     movementState,
     now: options.now
   });

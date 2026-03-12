@@ -12,6 +12,8 @@ export type CharacterLocomotionState =
   | "Rolling"
   | "WallRun"
   | "DoubleJump"
+  | "LedgeHang"
+  | "LedgeClimb"
   | "Attack"
   | "Block"
   | "Hit"

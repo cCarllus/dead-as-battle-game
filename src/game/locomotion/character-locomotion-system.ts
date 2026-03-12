@@ -1,9 +1,12 @@
-// Responsável por orquestrar motor, salto, crouch, rolling, câmera e áudio em um pipeline único de personagem.
-import { Vector3 } from "@babylonjs/core";
+// Responsável por orquestrar movimento, salto, ledge grab/climb, câmera e áudio em um pipeline único de personagem.
+import { Vector3, type AbstractMesh, type Scene } from "@babylonjs/core";
 import type { AnimationGameplayState } from "../animation/animation-state";
 import { resolveAnimationGameplayState } from "../animation/animation-state-machine";
 import type { CharacterRuntimeConfig } from "../character/character-config";
-import type { CombatHookState } from "../combat/combat-hooks";
+import {
+  isCombatMovementLocked,
+  type CombatHookState
+} from "../combat/combat-hooks";
 import { resolveLandingImpactFromAirTime } from "../effects/landing-impact";
 import type { CollisionSystem } from "../systems/collision.system";
 import { createCharacterMotor } from "./character-motor";
@@ -12,6 +15,10 @@ import { createCrouchSystem } from "./crouch-system";
 import { createDoubleJumpSystem } from "./double-jump-system";
 import type { GroundedSystem } from "./grounded-system";
 import { createJumpSystem } from "./jump-system";
+import { createLedgeClimbSystem } from "./ledge-climb-system";
+import { createLedgeDebug } from "./ledge-debug";
+import { createLedgeDetectionSystem } from "./ledge-detection-system";
+import { createLedgeHangSystem } from "./ledge-hang-system";
 import type {
   CharacterLocomotionSnapshot,
   CharacterMovementInputState,
@@ -50,12 +57,16 @@ export type CharacterLocomotionFrameOutput = {
 export type CharacterLocomotionSystem = {
   step: (input: CharacterLocomotionFrameInput) => CharacterLocomotionFrameOutput;
   reset: () => void;
+  dispose: () => void;
 };
 
 export type CreateCharacterLocomotionSystemOptions = {
+  scene: Scene;
   runtimeConfig: CharacterRuntimeConfig;
   collisionSystem: CollisionSystem;
   groundedSystem: GroundedSystem;
+  isEnvironmentMesh: (mesh: AbstractMesh) => boolean;
+  isClimbableMesh: (mesh: AbstractMesh) => boolean;
 };
 
 function resolveMovementDirectionFromAxes(forwardAxis: number, sideAxis: number): MovementDirection {
@@ -95,6 +106,7 @@ export function createCharacterLocomotionSystem(
   options: CreateCharacterLocomotionSystemOptions
 ): CharacterLocomotionSystem {
   const locomotionConfig = options.runtimeConfig.locomotion;
+  const ledgeConfig = options.runtimeConfig.ledge;
   const motor = createCharacterMotor();
   const jumpSystem = createJumpSystem({
     jumpBufferTimeMs: locomotionConfig.jumpBufferTimeMs,
@@ -104,6 +116,16 @@ export function createCharacterLocomotionSystem(
   const crouchSystem = createCrouchSystem();
   const rollingSystem = createRollingSystem();
   const stateMachine = createCharacterStateMachine();
+  const ledgeDetectionSystem = createLedgeDetectionSystem({
+    scene: options.scene,
+    runtimeConfig: options.runtimeConfig,
+    groundedSystem: options.groundedSystem,
+    isEnvironmentMesh: options.isEnvironmentMesh,
+    isClimbableMesh: options.isClimbableMesh
+  });
+  const ledgeDebug = createLedgeDebug(options.scene);
+  const ledgeHangSystem = createLedgeHangSystem(ledgeConfig);
+  const ledgeClimbSystem = createLedgeClimbSystem();
 
   let wasJumpPressed = false;
   let wasGrounded = false;
@@ -111,11 +133,173 @@ export function createCharacterLocomotionSystem(
   let airborneTimeMs = 0;
   let sprintBurstUntilMs = 0;
 
+  const renderLedgeDebug = (
+    candidate: ReturnType<typeof ledgeHangSystem.getActiveLedge>,
+    rootTransform:
+      | CharacterLocomotionFrameInput["currentTransform"]
+      | CharacterLocomotionFrameOutput["transform"]
+      | null
+  ): void => {
+    if (!candidate) {
+      ledgeDebug.render(null);
+      return;
+    }
+
+    const collisionDebugState = options.collisionSystem.getDebugState();
+    const characterRootPosition = rootTransform
+      ? new Vector3(rootTransform.x, rootTransform.y, rootTransform.z)
+      : collisionDebugState.gameplayRootPosition.clone();
+    const colliderCenterPosition = characterRootPosition.add(collisionDebugState.ellipsoidOffset);
+
+    ledgeDebug.render({
+      candidate,
+      characterRootPosition,
+      colliderCenterPosition
+    });
+  };
+
+  const logLedgeDebug = (
+    label: string,
+    candidate: ReturnType<typeof ledgeHangSystem.getActiveLedge>,
+    rootTransform:
+      | CharacterLocomotionFrameInput["currentTransform"]
+      | CharacterLocomotionFrameOutput["transform"]
+      | null
+  ): void => {
+    if (!candidate) {
+      return;
+    }
+
+    const collisionDebugState = options.collisionSystem.getDebugState();
+    const characterRootPosition = rootTransform
+      ? new Vector3(rootTransform.x, rootTransform.y, rootTransform.z)
+      : collisionDebugState.gameplayRootPosition.clone();
+    const colliderCenterPosition = characterRootPosition.add(collisionDebugState.ellipsoidOffset);
+
+    ledgeDebug.log(label, {
+      candidate,
+      characterRootPosition,
+      colliderCenterPosition
+    });
+  };
+
+  const buildFrameOutput = (
+    input: CharacterLocomotionFrameInput,
+    params: {
+      transform: { x: number; y: number; z: number; rotationY: number };
+      movementDirection: MovementDirection;
+      isGrounded: boolean;
+      isMoving: boolean;
+      isSprinting: boolean;
+      isCrouching: boolean;
+      isRolling: boolean;
+      isLedgeHanging: boolean;
+      isLedgeClimbing: boolean;
+      didGroundJump: boolean;
+      didDoubleJump: boolean;
+      didLand: boolean;
+      didCrouchEnter: boolean;
+      didCrouchExit: boolean;
+      didRollingStart: boolean;
+      didRollingEnd: boolean;
+      speedNormalized: number;
+      lateralInput: number;
+      forwardInput: number;
+      crouchAlpha: number;
+      rollingAlpha: number;
+      verticalVelocity: number;
+      landingImpact: number;
+      sprintIntent: {
+        isShiftPressed: boolean;
+        isForwardPressed: boolean;
+      };
+    }
+  ): CharacterLocomotionFrameOutput => {
+    const state = stateMachine.resolve({
+      nowMs: input.nowMs,
+      isAlive: input.combat.isAlive,
+      isStunned: input.combat.isStunned,
+      isAttacking: input.combat.attackComboIndex > 0,
+      isBlocking: input.combat.isBlocking && input.combat.attackComboIndex === 0,
+      isGrounded: params.isGrounded,
+      isMoving: params.isMoving,
+      isSprinting: params.isSprinting,
+      isCrouching: params.isCrouching,
+      isRolling: params.isRolling,
+      isLedgeHanging: params.isLedgeHanging,
+      isLedgeClimbing: params.isLedgeClimbing,
+      didGroundJump: params.didGroundJump,
+      didDoubleJump: params.didDoubleJump,
+      verticalVelocity: params.verticalVelocity
+    });
+
+    const snapshot: CharacterLocomotionSnapshot = {
+      nowMs: input.nowMs,
+      state,
+      movementDirection: params.movementDirection,
+      transform: params.transform,
+      isGrounded: params.isGrounded,
+      isMoving: params.isMoving,
+      isSprinting: params.isSprinting,
+      isCrouching: params.isCrouching,
+      isRolling: params.isRolling,
+      isWallRunning: false,
+      wallRunSide: "none",
+      didGroundJump: params.didGroundJump,
+      didDoubleJump: params.didDoubleJump,
+      didLand: params.didLand,
+      didCrouchEnter: params.didCrouchEnter,
+      didCrouchExit: params.didCrouchExit,
+      didRollingStart: params.didRollingStart,
+      didRollingEnd: params.didRollingEnd,
+      didWallRunStart: false,
+      didWallRunEnd: false,
+      speedNormalized: params.speedNormalized,
+      lateralInput: params.lateralInput,
+      forwardInput: params.forwardInput,
+      crouchAlpha: params.crouchAlpha,
+      rollingAlpha: params.rollingAlpha,
+      verticalVelocity: params.verticalVelocity,
+      landingImpact: params.landingImpact,
+      sprintIntent: params.sprintIntent,
+      cameraProfile: {
+        crouchOffsetY: locomotionConfig.crouchCameraOffsetY,
+        rollingOffsetY: locomotionConfig.rollingCameraOffsetY,
+        sprintFovBoostRadians: locomotionConfig.sprintFovBoostRadians,
+        wallRunFovBoostRadians: 0,
+        wallRunTiltRadians: 0
+      }
+    };
+
+    return {
+      transform: params.transform,
+      animationState: resolveAnimationGameplayState({
+        snapshot,
+        combat: input.combat
+      }),
+      snapshot,
+      isGrounded: params.isGrounded,
+      isMoving: params.isMoving,
+      isSprinting: params.isSprinting,
+      isSprintBurstActive: params.isSprinting && input.nowMs <= sprintBurstUntilMs,
+      didStartSprint: false,
+      didLand: params.didLand,
+      lateralInput: params.lateralInput,
+      forwardInput: params.forwardInput,
+      speedFeedback: params.speedNormalized,
+      landingImpact: params.landingImpact
+    };
+  };
+
   return {
     step: (input) => {
+      const activeHangLedge = ledgeHangSystem.getActiveLedge();
+      const ledgeHangActive = activeHangLedge !== null;
+      const ledgeClimbActive = ledgeClimbSystem.isActive();
       const inputEnabled = input.isInputEnabled && input.combat.isAlive && !input.combat.isStunned;
-      const movementLocked = input.combat.attackComboIndex > 0 || !input.combat.isAlive || input.combat.isStunned;
-      const movementEnabled = inputEnabled && !movementLocked;
+      const movementLocked = isCombatMovementLocked(input.combat);
+      const movementEnabled = inputEnabled && !movementLocked && !ledgeHangActive && !ledgeClimbActive;
+      renderLedgeDebug(null, null);
 
       const forwardInput = movementEnabled
         ? (input.inputState.forward ? 1 : 0) - (input.inputState.backward ? 1 : 0)
@@ -128,6 +312,7 @@ export function createCharacterLocomotionSystem(
       const desiredDirection = resolveDesiredDirection(input.cameraForward, forwardInput, lateralInput);
       const hasDirectionalIntent = desiredDirection.lengthSquared() > 0.0001;
       const fallbackForward = resolveForwardFromRotation(input.currentTransform.rotationY);
+      const approachDirection = hasDirectionalIntent ? desiredDirection : fallbackForward;
 
       const groundedBefore = options.groundedSystem.detect({
         position: {
@@ -138,16 +323,265 @@ export function createCharacterLocomotionSystem(
         wasGrounded
       });
 
-      const jumpPressed = movementEnabled && input.inputState.jump && !input.isFlyModeEnabled;
+      const jumpPressed = inputEnabled && input.inputState.jump && !input.isFlyModeEnabled;
       const jumpPressedEdge = jumpPressed && !wasJumpPressed;
       wasJumpPressed = jumpPressed;
 
-      if (jumpPressedEdge) {
+      if (!ledgeHangActive && !ledgeClimbActive && movementEnabled && jumpPressedEdge) {
         jumpSystem.queueJumpPress(input.nowMs);
       }
 
-      jumpSystem.notifyGrounded(input.nowMs, groundedBefore.isGrounded);
-      doubleJumpSystem.resetIfGrounded(groundedBefore.isGrounded);
+      jumpSystem.notifyGrounded(
+        input.nowMs,
+        groundedBefore.isGrounded && !ledgeHangActive && !ledgeClimbActive
+      );
+      doubleJumpSystem.resetIfGrounded(groundedBefore.isGrounded && !ledgeHangActive && !ledgeClimbActive);
+
+      if (ledgeHangActive) {
+        const shouldForceRelease =
+          input.isFlyModeEnabled ||
+          !input.combat.isAlive ||
+          input.combat.isStunned;
+        const wantsDrop =
+          ledgeConfig.dropFromLedgeEnabled &&
+          (input.inputState.backward || input.inputState.crouch);
+
+        if (shouldForceRelease || wantsDrop) {
+          logLedgeDebug("release", activeHangLedge, input.currentTransform);
+          ledgeHangSystem.release(input.nowMs);
+          jumpSystem.setVerticalVelocity(ledgeConfig.dropReleaseVelocity);
+        } else if (jumpPressedEdge) {
+          const activeLedge = ledgeHangSystem.consumeForClimb(input.nowMs);
+          if (activeLedge) {
+            logLedgeDebug("climb-start", activeLedge, {
+              x: activeLedge.hangPosition.x,
+              y: activeLedge.hangPosition.y,
+              z: activeLedge.hangPosition.z,
+              rotationY: activeLedge.rotationY
+            });
+            ledgeClimbSystem.start({
+              ledge: activeLedge,
+              nowMs: input.nowMs,
+              durationMs: ledgeConfig.climbDurationOverrideMs
+            });
+
+            const climbFrame = ledgeClimbSystem.step({ nowMs: input.nowMs });
+            if (climbFrame.transform) {
+              renderLedgeDebug(activeLedge, climbFrame.transform);
+              options.collisionSystem.setColliderHeight(
+                options.runtimeConfig.colliderHeight,
+                options.runtimeConfig.colliderRadius
+              );
+              jumpSystem.setVerticalVelocity(0);
+              airborneTimeMs = 0;
+              wasGrounded = false;
+
+              return buildFrameOutput(input, {
+                transform: climbFrame.transform,
+                movementDirection: "none",
+                isGrounded: false,
+                isMoving: false,
+                isSprinting: false,
+                isCrouching: false,
+                isRolling: false,
+                isLedgeHanging: false,
+                isLedgeClimbing: true,
+                didGroundJump: false,
+                didDoubleJump: false,
+                didLand: false,
+                didCrouchEnter: false,
+                didCrouchExit: false,
+                didRollingStart: false,
+                didRollingEnd: false,
+                speedNormalized: 0,
+                lateralInput: 0,
+                forwardInput: 0,
+                crouchAlpha: 0,
+                rollingAlpha: 0,
+                verticalVelocity: 0,
+                landingImpact: 0,
+                sprintIntent: {
+                  isShiftPressed: false,
+                  isForwardPressed: false
+                }
+              });
+            }
+          }
+        } else {
+          const lockedTransform = ledgeHangSystem.getLockedTransform();
+          if (lockedTransform) {
+            renderLedgeDebug(activeHangLedge, lockedTransform);
+            options.collisionSystem.setColliderHeight(
+              options.runtimeConfig.colliderHeight,
+              options.runtimeConfig.colliderRadius
+            );
+            jumpSystem.setVerticalVelocity(0);
+            airborneTimeMs = 0;
+            wasGrounded = false;
+
+            return buildFrameOutput(input, {
+              transform: lockedTransform,
+              movementDirection: "none",
+              isGrounded: false,
+              isMoving: false,
+              isSprinting: false,
+              isCrouching: false,
+              isRolling: false,
+              isLedgeHanging: true,
+              isLedgeClimbing: false,
+              didGroundJump: false,
+              didDoubleJump: false,
+              didLand: false,
+              didCrouchEnter: false,
+              didCrouchExit: false,
+              didRollingStart: false,
+              didRollingEnd: false,
+              speedNormalized: 0,
+              lateralInput: 0,
+              forwardInput: 0,
+              crouchAlpha: 0,
+              rollingAlpha: 0,
+              verticalVelocity: 0,
+              landingImpact: 0,
+              sprintIntent: {
+                isShiftPressed: false,
+                isForwardPressed: false
+              }
+            });
+          }
+        }
+      }
+
+      if (ledgeClimbActive) {
+        if (input.isFlyModeEnabled || !input.combat.isAlive || input.combat.isStunned) {
+          ledgeClimbSystem.reset();
+          jumpSystem.setVerticalVelocity(ledgeConfig.dropReleaseVelocity);
+        } else {
+          const climbFrame = ledgeClimbSystem.step({ nowMs: input.nowMs });
+          if (climbFrame.transform) {
+            renderLedgeDebug(climbFrame.ledge, climbFrame.transform);
+            options.collisionSystem.setColliderHeight(
+              options.runtimeConfig.colliderHeight,
+              options.runtimeConfig.colliderRadius
+            );
+            jumpSystem.setVerticalVelocity(0);
+            airborneTimeMs = 0;
+
+            if (!climbFrame.didFinish) {
+              wasGrounded = false;
+              return buildFrameOutput(input, {
+                transform: climbFrame.transform,
+                movementDirection: "none",
+                isGrounded: false,
+                isMoving: false,
+                isSprinting: false,
+                isCrouching: false,
+                isRolling: false,
+                isLedgeHanging: false,
+                isLedgeClimbing: true,
+                didGroundJump: false,
+                didDoubleJump: false,
+                didLand: false,
+                didCrouchEnter: false,
+                didCrouchExit: false,
+                didRollingStart: false,
+                didRollingEnd: false,
+                speedNormalized: 0,
+                lateralInput: 0,
+                forwardInput: 0,
+                crouchAlpha: 0,
+                rollingAlpha: 0,
+                verticalVelocity: 0,
+                landingImpact: 0,
+                sprintIntent: {
+                  isShiftPressed: false,
+                  isForwardPressed: false
+                }
+              });
+            }
+
+            const finalGrounding = options.groundedSystem.detect({
+              position: {
+                x: climbFrame.transform.x,
+                y: climbFrame.transform.y,
+                z: climbFrame.transform.z
+              },
+              wasGrounded: true
+            });
+            const isGroundedResolved = finalGrounding.isGrounded && !!finalGrounding.hitMesh;
+
+            if (!isGroundedResolved) {
+              wasGrounded = false;
+              jumpSystem.setVerticalVelocity(ledgeConfig.dropReleaseVelocity);
+              return buildFrameOutput(input, {
+                transform: climbFrame.transform,
+                movementDirection: "none",
+                isGrounded: false,
+                isMoving: false,
+                isSprinting: false,
+                isCrouching: false,
+                isRolling: false,
+                isLedgeHanging: false,
+                isLedgeClimbing: false,
+                didGroundJump: false,
+                didDoubleJump: false,
+                didLand: false,
+                didCrouchEnter: false,
+                didCrouchExit: false,
+                didRollingStart: false,
+                didRollingEnd: false,
+                speedNormalized: 0,
+                lateralInput: 0,
+                forwardInput: 0,
+                crouchAlpha: 0,
+                rollingAlpha: 0,
+                verticalVelocity: ledgeConfig.dropReleaseVelocity,
+                landingImpact: 0,
+                sprintIntent: {
+                  isShiftPressed: false,
+                  isForwardPressed: false
+                }
+              });
+            }
+
+            wasGrounded = true;
+            return buildFrameOutput(input, {
+              transform: {
+                x: climbFrame.transform.x,
+                y: finalGrounding.groundY + options.runtimeConfig.collisionClearanceY,
+                z: climbFrame.transform.z,
+                rotationY: climbFrame.transform.rotationY
+              },
+              movementDirection: "none",
+              isGrounded: true,
+              isMoving: false,
+              isSprinting: false,
+              isCrouching: false,
+              isRolling: false,
+              isLedgeHanging: false,
+              isLedgeClimbing: false,
+              didGroundJump: false,
+              didDoubleJump: false,
+              didLand: false,
+              didCrouchEnter: false,
+              didCrouchExit: false,
+              didRollingStart: false,
+              didRollingEnd: false,
+              speedNormalized: 0,
+              lateralInput: 0,
+              forwardInput: 0,
+              crouchAlpha: 0,
+              rollingAlpha: 0,
+              verticalVelocity: 0,
+              landingImpact: 0,
+              sprintIntent: {
+                isShiftPressed: false,
+                isForwardPressed: false
+              }
+            });
+          }
+        }
+      }
 
       const canSprint =
         movementEnabled &&
@@ -209,6 +643,81 @@ export function createCharacterLocomotionSystem(
       });
       const isCrouchStateActive =
         crouchOutput.isCrouched && wantsStationaryCrouch && !rollingOutput.forcesCompactCollider;
+
+      const canAttemptLedgeGrab =
+        !input.isFlyModeEnabled &&
+        inputEnabled &&
+        !movementLocked &&
+        !groundedBefore.isGrounded &&
+        !rollingOutput.isRolling &&
+        !isCrouchStateActive &&
+        !didGroundJump &&
+        !didDoubleJump &&
+        ledgeHangSystem.canGrab(input.nowMs);
+
+      if (canAttemptLedgeGrab) {
+        const ledgeCandidate = ledgeDetectionSystem.detect({
+          currentTransform: input.currentTransform,
+          approachDirection
+        });
+
+        if (ledgeCandidate && ledgeHangSystem.grab(ledgeCandidate, input.nowMs)) {
+          renderLedgeDebug(ledgeCandidate, {
+            x: ledgeCandidate.hangPosition.x,
+            y: ledgeCandidate.hangPosition.y,
+            z: ledgeCandidate.hangPosition.z,
+            rotationY: ledgeCandidate.rotationY
+          });
+          logLedgeDebug("grab", ledgeCandidate, {
+            x: ledgeCandidate.hangPosition.x,
+            y: ledgeCandidate.hangPosition.y,
+            z: ledgeCandidate.hangPosition.z,
+            rotationY: ledgeCandidate.rotationY
+          });
+          options.collisionSystem.setColliderHeight(
+            options.runtimeConfig.colliderHeight,
+            options.runtimeConfig.colliderRadius
+          );
+          jumpSystem.setVerticalVelocity(0);
+          airborneTimeMs = 0;
+          wasGrounded = false;
+
+          return buildFrameOutput(input, {
+            transform: {
+              x: ledgeCandidate.hangPosition.x,
+              y: ledgeCandidate.hangPosition.y,
+              z: ledgeCandidate.hangPosition.z,
+              rotationY: ledgeCandidate.rotationY
+            },
+            movementDirection: "none",
+            isGrounded: false,
+            isMoving: false,
+            isSprinting: false,
+            isCrouching: false,
+            isRolling: false,
+            isLedgeHanging: true,
+            isLedgeClimbing: false,
+            didGroundJump: false,
+            didDoubleJump: false,
+            didLand: false,
+            didCrouchEnter: false,
+            didCrouchExit: false,
+            didRollingStart: false,
+            didRollingEnd: false,
+            speedNormalized: 0,
+            lateralInput: 0,
+            forwardInput: 0,
+            crouchAlpha: 0,
+            rollingAlpha: 0,
+            verticalVelocity: 0,
+            landingImpact: 0,
+            sprintIntent: {
+              isShiftPressed: false,
+              isForwardPressed: false
+            }
+          });
+        }
+      }
 
       const colliderHeight = rollingOutput.isRolling
         ? options.runtimeConfig.rollingColliderHeight
@@ -334,34 +843,16 @@ export function createCharacterLocomotionSystem(
       );
       const speedNormalized = speedCap > 0 ? Math.max(0, Math.min(1, motorOutput.speed / speedCap)) : 0;
 
-      const state = stateMachine.resolve({
-        nowMs: input.nowMs,
-        isAlive: input.combat.isAlive,
-        isStunned: input.combat.isStunned,
-        isAttacking: input.combat.attackComboIndex > 0,
-        isBlocking: input.combat.isBlocking && input.combat.attackComboIndex === 0,
-        isGrounded: isGroundedResolved,
-        isMoving: motorOutput.isMoving,
-        isSprinting: canSprint,
-        isCrouching: isCrouchStateActive,
-        isRolling: rollingOutput.isRolling,
-        didGroundJump,
-        didDoubleJump,
-        verticalVelocity
-      });
-
-      const snapshot: CharacterLocomotionSnapshot = {
-        nowMs: input.nowMs,
-        state,
-        movementDirection,
+      const frameOutput = buildFrameOutput(input, {
         transform,
+        movementDirection,
         isGrounded: isGroundedResolved,
         isMoving: motorOutput.isMoving,
         isSprinting: canSprint,
         isCrouching: isCrouchStateActive,
         isRolling: rollingOutput.isRolling,
-        isWallRunning: false,
-        wallRunSide: "none",
+        isLedgeHanging: false,
+        isLedgeClimbing: false,
         didGroundJump,
         didDoubleJump,
         didLand,
@@ -369,8 +860,6 @@ export function createCharacterLocomotionSystem(
         didCrouchExit: crouchOutput.didExit,
         didRollingStart: rollingOutput.didStart,
         didRollingEnd: rollingOutput.didEnd,
-        didWallRunStart: false,
-        didWallRunEnd: false,
         speedNormalized,
         lateralInput,
         forwardInput,
@@ -381,33 +870,13 @@ export function createCharacterLocomotionSystem(
         sprintIntent: {
           isShiftPressed: canSprint,
           isForwardPressed: canSprint && input.inputState.forward
-        },
-        cameraProfile: {
-          crouchOffsetY: locomotionConfig.crouchCameraOffsetY,
-          rollingOffsetY: locomotionConfig.rollingCameraOffsetY,
-          sprintFovBoostRadians: locomotionConfig.sprintFovBoostRadians,
-          wallRunFovBoostRadians: 0,
-          wallRunTiltRadians: 0
         }
-      };
+      });
 
       return {
-        transform,
-        animationState: resolveAnimationGameplayState({
-          snapshot,
-          combat: input.combat
-        }),
-        snapshot,
-        isGrounded: isGroundedResolved,
-        isMoving: motorOutput.isMoving,
-        isSprinting: canSprint,
+        ...frameOutput,
         isSprintBurstActive,
-        didStartSprint,
-        didLand,
-        lateralInput,
-        forwardInput,
-        speedFeedback: speedNormalized,
-        landingImpact
+        didStartSprint
       };
     },
     reset: () => {
@@ -417,11 +886,17 @@ export function createCharacterLocomotionSystem(
       crouchSystem.reset();
       rollingSystem.reset();
       stateMachine.reset();
+      ledgeHangSystem.reset();
+      ledgeClimbSystem.reset();
       wasJumpPressed = false;
       wasGrounded = false;
       wasSprinting = false;
       airborneTimeMs = 0;
       sprintBurstUntilMs = 0;
+      renderLedgeDebug(null, null);
+    },
+    dispose: () => {
+      ledgeDebug.dispose();
     }
   };
 }

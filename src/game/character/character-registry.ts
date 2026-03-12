@@ -23,7 +23,8 @@ function mergeRuntimeConfig(
   if (!override) {
     return {
       ...baseConfig,
-      locomotion: { ...baseConfig.locomotion }
+      locomotion: { ...baseConfig.locomotion },
+      ledge: { ...baseConfig.ledge }
     };
   }
 
@@ -33,6 +34,10 @@ function mergeRuntimeConfig(
     locomotion: {
       ...baseConfig.locomotion,
       ...override.locomotion
+    },
+    ledge: {
+      ...baseConfig.ledge,
+      ...override.ledge
     }
   };
 }

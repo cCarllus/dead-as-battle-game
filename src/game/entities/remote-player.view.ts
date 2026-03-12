@@ -138,6 +138,8 @@ function resolveAnimationGameplayState(options: {
   isStunned: boolean;
   isUltimateActive: boolean;
 }): AnimationGameplayState {
+  const isLedgeState =
+    options.locomotionState === "LedgeHang" || options.locomotionState === "LedgeClimb";
   if (!options.isAlive) {
     return {
       ...createDefaultAnimationGameplayState(),
@@ -172,7 +174,7 @@ function resolveAnimationGameplayState(options: {
       : resolveMovementDirectionFromDelta(deltaX, deltaZ, options.rotationY);
   }
 
-  const isBlocking = options.isBlocking && options.attackComboIndex === 0;
+  const isBlocking = !isLedgeState && options.isBlocking && options.attackComboIndex === 0;
   const isHitReacting = options.isStunned && !isBlocking && options.attackComboIndex === 0;
   const isJumping =
     options.locomotionState === "JumpStart" ||
@@ -193,11 +195,21 @@ function resolveAnimationGameplayState(options: {
     isWallRunning: false,
     isUltimateActive: options.isUltimateActive,
     isBlocking,
-    attackComboIndex: options.attackComboIndex,
+    attackComboIndex: isLedgeState ? 0 : options.attackComboIndex,
     isHitReacting,
     locomotionState,
     restartCommand: null
   };
+}
+
+function shouldPreserveReplicatedLocomotionState(locomotionState: MatchPlayerState["locomotionState"]): boolean {
+  return (
+    locomotionState === "Crouch" ||
+    locomotionState === "Rolling" ||
+    locomotionState === "WallRun" ||
+    locomotionState === "LedgeHang" ||
+    locomotionState === "LedgeClimb"
+  );
 }
 
 function resolveSafeAttackComboIndex(player: MatchPlayerState): 0 | 1 | 2 | 3 {
@@ -337,11 +349,7 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
         nextAnimationGameplayState.isJumping || nowMs < jumpAnimationGraceUntilMs;
       nextAnimationGameplayState.isSprinting =
         nextAnimationGameplayState.isSprinting || nowMs < sprintAnimationGraceUntilMs;
-      if (
-        !nextAnimationGameplayState.isCrouching &&
-        !nextAnimationGameplayState.isRolling &&
-        !nextAnimationGameplayState.isWallRunning
-      ) {
+      if (!shouldPreserveReplicatedLocomotionState(player.locomotionState)) {
         nextAnimationGameplayState.locomotionState = nextAnimationGameplayState.isJumping
           ? "InAir"
           : !nextAnimationGameplayState.isMoving

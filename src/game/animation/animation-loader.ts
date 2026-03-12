@@ -71,7 +71,12 @@ function collectInstantiatedRootNodes(rootNodes: readonly Node[]): TransformNode
 
 function isPositionAnimationTargetProperty(targetProperty: string): boolean {
   const normalized = targetProperty.trim().toLowerCase();
-  return normalized === "position" || normalized.startsWith("position.");
+  return (
+    normalized === "position" ||
+    normalized.startsWith("position.") ||
+    normalized === "translation" ||
+    normalized.startsWith("translation.")
+  );
 }
 
 function stripRootMotionFromAnimationGroups(

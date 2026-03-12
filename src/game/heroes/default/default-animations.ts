@@ -18,5 +18,5 @@ export const DEFAULT_HERO_ANIMATION_CONFIG: HeroAnimationConfig = {
     block: "Hit_Reaction_1",
     hit: "Left_Hook_from_Guard"
   },
-  loopedCommands: ["idle", "walk", "run", "inAir", "block"]
+  loopedCommands: ["idle", "walk", "run", "inAir", "ledgeHang", "block"]
 };

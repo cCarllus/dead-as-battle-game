@@ -263,8 +263,21 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     skinHandle?.animationController?.syncFromGameplay(animationGameplayState);
   };
 
+  const resolvePoseOffsetY = (): number => {
+    switch (animationGameplayState.locomotionState) {
+      case "Crouch":
+        return currentHeroConfig.crouchVisualOffsetY;
+      case "LedgeHang":
+        return currentHeroConfig.ledgeHangVisualOffsetY;
+      case "LedgeClimb":
+        return currentHeroConfig.ledgeClimbVisualOffsetY;
+      default:
+        return 0;
+    }
+  };
+
   const applyCurrentVisualPose = (): void => {
-    const poseOffsetY = animationGameplayState.isCrouching ? currentHeroConfig.crouchVisualOffsetY : 0;
+    const poseOffsetY = resolvePoseOffsetY();
     applyHeroVisualConfig(visualRoot, currentHeroConfig, currentHeroCalibration, poseOffsetY);
   };
 
@@ -392,7 +405,8 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     getRuntimeConfig: () => {
       return {
         ...runtimeConfig,
-        locomotion: { ...runtimeConfig.locomotion }
+        locomotion: { ...runtimeConfig.locomotion },
+        ledge: { ...runtimeConfig.ledge }
       };
     },
     setNickname: (nextNickname) => {

@@ -86,6 +86,10 @@ export function resolveAnimationCommandFromGameplay(
       case "inAir":
       case "Fall":
         return "inAir";
+      case "LedgeHang":
+        return "ledgeHang";
+      case "LedgeClimb":
+        return "ledgeClimb";
       case "Rolling":
         return "rolling";
       case "Crouch":

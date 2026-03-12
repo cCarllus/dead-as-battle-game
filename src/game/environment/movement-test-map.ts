@@ -7,6 +7,7 @@ import {
   type AbstractMesh,
   type Scene
 } from "@babylonjs/core";
+import { setMeshClimbable } from "./climbable-surface-utils";
 
 export type MovementTestMapHandle = {
   meshes: AbstractMesh[];
@@ -83,6 +84,7 @@ export function createMovementTestMap(scene: Scene): MovementTestMapHandle {
     accentMaterial,
     root
   );
+  setMeshClimbable(wallRunWallLeft);
   const wallRunWallRight = createBox(
     scene,
     "MovementTestWallRunRight",
@@ -91,6 +93,7 @@ export function createMovementTestMap(scene: Scene): MovementTestMapHandle {
     accentMaterial,
     root
   );
+  setMeshClimbable(wallRunWallRight);
   meshes.push(wallRunWallLeft, wallRunWallRight);
 
   const rampA = createBox(
@@ -121,47 +124,47 @@ export function createMovementTestMap(scene: Scene): MovementTestMapHandle {
   ];
 
   platformLayouts.forEach((layout, index) => {
-    meshes.push(
-      createBox(
-        scene,
-        `MovementTestPlatform_${index + 1}`,
-        {
-          width: layout.width,
-          height: layout.height,
-          depth: layout.depth
-        },
-        {
-          x: layout.x,
-          y: layout.y,
-          z: layout.z
-        },
-        accentMaterial,
-        root
-      )
+    const platform = createBox(
+      scene,
+      `MovementTestPlatform_${index + 1}`,
+      {
+        width: layout.width,
+        height: layout.height,
+        depth: layout.depth
+      },
+      {
+        x: layout.x,
+        y: layout.y,
+        z: layout.z
+      },
+      accentMaterial,
+      root
     );
+    setMeshClimbable(platform);
+    meshes.push(platform);
   });
 
   for (let index = 0; index < 16; index += 1) {
     const lane = index % 4;
     const row = Math.floor(index / 4);
-    meshes.push(
-      createBox(
-        scene,
-        `MovementTestObstacle_${index + 1}`,
-        {
-          width: 12 + lane * 4,
-          height: 4 + row * 2,
-          depth: 12
-        },
-        {
-          x: -180 + lane * 44,
-          y: 2 + row,
-          z: -10 + row * 48
-        },
-        obstacleMaterial,
-        root
-      )
+    const obstacle = createBox(
+      scene,
+      `MovementTestObstacle_${index + 1}`,
+      {
+        width: 12 + lane * 4,
+        height: 4 + row * 2,
+        depth: 12
+      },
+      {
+        x: -180 + lane * 44,
+        y: 2 + row,
+        z: -10 + row * 48
+      },
+      obstacleMaterial,
+      root
     );
+    setMeshClimbable(obstacle);
+    meshes.push(obstacle);
   }
 
   const lowTunnel = createBox(
@@ -201,4 +204,3 @@ export function createMovementTestMap(scene: Scene): MovementTestMapHandle {
     }
   };
 }
-

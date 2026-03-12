@@ -95,6 +95,9 @@ function resolveCommandPriority(command: AnimationCommand): number {
       return 5;
     case "block":
       return 4;
+    case "ledgeClimb":
+      return 3.5;
+    case "ledgeHang":
     case "jump":
     case "doubleJump":
     case "inAir":
@@ -325,6 +328,7 @@ export function createAnimationController(options: CreateAnimationControllerOpti
       if (!currentIsLooping && currentGroup.isPlaying) {
         const protectedCommands: readonly AnimationCommand[] = [
           "rolling",
+          "ledgeClimb",
           "ultimate",
           "attack1",
           "attack2",
