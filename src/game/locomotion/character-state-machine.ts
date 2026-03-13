@@ -1,5 +1,6 @@
 // Responsável por consolidar sinais de movimento/combate em um estado explícito com rolling e saltos responsivos.
 import type { CharacterLocomotionState } from "./locomotion-state";
+import { CHARACTER_LOCOMOTION_STATE_MACHINE_CONFIG } from "../config/state-machine.config";
 
 export type CharacterStateMachineInput = {
   nowMs: number;
@@ -25,10 +26,6 @@ export type CharacterStateMachine = {
   reset: () => void;
 };
 
-const JUMP_START_HOLD_MS = 140;
-const DOUBLE_JUMP_HOLD_MS = 180;
-const HIT_HOLD_MS = 220;
-
 export function createCharacterStateMachine(): CharacterStateMachine {
   let jumpStartUntilMs = 0;
   let doubleJumpUntilMs = 0;
@@ -48,15 +45,18 @@ export function createCharacterStateMachine(): CharacterStateMachine {
       wasStunned = input.isStunned;
 
       if (input.didGroundJump) {
-        jumpStartUntilMs = input.nowMs + JUMP_START_HOLD_MS;
+        jumpStartUntilMs = input.nowMs + CHARACTER_LOCOMOTION_STATE_MACHINE_CONFIG.jumpStartHoldMs;
       }
 
       if (input.didDoubleJump) {
-        doubleJumpUntilMs = input.nowMs + DOUBLE_JUMP_HOLD_MS;
+        doubleJumpUntilMs = input.nowMs + CHARACTER_LOCOMOTION_STATE_MACHINE_CONFIG.doubleJumpHoldMs;
       }
 
       if (input.isStunned) {
-        lastResolvedState = input.nowMs - stunnedStartedAtMs < HIT_HOLD_MS ? "Hit" : "Stunned";
+        lastResolvedState =
+          input.nowMs - stunnedStartedAtMs < CHARACTER_LOCOMOTION_STATE_MACHINE_CONFIG.hitHoldMs
+            ? "Hit"
+            : "Stunned";
         return lastResolvedState;
       }
 

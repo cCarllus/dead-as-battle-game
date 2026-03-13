@@ -2,6 +2,7 @@
 import { ArcRotateCamera, TransformNode, Vector3, type Scene } from "@babylonjs/core";
 import { createCameraShakeSystem, type CameraShakePreset } from "../camera/camera-shake";
 import { createHeadBobSystem } from "../camera/head-bob";
+import { DEFAULT_CAMERA_CONTROLLER_CONFIG } from "../config/camera.config";
 
 export type CameraControllerFrameInput = {
   deltaSeconds: number;
@@ -42,22 +43,6 @@ export type CreateCameraControllerOptions = {
   targetLateralOffset?: number;
 };
 
-const DEFAULT_RADIUS = 6.9;
-const DEFAULT_MOUSE_SENSITIVITY = 0.0022;
-const DEFAULT_MIN_BETA = 0.08;
-const DEFAULT_MAX_BETA = Math.PI - 0.08;
-const DEFAULT_TARGET_VERTICAL_OFFSET = 1.72;
-const DEFAULT_TARGET_LATERAL_OFFSET = 0.92;
-const TARGET_SMOOTH_TIME = 0.095;
-const FOV_SMOOTH_TIME = 0.11;
-const SCREEN_OFFSET_SMOOTH_TIME = 0.12;
-const BASE_FOV = (70 * Math.PI) / 180;
-const BURST_FOV_KICK = (2.4 * Math.PI) / 180;
-const LANDING_DROP_BASE = 0.025;
-const LANDING_DROP_SCALE = 0.06;
-const LANDING_RECOVERY_SPEED = 7;
-const SPRINT_CAMERA_VIBRATION = 0.00085;
-
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -93,12 +78,14 @@ function resolveOverShoulderTargetPosition(
 }
 
 export function createCameraController(options: CreateCameraControllerOptions): CameraController {
-  const radius = options.radius ?? DEFAULT_RADIUS;
-  const mouseSensitivity = options.mouseSensitivity ?? DEFAULT_MOUSE_SENSITIVITY;
-  const minBeta = options.minBeta ?? DEFAULT_MIN_BETA;
-  const maxBeta = options.maxBeta ?? DEFAULT_MAX_BETA;
-  const targetVerticalOffset = options.targetVerticalOffset ?? DEFAULT_TARGET_VERTICAL_OFFSET;
-  const targetLateralOffset = options.targetLateralOffset ?? DEFAULT_TARGET_LATERAL_OFFSET;
+  const radius = options.radius ?? DEFAULT_CAMERA_CONTROLLER_CONFIG.radius;
+  const mouseSensitivity = options.mouseSensitivity ?? DEFAULT_CAMERA_CONTROLLER_CONFIG.mouseSensitivity;
+  const minBeta = options.minBeta ?? DEFAULT_CAMERA_CONTROLLER_CONFIG.minBeta;
+  const maxBeta = options.maxBeta ?? DEFAULT_CAMERA_CONTROLLER_CONFIG.maxBeta;
+  const targetVerticalOffset =
+    options.targetVerticalOffset ?? DEFAULT_CAMERA_CONTROLLER_CONFIG.targetVerticalOffset;
+  const targetLateralOffset =
+    options.targetLateralOffset ?? DEFAULT_CAMERA_CONTROLLER_CONFIG.targetLateralOffset;
 
   const camera = new ArcRotateCamera(
     "globalMatchCamera",
@@ -115,7 +102,7 @@ export function createCameraController(options: CreateCameraControllerOptions): 
   camera.upperRadiusLimit = radius;
   camera.lowerBetaLimit = minBeta;
   camera.upperBetaLimit = maxBeta;
-  camera.fov = BASE_FOV;
+  camera.fov = DEFAULT_CAMERA_CONTROLLER_CONFIG.baseFovRadians;
 
   const targetNode = new TransformNode("globalMatchCameraTarget", options.scene);
   camera.lockedTarget = targetNode;
@@ -149,7 +136,9 @@ export function createCameraController(options: CreateCameraControllerOptions): 
       elapsedSeconds += safeDelta;
 
       if (input.landingImpact > 0) {
-        landingDrop += LANDING_DROP_BASE + LANDING_DROP_SCALE * input.landingImpact;
+        landingDrop +=
+          DEFAULT_CAMERA_CONTROLLER_CONFIG.landingDropBase +
+          DEFAULT_CAMERA_CONTROLLER_CONFIG.landingDropScale * input.landingImpact;
         shake.triggerPreset("medium", 0.5 + input.landingImpact * 0.9);
       }
 
@@ -157,7 +146,10 @@ export function createCameraController(options: CreateCameraControllerOptions): 
         shake.triggerPreset("light", 0.55);
       }
 
-      landingDrop = Math.max(0, landingDrop - LANDING_RECOVERY_SPEED * safeDelta);
+      landingDrop = Math.max(
+        0,
+        landingDrop - DEFAULT_CAMERA_CONTROLLER_CONFIG.landingRecoverySpeed * safeDelta
+      );
 
       const bobOffset = headBob.update({
         deltaSeconds: safeDelta,
@@ -170,7 +162,9 @@ export function createCameraController(options: CreateCameraControllerOptions): 
       const shakeOffset = shake.sample(safeDelta);
 
       const sprintVibration = input.isSprinting
-        ? Math.sin(elapsedSeconds * 40) * SPRINT_CAMERA_VIBRATION * input.speedFeedback
+        ? Math.sin(elapsedSeconds * 40) *
+          DEFAULT_CAMERA_CONTROLLER_CONFIG.sprintCameraVibration *
+          input.speedFeedback
         : 0;
 
       camera.alpha += shakeOffset.yaw + sprintVibration * 0.5;
@@ -182,21 +176,32 @@ export function createCameraController(options: CreateCameraControllerOptions): 
         targetVerticalOffset + input.targetOffsetY,
         targetLateralOffset + input.lateralOffset
       );
-      const targetLerpFactor = resolveExponentialLerpFactor(safeDelta, TARGET_SMOOTH_TIME);
+      const targetLerpFactor = resolveExponentialLerpFactor(
+        safeDelta,
+        DEFAULT_CAMERA_CONTROLLER_CONFIG.targetSmoothTimeSeconds
+      );
       const targetY = desiredTarget.y + bobOffset - landingDrop;
 
       targetNode.position.x += (desiredTarget.x - targetNode.position.x) * targetLerpFactor;
       targetNode.position.y += (targetY - targetNode.position.y) * targetLerpFactor;
       targetNode.position.z += (desiredTarget.z - targetNode.position.z) * targetLerpFactor;
 
-      const burstKick = input.isSprintBurstActive ? BURST_FOV_KICK : 0;
+      const burstKick = input.isSprintBurstActive
+        ? DEFAULT_CAMERA_CONTROLLER_CONFIG.sprintBurstFovKickRadians
+        : 0;
       const locomotionFovBoost = input.additionalFovRadians * (input.isMoving ? Math.max(0.4, input.speedFeedback) : 1);
-      const desiredFov = BASE_FOV + locomotionFovBoost + burstKick;
-      const fovLerpFactor = resolveExponentialLerpFactor(safeDelta, FOV_SMOOTH_TIME);
+      const desiredFov = DEFAULT_CAMERA_CONTROLLER_CONFIG.baseFovRadians + locomotionFovBoost + burstKick;
+      const fovLerpFactor = resolveExponentialLerpFactor(
+        safeDelta,
+        DEFAULT_CAMERA_CONTROLLER_CONFIG.fovSmoothTimeSeconds
+      );
       camera.fov += (desiredFov - camera.fov) * fovLerpFactor;
 
       const desiredScreenOffsetX = input.wallRunTiltRadians * 90;
-      const screenOffsetLerpFactor = resolveExponentialLerpFactor(safeDelta, SCREEN_OFFSET_SMOOTH_TIME);
+      const screenOffsetLerpFactor = resolveExponentialLerpFactor(
+        safeDelta,
+        DEFAULT_CAMERA_CONTROLLER_CONFIG.screenOffsetSmoothTimeSeconds
+      );
       camera.targetScreenOffset.x +=
         (desiredScreenOffsetX - camera.targetScreenOffset.x) * screenOffsetLerpFactor;
       camera.targetScreenOffset.y += (0 - camera.targetScreenOffset.y) * screenOffsetLerpFactor;

@@ -1,33 +1,8 @@
 // Responsável por definir estados, input e snapshot canônico da fundação de locomoção de personagem.
+import type { CharacterLocomotionState, WallRunSide } from "../shared/character-state";
+
 export type MovementDirection = "none" | "forward" | "backward" | "left" | "right";
-
-export type CharacterLocomotionState =
-  | "Idle"
-  | "Grounded"
-  | "Walk"
-  | "Run"
-  | "Running"
-  | "JumpStart"
-  | "Jumping"
-  | "InAir"
-  | "Fall"
-  | "Falling"
-  | "Crouch"
-  | "Rolling"
-  | "WallRun"
-  | "DoubleJump"
-  | "LedgeHang"
-  | "Hanging"
-  | "LedgeClimb"
-  | "ClimbingUp"
-  | "MantlingLowObstacle"
-  | "Attack"
-  | "Block"
-  | "Hit"
-  | "Stunned"
-  | "Dead";
-
-export type WallRunSide = "none" | "left" | "right";
+export type { CharacterLocomotionState, WallRunSide } from "../shared/character-state";
 
 export type CharacterMovementInputState = {
   forward: boolean;

@@ -1,6 +1,10 @@
 // Responsável por sincronizar estado autoritativo de jogadores da global_match e expor eventos por sessionId.
 import { Client, Room } from "@colyseus/sdk";
 import { resolveServerEndpoint } from "../config/server-endpoint";
+import {
+  isCharacterLocomotionState,
+  isWallRunSide
+} from "../game/shared/character-state";
 import { CLIENT_MATCH_EVENTS } from "./match-events";
 import type {
   MatchAttackStartedEventPayload,
@@ -28,33 +32,6 @@ const DEFAULT_ULTIMATE_MAX = 100;
 const DEFAULT_MAX_STAMINA = 100;
 const DEFAULT_MAX_GUARD = 100;
 const DEFAULT_SCORE_VALUE = 0;
-const VALID_LOCOMOTION_STATES = new Set<MatchPlayerLocomotionState>([
-  "Idle",
-  "Grounded",
-  "Walk",
-  "Run",
-  "Running",
-  "JumpStart",
-  "Jumping",
-  "InAir",
-  "Fall",
-  "Falling",
-  "Crouch",
-  "Rolling",
-  "WallRun",
-  "DoubleJump",
-  "LedgeHang",
-  "Hanging",
-  "LedgeClimb",
-  "ClimbingUp",
-  "MantlingLowObstacle",
-  "Attack",
-  "Block",
-  "Hit",
-  "Stunned",
-  "Dead"
-]);
-const VALID_WALL_RUN_SIDES = new Set<MatchPlayerWallRunSide>(["none", "left", "right"]);
 
 export type MatchIdentity = {
   userId: string;
@@ -135,15 +112,11 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function normalizeLocomotionState(value: unknown): MatchPlayerLocomotionState {
-  return typeof value === "string" && VALID_LOCOMOTION_STATES.has(value as MatchPlayerLocomotionState)
-    ? (value as MatchPlayerLocomotionState)
-    : "Idle";
+  return isCharacterLocomotionState(value) ? value : "Idle";
 }
 
 function normalizeWallRunSide(value: unknown): MatchPlayerWallRunSide {
-  return typeof value === "string" && VALID_WALL_RUN_SIDES.has(value as MatchPlayerWallRunSide)
-    ? (value as MatchPlayerWallRunSide)
-    : "none";
+  return isWallRunSide(value) ? value : "none";
 }
 
 function normalizeIdentity(identity: MatchIdentity | null): MatchIdentity | null {

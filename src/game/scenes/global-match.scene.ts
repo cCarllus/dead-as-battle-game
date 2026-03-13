@@ -12,12 +12,16 @@ import {
 import type {
   MatchCombatUltimatePayload,
   MatchPlayerLocomotionState,
+  MatchPlayerMovedPayload,
   MatchPlayerState,
   MatchPlayerWallRunSide
 } from "../../models/match-player.model";
 import { createCharacterAudioController, type CharacterAudioController } from "../audio/character-audio-controller";
 import { resolveLocomotionCameraHooks } from "../camera/locomotion-camera-hooks";
+import { createGameContext, type GameContext } from "../core/game-context";
+import type { GameFlowState } from "../core/game-state-machine";
 import { createPhysicsDebugLogger } from "../debug/physics-debug";
+import { GLOBAL_MATCH_RUNTIME_CONFIG } from "../config/match-runtime.config";
 import { createMotionLinesEffect } from "../effects/motion-lines";
 import { createWindParticlesSystem } from "../effects/wind-particles";
 import { createEffectManager } from "../effects/effect-manager";
@@ -41,15 +45,6 @@ import { GLOBAL_MATCH_MAP_URL, loadGlobalMatchMap } from "../systems/map-loader.
 import { createMovementInputSystem } from "../systems/movement-input.system";
 import { createPlayerViewManager } from "../systems/player-view-manager";
 import { createPointerLockSystem } from "../systems/pointer-lock.system";
-
-const LOCAL_MOVEMENT_SYNC_INTERVAL_MS = 50;
-const LOCAL_MOVEMENT_SYNC_THRESHOLD = 0.015;
-const LOCAL_SPRINT_INPUT_SYNC_INTERVAL_MS = 50;
-const LOCAL_ATTACK_INTERVAL_MS = 300;
-const LOCAL_COMBO_RESET_TIME_MS = 1000;
-const LOCAL_ATTACK_ANIMATION_WINDOW_MS = 260;
-const LOCAL_ATTACK_INPUT_BUFFER_MS = 120;
-const LOCAL_BLOCK_MAX_HOLD_MS = 2500;
 
 export type GlobalMatchSceneOptions = {
   canvas: HTMLCanvasElement;
@@ -92,6 +87,7 @@ export type GlobalMatchSceneHandle = {
   getPlayerNameplateScreenPosition: (sessionId: string) => { x: number; y: number } | null;
   getPlayerWorldPosition: (sessionId: string) => { x: number; y: number; z: number } | null;
   getCameraGroundForward: () => { x: number; z: number };
+  getContext: () => GlobalMatchSceneContext;
   dispose: () => void;
 };
 
@@ -103,6 +99,72 @@ type LocalGameplayRuntime = {
   ownerCollisionBodyId: number;
   ownerHeroId: string;
 };
+
+type GlobalMatchRuntimeServices = {
+  cameraController: ReturnType<typeof createCameraController>;
+  movementInput: ReturnType<typeof createMovementInputSystem>;
+  pointerLockSystem: ReturnType<typeof createPointerLockSystem>;
+  combatInput: ReturnType<typeof createCombatInputSystem>;
+  playerViewManager: ReturnType<typeof createPlayerViewManager>;
+  effectManager: ReturnType<typeof createEffectManager>;
+  lightingSystem: ReturnType<typeof createLightingSystem>;
+  physicsWorld: ReturnType<typeof createPhysicsWorld>;
+  physicsDebug: ReturnType<typeof createPhysicsDebugLogger>;
+  windParticles: ReturnType<typeof createWindParticlesSystem>;
+  motionLines: ReturnType<typeof createMotionLinesEffect>;
+  localGameplayRuntime: LocalGameplayRuntime | null;
+};
+
+type GlobalMatchRuntimeEvents = {
+  playerSpawned: {
+    player: MatchPlayerState;
+    source: "snapshot" | "stream";
+    isLocal: boolean;
+  };
+  playerUpdated: {
+    player: MatchPlayerState;
+    source: "snapshot" | "stream";
+    isLocal: boolean;
+  };
+  playerRemoved: {
+    sessionId: string;
+    source: "snapshot" | "stream";
+    isLocal: boolean;
+  };
+  pointerLockChanged: {
+    locked: boolean;
+  };
+  localMovementSynced: {
+    movement: MatchPlayerMovedPayload;
+  };
+  localSprintIntentSynced: {
+    intent: {
+      isShiftPressed: boolean;
+      isForwardPressed: boolean;
+    };
+  };
+  localAttackRequested: {
+    comboIndex: 0 | 1 | 2 | 3;
+    requestedAt: number;
+  };
+  localBlockStarted: {
+    requestedAt: number;
+  };
+  localBlockEnded: {
+    requestedAt: number;
+  };
+  ultimateEffectTriggered: {
+    sessionId: string;
+    characterId: string;
+    durationMs: number;
+  };
+};
+
+export type GlobalMatchSceneContext = GameContext<
+  GlobalMatchRuntimeServices,
+  GlobalMatchRuntimeEvents,
+  GameFlowState
+>;
 
 function positionDistanceSquared(
   left: { x: number; y: number; z: number },
@@ -132,7 +194,7 @@ function shouldHideLocalVisualForCamera(
   const dz = center.z - cameraPosition.z;
   const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-  return distance <= radius * 1.05;
+  return distance <= radius * GLOBAL_MATCH_RUNTIME_CONFIG.localVisualCulling.cameraHideRadiusMultiplier;
 }
 
 function resolveProjectedPoint(
@@ -287,6 +349,27 @@ export async function createGlobalMatchScene(
     canRequestLock: () => inputEnabled
   });
   const pointerLockChangeListeners = new Set<(locked: boolean) => void>();
+  const context = createGameContext<GlobalMatchRuntimeServices, GlobalMatchRuntimeEvents>({
+    sceneId: "global_match_scene",
+    localSessionId: options.localSessionId,
+    initialState: "Boot",
+    metadata: {
+      mapUrl: GLOBAL_MATCH_MAP_URL
+    }
+  });
+
+  context.services.register("cameraController", cameraController);
+  context.services.register("movementInput", movementInput);
+  context.services.register("pointerLockSystem", pointerLockSystem);
+  context.services.register("playerViewManager", playerViewManager);
+  context.services.register("effectManager", effectManager);
+  context.services.register("lightingSystem", lightingSystem);
+  context.services.register("physicsWorld", physicsWorld);
+  context.services.register("physicsDebug", physicsDebug);
+  context.services.register("windParticles", windParticles);
+  context.services.register("motionLines", motionLines);
+  context.services.register("localGameplayRuntime", null);
+  context.state.transitionTo("Loading", "global match scene bootstrap");
 
   let flyModeEnabled = false;
   let pointerLocked = pointerLockSystem.isLocked();
@@ -307,6 +390,7 @@ export async function createGlobalMatchScene(
   let lastSentSprintIntent: { isShiftPressed: boolean; isForwardPressed: boolean } | null = null;
   let isLocalVisualHiddenForCamera = false;
   let lastLocalLocomotionState: MatchPlayerLocomotionState = "Idle";
+  let knownPlayerSessionIds = new Set<string>();
 
   let localGameplayRuntime: LocalGameplayRuntime | null = null;
 
@@ -338,6 +422,7 @@ export async function createGlobalMatchScene(
     localGameplayRuntime.locomotionSystem.dispose();
     localGameplayRuntime.collisionSystem.dispose();
     localGameplayRuntime = null;
+    context.services.register("localGameplayRuntime", null);
   };
 
   const ensureLocalGameplayRuntime = (): LocalGameplayRuntime | null => {
@@ -410,26 +495,91 @@ export async function createGlobalMatchScene(
       ownerCollisionBodyId: localView.collisionBody.uniqueId,
       ownerHeroId: localView.heroId
     };
+    context.services.register("localGameplayRuntime", localGameplayRuntime);
 
     return localGameplayRuntime;
   };
 
+  const emitSnapshotPresenceEvents = (players: MatchPlayerState[]): void => {
+    const nextKnownPlayerSessionIds = new Set<string>(players.map((player) => player.sessionId));
+
+    players.forEach((player) => {
+      const isLocal = player.sessionId === options.localSessionId;
+      if (!knownPlayerSessionIds.has(player.sessionId)) {
+        context.events.emit("playerSpawned", {
+          player,
+          source: "snapshot",
+          isLocal
+        });
+        return;
+      }
+
+      context.events.emit("playerUpdated", {
+        player,
+        source: "snapshot",
+        isLocal
+      });
+    });
+
+    knownPlayerSessionIds.forEach((sessionId) => {
+      if (nextKnownPlayerSessionIds.has(sessionId)) {
+        return;
+      }
+
+      context.events.emit("playerRemoved", {
+        sessionId,
+        source: "snapshot",
+        isLocal: sessionId === options.localSessionId
+      });
+    });
+
+    knownPlayerSessionIds = nextKnownPlayerSessionIds;
+  };
+
   const setPlayers = (players: MatchPlayerState[]): void => {
+    emitSnapshotPresenceEvents(players);
     playerViewManager.syncPlayers(players);
     ensureLocalGameplayRuntime();
   };
 
   const addPlayer = (player: MatchPlayerState): void => {
+    knownPlayerSessionIds.add(player.sessionId);
+    context.events.emit("playerSpawned", {
+      player,
+      source: "stream",
+      isLocal: player.sessionId === options.localSessionId
+    });
     playerViewManager.addPlayer(player);
     ensureLocalGameplayRuntime();
   };
 
   const updatePlayer = (player: MatchPlayerState): void => {
+    if (!knownPlayerSessionIds.has(player.sessionId)) {
+      knownPlayerSessionIds.add(player.sessionId);
+      context.events.emit("playerSpawned", {
+        player,
+        source: "stream",
+        isLocal: player.sessionId === options.localSessionId
+      });
+    } else {
+      context.events.emit("playerUpdated", {
+        player,
+        source: "stream",
+        isLocal: player.sessionId === options.localSessionId
+      });
+    }
+
     playerViewManager.updatePlayer(player);
     ensureLocalGameplayRuntime();
   };
 
   const removePlayer = (sessionId: string): void => {
+    knownPlayerSessionIds.delete(sessionId);
+    context.events.emit("playerRemoved", {
+      sessionId,
+      source: "stream",
+      isLocal: sessionId === options.localSessionId
+    });
     effectManager.stopEffectsForPlayer(sessionId);
     playerViewManager.removePlayer(sessionId);
 
@@ -500,7 +650,7 @@ export async function createGlobalMatchScene(
   const commitLocalAttackIntent = (now: number): void => {
     const shouldResetCombo =
       localPredictedComboChainIndex <= 0 ||
-      now - localPredictedLastAttackAtMs > LOCAL_COMBO_RESET_TIME_MS;
+      now - localPredictedLastAttackAtMs > GLOBAL_MATCH_RUNTIME_CONFIG.combatPrediction.comboResetMs;
 
     if (shouldResetCombo) {
       localPredictedComboChainIndex = 1;
@@ -511,10 +661,15 @@ export async function createGlobalMatchScene(
 
     localPredictedActiveAttackComboIndex = localPredictedComboChainIndex;
     localPredictedLastAttackAtMs = now;
-    localPredictedAttackUntilMs = now + LOCAL_ATTACK_ANIMATION_WINDOW_MS;
+    localPredictedAttackUntilMs =
+      now + GLOBAL_MATCH_RUNTIME_CONFIG.combatPrediction.attackAnimationWindowMs;
     localBufferedAttackUntilMs = 0;
     localPredictedBlockActive = false;
     localPredictedBlockStartedAtMs = 0;
+    context.events.emit("localAttackRequested", {
+      comboIndex: localPredictedActiveAttackComboIndex,
+      requestedAt: now
+    });
     options.onLocalAttackRequested?.();
   };
 
@@ -530,10 +685,12 @@ export async function createGlobalMatchScene(
     }
 
     const elapsedSinceLastAttack = now - localPredictedLastAttackAtMs;
-    if (elapsedSinceLastAttack < LOCAL_ATTACK_INTERVAL_MS) {
-      const remainingCooldown = LOCAL_ATTACK_INTERVAL_MS - elapsedSinceLastAttack;
-      if (remainingCooldown <= LOCAL_ATTACK_INPUT_BUFFER_MS) {
-        localBufferedAttackUntilMs = now + LOCAL_ATTACK_INPUT_BUFFER_MS;
+    if (elapsedSinceLastAttack < GLOBAL_MATCH_RUNTIME_CONFIG.combatPrediction.attackIntervalMs) {
+      const remainingCooldown =
+        GLOBAL_MATCH_RUNTIME_CONFIG.combatPrediction.attackIntervalMs - elapsedSinceLastAttack;
+      if (remainingCooldown <= GLOBAL_MATCH_RUNTIME_CONFIG.combatPrediction.attackInputBufferMs) {
+        localBufferedAttackUntilMs =
+          now + GLOBAL_MATCH_RUNTIME_CONFIG.combatPrediction.attackInputBufferMs;
       }
       return;
     }
@@ -562,17 +719,26 @@ export async function createGlobalMatchScene(
 
     localPredictedBlockActive = true;
     localPredictedBlockStartedAtMs = now;
+    context.events.emit("localBlockStarted", {
+      requestedAt: now
+    });
     options.onLocalBlockStartRequested?.();
   };
 
   const handleLocalBlockEndIntent = (): void => {
     if (!localPredictedBlockActive) {
+      context.events.emit("localBlockEnded", {
+        requestedAt: Date.now()
+      });
       options.onLocalBlockEndRequested?.();
       return;
     }
 
     localPredictedBlockActive = false;
     localPredictedBlockStartedAtMs = 0;
+    context.events.emit("localBlockEnded", {
+      requestedAt: Date.now()
+    });
     options.onLocalBlockEndRequested?.();
   };
 
@@ -582,12 +748,20 @@ export async function createGlobalMatchScene(
     onBlockStart: handleLocalBlockStartIntent,
     onBlockEnd: handleLocalBlockEndIntent
   });
+  context.services.register("combatInput", combatInput);
 
   const setInputEnabled = (enabled: boolean): void => {
     inputEnabled = enabled;
     movementInput.setEnabled(enabled);
     pointerLockSystem.setEnabled(enabled);
     combatInput.setEnabled(enabled);
+
+    const sceneState = context.state.getState();
+    if (!enabled && sceneState === "InMatch") {
+      context.state.transitionTo("Paused", "match input disabled");
+    } else if (enabled && sceneState === "Paused") {
+      context.state.transitionTo("InMatch", "match input enabled");
+    }
 
     if (!enabled) {
       resetPredictedCombatState();
@@ -620,8 +794,10 @@ export async function createGlobalMatchScene(
     const didTransformChange =
       !lastSyncedLocalMovement ||
       positionDistanceSquared(movement, lastSyncedLocalMovement) >=
-        LOCAL_MOVEMENT_SYNC_THRESHOLD * LOCAL_MOVEMENT_SYNC_THRESHOLD ||
-      Math.abs(movement.rotationY - lastSyncedLocalMovement.rotationY) >= 0.01;
+        GLOBAL_MATCH_RUNTIME_CONFIG.movementSync.thresholdMeters *
+          GLOBAL_MATCH_RUNTIME_CONFIG.movementSync.thresholdMeters ||
+      Math.abs(movement.rotationY - lastSyncedLocalMovement.rotationY) >=
+        GLOBAL_MATCH_RUNTIME_CONFIG.movementSync.rotationThresholdRadians;
     const didLocomotionChange =
       !lastSyncedLocalMovement ||
       lastSyncedLocalMovement.locomotionState !== movement.locomotionState ||
@@ -629,15 +805,25 @@ export async function createGlobalMatchScene(
       lastSyncedLocalMovement.isRolling !== movement.isRolling ||
       lastSyncedLocalMovement.isWallRunning !== movement.isWallRunning ||
       lastSyncedLocalMovement.wallRunSide !== movement.wallRunSide ||
-      Math.abs(lastSyncedLocalMovement.verticalVelocity - movement.verticalVelocity) >= 0.15;
+      Math.abs(lastSyncedLocalMovement.verticalVelocity - movement.verticalVelocity) >=
+        GLOBAL_MATCH_RUNTIME_CONFIG.movementSync.verticalVelocityThreshold;
 
-    if ((!didTransformChange && !didLocomotionChange) || elapsedMs < LOCAL_MOVEMENT_SYNC_INTERVAL_MS) {
+    if (
+      (!didTransformChange && !didLocomotionChange) ||
+      elapsedMs < GLOBAL_MATCH_RUNTIME_CONFIG.movementSync.intervalMs
+    ) {
       return;
     }
 
     options.onLocalPlayerMoved(movement);
     lastSyncedLocalMovement = { ...movement };
     lastMovementSyncAtMs = nowMs;
+    context.events.emit("localMovementSynced", {
+      movement: {
+        sessionId: options.localSessionId,
+        ...movement
+      }
+    });
   };
 
   const maybeEmitLocalSprintIntent = (intent: {
@@ -654,7 +840,7 @@ export async function createGlobalMatchScene(
       lastSentSprintIntent.isShiftPressed !== intent.isShiftPressed ||
       lastSentSprintIntent.isForwardPressed !== intent.isForwardPressed;
 
-    if (!changed && nowMs - lastSprintInputSyncAtMs < LOCAL_SPRINT_INPUT_SYNC_INTERVAL_MS) {
+    if (!changed && nowMs - lastSprintInputSyncAtMs < GLOBAL_MATCH_RUNTIME_CONFIG.sprintIntentSync.intervalMs) {
       return;
     }
 
@@ -664,6 +850,9 @@ export async function createGlobalMatchScene(
       isForwardPressed: intent.isForwardPressed
     };
     lastSprintInputSyncAtMs = nowMs;
+    context.events.emit("localSprintIntentSynced", {
+      intent
+    });
   };
 
   const applyLocalMovement = (deltaSeconds: number): void => {
@@ -693,7 +882,7 @@ export async function createGlobalMatchScene(
 
     if (
       localPredictedComboChainIndex > 0 &&
-      nowMs - localPredictedLastAttackAtMs > LOCAL_COMBO_RESET_TIME_MS
+      nowMs - localPredictedLastAttackAtMs > GLOBAL_MATCH_RUNTIME_CONFIG.combatPrediction.comboResetMs
     ) {
       localPredictedComboChainIndex = 0;
     }
@@ -701,7 +890,7 @@ export async function createGlobalMatchScene(
     const canCommitBufferedAttack =
       localBufferedAttackUntilMs > 0 &&
       nowMs <= localBufferedAttackUntilMs &&
-      nowMs - localPredictedLastAttackAtMs >= LOCAL_ATTACK_INTERVAL_MS &&
+      nowMs - localPredictedLastAttackAtMs >= GLOBAL_MATCH_RUNTIME_CONFIG.combatPrediction.attackIntervalMs &&
       canUseCombatInput();
     if (canCommitBufferedAttack) {
       commitLocalAttackIntent(nowMs);
@@ -712,7 +901,7 @@ export async function createGlobalMatchScene(
     if (
       localPredictedBlockActive &&
       localPredictedBlockStartedAtMs > 0 &&
-      nowMs - localPredictedBlockStartedAtMs >= LOCAL_BLOCK_MAX_HOLD_MS
+      nowMs - localPredictedBlockStartedAtMs >= GLOBAL_MATCH_RUNTIME_CONFIG.combatPrediction.blockMaxHoldMs
     ) {
       localPredictedBlockActive = false;
       localPredictedBlockStartedAtMs = 0;
@@ -863,11 +1052,15 @@ export async function createGlobalMatchScene(
     pointerLockChangeListeners.forEach((listener) => {
       listener(locked);
     });
+    context.events.emit("pointerLockChanged", {
+      locked
+    });
   });
 
   document.addEventListener("mousemove", onMouseMove);
 
   setPlayers(options.initialPlayers ?? []);
+  context.state.transitionTo("InMatch", "global match scene ready");
 
   engine.runRenderLoop(() => {
     const deltaSeconds = Math.min(MAX_FRAME_DELTA_SECONDS, engine.getDeltaTime() / 1000);
@@ -919,6 +1112,11 @@ export async function createGlobalMatchScene(
       };
     },
     triggerPlayerUltimateEffect: (payload) => {
+      context.events.emit("ultimateEffectTriggered", {
+        sessionId: payload.sessionId,
+        characterId: payload.characterId,
+        durationMs: payload.durationMs
+      });
       effectManager.playUltimateEffect({
         sessionId: payload.sessionId,
         characterId: payload.characterId,
@@ -956,10 +1154,12 @@ export async function createGlobalMatchScene(
         z: forward.z
       };
     },
+    getContext: () => context,
     dispose: () => {
       window.removeEventListener("resize", onWindowResize);
       document.removeEventListener("mousemove", onMouseMove);
 
+      knownPlayerSessionIds.clear();
       setInputEnabled(false);
       disposePointerLockChange();
       pointerLockChangeListeners.clear();
@@ -984,6 +1184,8 @@ export async function createGlobalMatchScene(
       scene.dispose();
       engine.stopRenderLoop();
       engine.dispose();
+      context.state.transitionTo("Disposed", "global match scene disposed");
+      context.dispose();
     }
   };
 }

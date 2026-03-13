@@ -1,31 +1,9 @@
 // Responsável por tipar payloads e estado de jogadores sincronizados na sala global_match.
-export type MatchPlayerLocomotionState =
-  | "Idle"
-  | "Grounded"
-  | "Walk"
-  | "Run"
-  | "Running"
-  | "JumpStart"
-  | "Jumping"
-  | "InAir"
-  | "Fall"
-  | "Falling"
-  | "Crouch"
-  | "Rolling"
-  | "WallRun"
-  | "DoubleJump"
-  | "LedgeHang"
-  | "Hanging"
-  | "LedgeClimb"
-  | "ClimbingUp"
-  | "MantlingLowObstacle"
-  | "Attack"
-  | "Block"
-  | "Hit"
-  | "Stunned"
-  | "Dead";
+import type { CharacterLocomotionState, WallRunSide } from "../game/shared/character-state";
 
-export type MatchPlayerWallRunSide = "none" | "left" | "right";
+export type MatchPlayerLocomotionState = CharacterLocomotionState;
+
+export type MatchPlayerWallRunSide = WallRunSide;
 
 export type MatchPlayerState = {
   sessionId: string;
