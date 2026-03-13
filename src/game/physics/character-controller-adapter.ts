@@ -6,6 +6,10 @@ import {
 } from "@babylonjs/core/Physics/v2/characterController";
 import { PhysicsShapeCapsule } from "@babylonjs/core/Physics/v2/physicsShape";
 import type { CharacterRuntimeConfig } from "../character/character-config";
+import {
+  resolveColliderProfileConfig,
+  type CharacterColliderProfileName
+} from "../character/character-collider-config";
 import type { ShapeQueryService } from "./shape-query-service";
 
 const UP_VECTOR = new Vector3(0, 1, 0);
@@ -13,13 +17,6 @@ const DOWN_VECTOR = new Vector3(0, -1, 0);
 const ZERO_VECTOR = Vector3.Zero();
 const CHARACTER_DT_FALLBACK_SECONDS = 1 / 60;
 const CHARACTER_DT_MIN_SECONDS = 1 / 240;
-
-export type CharacterColliderProfileName =
-  | "default"
-  | "rolling"
-  | "hanging"
-  | "climbingUp"
-  | "mantle";
 
 export type CharacterColliderProfile = {
   name: CharacterColliderProfileName;
@@ -120,38 +117,31 @@ function round3(value: number): number {
 export function createCharacterControllerAdapter(
   options: CreateCharacterControllerAdapterOptions
 ): CharacterControllerAdapter {
+  const standingProfile = options.runtimeConfig.collider.standing;
   const defaultProfile: CharacterColliderProfile = {
     name: "default",
-    height: options.runtimeConfig.colliderHeight,
-    radius: options.runtimeConfig.colliderRadius,
-    centerY: options.runtimeConfig.colliderHeight * 0.5
+    height: standingProfile.height,
+    radius: standingProfile.radius,
+    centerY: standingProfile.centerY
   };
 
   const profileByName: Record<CharacterColliderProfileName, CharacterColliderProfile> = {
     default: defaultProfile,
     rolling: {
       name: "rolling",
-      height: options.runtimeConfig.rollingColliderHeight,
-      radius: options.runtimeConfig.colliderRadius,
-      centerY: options.runtimeConfig.rollColliderCenterY
+      ...resolveColliderProfileConfig(options.runtimeConfig.collider, "rolling")
     },
     hanging: {
       name: "hanging",
-      height: options.runtimeConfig.hangingColliderHeight,
-      radius: options.runtimeConfig.colliderRadius,
-      centerY: options.runtimeConfig.hangingColliderCenterY
+      ...resolveColliderProfileConfig(options.runtimeConfig.collider, "hanging")
     },
     climbingUp: {
       name: "climbingUp",
-      height: options.runtimeConfig.climbingColliderHeight,
-      radius: options.runtimeConfig.colliderRadius,
-      centerY: options.runtimeConfig.climbingColliderCenterY
+      ...resolveColliderProfileConfig(options.runtimeConfig.collider, "climbingUp")
     },
     mantle: {
       name: "mantle",
-      height: options.runtimeConfig.mantleColliderHeight,
-      radius: options.runtimeConfig.colliderRadius,
-      centerY: options.runtimeConfig.mantleColliderCenterY
+      ...resolveColliderProfileConfig(options.runtimeConfig.collider, "mantle")
     }
   };
 
@@ -191,7 +181,7 @@ export function createCharacterControllerAdapter(
     options.runtimeConfig.locomotion.runSpeed *
     options.runtimeConfig.locomotion.sprintBurstSpeedMultiplier *
     1.45;
-  characterController.keepDistance = Math.max(0.025, options.runtimeConfig.collisionClearanceY);
+  characterController.keepDistance = Math.max(0.025, options.runtimeConfig.collider.collisionClearanceY);
   characterController.keepContactTolerance = Math.max(0.06, characterController.keepDistance + 0.04);
   characterController.maxCastIterations = 12;
 
@@ -206,8 +196,8 @@ export function createCharacterControllerAdapter(
   };
 
   const syncCollisionBodyVisual = (): void => {
-    const radiusScale = activeProfile.radius / Math.max(0.001, options.runtimeConfig.colliderRadius);
-    const heightScale = activeProfile.height / Math.max(0.001, options.runtimeConfig.colliderHeight);
+    const radiusScale = activeProfile.radius / Math.max(0.001, standingProfile.radius);
+    const heightScale = activeProfile.height / Math.max(0.001, standingProfile.height);
     options.collisionBody.scaling.set(radiusScale, heightScale, radiusScale);
     options.collisionBody.position.y = activeProfile.centerY;
   };
@@ -423,7 +413,7 @@ export function createCharacterControllerAdapter(
         origin,
         direction: forwardDirection.normalizeToNew(),
         length: Math.max(0.05, distance),
-        radius: options.runtimeConfig.colliderRadius * 0.22,
+        radius: options.runtimeConfig.collider.standing.radius * 0.22,
         predicate: () => true
       });
 

@@ -3,6 +3,7 @@ import { Vector3, type AbstractMesh, type Scene } from "@babylonjs/core";
 import type { AnimationGameplayState } from "../animation/animation-state";
 import { resolveAnimationGameplayState } from "../animation/animation-state-machine";
 import type { CharacterRuntimeConfig } from "../character/character-config";
+import { interpolateColliderProfile } from "../character/character-collider-config";
 import {
   isCombatMovementLocked,
   type CombatHookState
@@ -189,10 +190,16 @@ export function createCharacterLocomotionSystem(
 
     if (input.crouchAlpha > 0.05) {
       options.collisionSystem.setColliderProfile("default");
-      const crouchedHeight =
-        runtimeConfig.colliderHeight +
-        (runtimeConfig.crouchColliderHeight - runtimeConfig.colliderHeight) * input.crouchAlpha;
-      options.collisionSystem.setColliderHeight(crouchedHeight, runtimeConfig.colliderRadius);
+      const crouchedProfile = interpolateColliderProfile(
+        runtimeConfig.collider.standing,
+        runtimeConfig.collider.crouch,
+        input.crouchAlpha
+      );
+      options.collisionSystem.setColliderHeight(
+        crouchedProfile.height,
+        crouchedProfile.radius,
+        crouchedProfile.centerY
+      );
       return;
     }
 
@@ -555,7 +562,7 @@ export function createCharacterLocomotionSystem(
             wasGrounded = true;
             const finalTransform = {
               x: climbFrame.transform.x,
-              y: finalGrounding.groundY + runtimeConfig.collisionClearanceY,
+              y: finalGrounding.groundY + runtimeConfig.collider.collisionClearanceY,
               z: climbFrame.transform.z,
               rotationY: climbFrame.transform.rotationY
             };
@@ -979,7 +986,7 @@ export function createCharacterLocomotionSystem(
           });
 
       const snapDistance = Math.max(
-        runtimeConfig.collisionClearanceY,
+        runtimeConfig.collider.collisionClearanceY,
         locomotionConfig.groundedStickDistance + (rollingOutput.isRolling ? 0.1 : 0)
       );
       const shouldSnapToGround =
@@ -991,7 +998,7 @@ export function createCharacterLocomotionSystem(
 
       let nextY = collisionResult.transform.y;
       if (!input.isFlyModeEnabled && isGroundedResolved && verticalVelocity <= 0.01) {
-        nextY = groundedAfter.groundY + runtimeConfig.collisionClearanceY;
+        nextY = groundedAfter.groundY + runtimeConfig.collider.collisionClearanceY;
         jumpSystem.setVerticalVelocity(0);
         verticalVelocity = 0;
       }

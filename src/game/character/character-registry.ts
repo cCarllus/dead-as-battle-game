@@ -1,6 +1,11 @@
 // Responsável por resolver definições data-driven de runtime, animação e áudio por personagem.
 import { DEFAULT_CHAMPION_ID } from "../../data/champions.catalog";
-import { DEFAULT_CHARACTER_RUNTIME_CONFIG, type CharacterRuntimeConfig } from "./character-config";
+import {
+  DEFAULT_CHARACTER_RUNTIME_CONFIG,
+  cloneCharacterRuntimeConfig,
+  type CharacterRuntimeConfig
+} from "./character-config";
+import { cloneColliderConfig } from "./character-collider-config";
 
 type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
@@ -21,16 +26,44 @@ function mergeRuntimeConfig(
   override: DeepPartial<CharacterRuntimeConfig> | undefined
 ): CharacterRuntimeConfig {
   if (!override) {
-    return {
-      ...baseConfig,
-      locomotion: { ...baseConfig.locomotion },
-      ledge: { ...baseConfig.ledge }
-    };
+    return cloneCharacterRuntimeConfig(baseConfig);
   }
 
   return {
     ...baseConfig,
     ...override,
+    collider: {
+      ...cloneColliderConfig(baseConfig.collider),
+      ...override.collider,
+      standing: {
+        ...baseConfig.collider.standing,
+        ...override.collider?.standing
+      },
+      crouch: {
+        ...baseConfig.collider.crouch,
+        ...override.collider?.crouch
+      },
+      rolling: {
+        ...baseConfig.collider.rolling,
+        ...override.collider?.rolling
+      },
+      hanging: {
+        ...baseConfig.collider.hanging,
+        ...override.collider?.hanging
+      },
+      climbingUp: {
+        ...baseConfig.collider.climbingUp,
+        ...override.collider?.climbingUp
+      },
+      mantle: {
+        ...baseConfig.collider.mantle,
+        ...override.collider?.mantle
+      }
+    },
+    anchors: {
+      ...baseConfig.anchors,
+      ...override.anchors
+    },
     locomotion: {
       ...baseConfig.locomotion,
       ...override.locomotion

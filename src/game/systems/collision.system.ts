@@ -1,8 +1,11 @@
 // Responsável por integrar deslocamento de gameplay com colisão, priorizando Physics Character Controller quando disponível.
 import { Vector3, type AbstractMesh, type Scene, type TransformNode } from "@babylonjs/core";
 import type { CharacterRuntimeConfig } from "../character/character-config";
+import {
+  resolveColliderProfileConfig,
+  type CharacterColliderProfileName
+} from "../character/character-collider-config";
 import type {
-  CharacterColliderProfileName,
   CharacterControllerAdapter,
   CharacterControllerGroundInfo
 } from "../physics/character-controller-adapter";
@@ -41,28 +44,45 @@ export type CreateCollisionSystemOptions = {
 };
 
 const COLLISION_COMPARE_EPSILON = 0.00001;
-const DEFAULT_COLLIDER_RADIUS = 0.42;
 
 function isNearlyEqual(left: number, right: number, epsilon = COLLISION_COMPARE_EPSILON): boolean {
   return Math.abs(left - right) <= epsilon;
 }
 
 export function createCollisionSystem(options: CreateCollisionSystemOptions): CollisionSystem {
+  const standingCollider = options.runtimeConfig.collider.standing;
   options.scene.collisionsEnabled = true;
   options.collisionBody.checkCollisions = true;
   options.collisionBody.isPickable = false;
-  options.collisionBody.ellipsoid = new Vector3(DEFAULT_COLLIDER_RADIUS, 1.18, DEFAULT_COLLIDER_RADIUS);
-  options.collisionBody.ellipsoidOffset = new Vector3(0, 1.18, 0);
+  options.collisionBody.position.y = standingCollider.centerY;
+  options.collisionBody.scaling.set(1, 1, 1);
+  options.collisionBody.ellipsoid = new Vector3(
+    standingCollider.radius,
+    Math.max(0.001, standingCollider.height * 0.5 - standingCollider.radius),
+    standingCollider.radius
+  );
+  options.collisionBody.ellipsoidOffset = Vector3.Zero();
 
   const configuredStaticMeshIds = new Set<number>();
   const adapter = options.characterControllerAdapter ?? null;
   let legacyLastVelocity = Vector3.Zero();
 
-  const applyLegacyColliderDimensions = (height: number, radius = DEFAULT_COLLIDER_RADIUS, centerY?: number): void => {
+  const applyLegacyColliderDimensions = (
+    height: number,
+    radius = standingCollider.radius,
+    centerY?: number
+  ): void => {
     const safeHeight = Math.max(radius * 2 + 0.1, height);
     const halfHeight = safeHeight * 0.5 - radius;
+    const targetCenterY = centerY ?? safeHeight * 0.5;
     options.collisionBody.ellipsoid = new Vector3(radius, halfHeight, radius);
-    options.collisionBody.ellipsoidOffset = new Vector3(0, centerY ?? halfHeight, 0);
+    options.collisionBody.ellipsoidOffset = Vector3.Zero();
+    options.collisionBody.position.y = targetCenterY;
+    options.collisionBody.scaling.set(
+      radius / Math.max(0.001, standingCollider.radius),
+      safeHeight / Math.max(0.001, standingCollider.height),
+      radius / Math.max(0.001, standingCollider.radius)
+    );
   };
 
   const resolveTransform = (): CollisionMoveResult["transform"] => {
@@ -91,7 +111,7 @@ export function createCollisionSystem(options: CreateCollisionSystemOptions): Co
         mesh.isPickable = true;
       });
     },
-    setColliderHeight: (height, radius = DEFAULT_COLLIDER_RADIUS, centerY) => {
+    setColliderHeight: (height, radius = standingCollider.radius, centerY) => {
       if (adapter) {
         adapter.setColliderDimensions(height, radius, centerY);
       }
@@ -103,16 +123,8 @@ export function createCollisionSystem(options: CreateCollisionSystemOptions): Co
       }
 
       if (!adapter) {
-        if (profileName === "rolling") {
-          applyLegacyColliderDimensions(
-            options.runtimeConfig.rollingColliderHeight,
-            options.runtimeConfig.colliderRadius,
-            options.runtimeConfig.rollColliderCenterY
-          );
-          return;
-        }
-
-        applyLegacyColliderDimensions(options.runtimeConfig.colliderHeight, options.runtimeConfig.colliderRadius);
+        const profile = resolveColliderProfileConfig(options.runtimeConfig.collider, profileName);
+        applyLegacyColliderDimensions(profile.height, profile.radius, profile.centerY);
       }
     },
     syncToTransform: (transform) => {
@@ -130,10 +142,11 @@ export function createCollisionSystem(options: CreateCollisionSystemOptions): Co
       return adapter?.getActiveProfileName() ?? "legacy";
     },
     getDebugState: () => {
+      const colliderCenterOffset = options.collisionBody.position.add(options.collisionBody.ellipsoidOffset);
       return {
         gameplayRootPosition: options.gameplayRoot.position.clone(),
         ellipsoid: options.collisionBody.ellipsoid.clone(),
-        ellipsoidOffset: options.collisionBody.ellipsoidOffset.clone(),
+        ellipsoidOffset: colliderCenterOffset,
         activeColliderProfile: adapter?.getActiveProfileName() ?? "legacy",
         velocity: adapter?.getCurrentVelocity() ?? legacyLastVelocity.clone()
       };

@@ -13,6 +13,7 @@ export type CharacterRuntimeRig = {
   characterRoot: TransformNode;
   networkRoot: TransformNode;
   collisionBody: AbstractMesh;
+  rootDebugBody: AbstractMesh;
   groundCheck: TransformNode;
   wallCheckLeft: TransformNode;
   wallCheckRight: TransformNode;
@@ -35,7 +36,33 @@ export type CreateCharacterRootOptions = {
   runtimeConfig: CharacterRuntimeConfig;
 };
 
+export function syncCharacterRuntimeRigAnchors(
+  rig: Pick<
+    CharacterRuntimeRig,
+    "groundCheck" | "wallCheckLeft" | "wallCheckRight" | "audioRoot" | "nameplateAnchor" | "cameraTargetAnchor"
+  >,
+  runtimeConfig: CharacterRuntimeConfig
+): void {
+  rig.groundCheck.position.y = runtimeConfig.anchors.groundCheckOffsetY;
+
+  rig.wallCheckLeft.position.set(
+    -runtimeConfig.anchors.wallCheckHorizontalOffset,
+    runtimeConfig.anchors.wallCheckOffsetY,
+    0
+  );
+  rig.wallCheckRight.position.set(
+    runtimeConfig.anchors.wallCheckHorizontalOffset,
+    runtimeConfig.anchors.wallCheckOffsetY,
+    0
+  );
+
+  rig.audioRoot.position.y = runtimeConfig.anchors.audioRootOffsetY;
+  rig.nameplateAnchor.position.y = runtimeConfig.anchors.nameplateOffsetY;
+  rig.cameraTargetAnchor.position.y = runtimeConfig.anchors.cameraTargetOffsetY;
+}
+
 export function createCharacterRoot(options: CreateCharacterRootOptions): CharacterRuntimeRig {
+  const standingCollider = options.runtimeConfig.collider.standing;
   const root = new TransformNode(`CharacterRoot_${options.sessionId}`, options.scene);
   const networkRoot = new TransformNode(`NetworkRoot_${options.sessionId}`, options.scene);
   networkRoot.parent = root;
@@ -44,11 +71,20 @@ export function createCharacterRoot(options: CreateCharacterRootOptions): Charac
   collisionMaterial.diffuseColor = new Color3(0.98, 0.82, 0.08);
   collisionMaterial.alpha = 0.28;
 
+  const rootDebugMaterial = new StandardMaterial(`RootDebugBodyMaterial_${options.sessionId}`, options.scene);
+  rootDebugMaterial.diffuseColor = new Color3(0.16, 0.88, 1);
+  rootDebugMaterial.emissiveColor = new Color3(0.1, 0.46, 0.55);
+  rootDebugMaterial.specularColor = new Color3(0, 0, 0);
+  rootDebugMaterial.alpha = 0.9;
+  rootDebugMaterial.wireframe = true;
+  rootDebugMaterial.disableLighting = true;
+  rootDebugMaterial.backFaceCulling = false;
+
   const collisionBody = MeshBuilder.CreateCapsule(
     `CollisionBody_${options.sessionId}`,
     {
-      height: options.runtimeConfig.colliderHeight,
-      radius: options.runtimeConfig.colliderRadius,
+      height: standingCollider.height,
+      radius: standingCollider.radius,
       tessellation: 18
     },
     options.scene
@@ -57,26 +93,32 @@ export function createCharacterRoot(options: CreateCharacterRootOptions): Charac
   collisionBody.material = collisionMaterial;
   collisionBody.isVisible = false;
   collisionBody.isPickable = false;
+  collisionBody.position.y = standingCollider.centerY;
+
+  // Guia visual opcional para inspecionar o envelope-base do root sem alterar o collider real.
+  const rootDebugBody = MeshBuilder.CreateCylinder(
+    `RootDebugBody_${options.sessionId}`,
+    {
+      height: standingCollider.height,
+      diameter: standingCollider.radius * 2,
+      tessellation: 24
+    },
+    options.scene
+  );
+  rootDebugBody.parent = root;
+  rootDebugBody.material = rootDebugMaterial;
+  rootDebugBody.isVisible = false;
+  rootDebugBody.isPickable = false;
+  rootDebugBody.position.y = standingCollider.centerY;
 
   const groundCheck = new TransformNode(`GroundCheck_${options.sessionId}`, options.scene);
   groundCheck.parent = root;
-  groundCheck.position.y = options.runtimeConfig.groundCheckOffsetY;
 
   const wallCheckLeft = new TransformNode(`WallCheckLeft_${options.sessionId}`, options.scene);
   wallCheckLeft.parent = root;
-  wallCheckLeft.position.set(
-    -options.runtimeConfig.wallCheckHorizontalOffset,
-    options.runtimeConfig.wallCheckOffsetY,
-    0
-  );
 
   const wallCheckRight = new TransformNode(`WallCheckRight_${options.sessionId}`, options.scene);
   wallCheckRight.parent = root;
-  wallCheckRight.position.set(
-    options.runtimeConfig.wallCheckHorizontalOffset,
-    options.runtimeConfig.wallCheckOffsetY,
-    0
-  );
 
   const visualRoot = new TransformNode(`VisualRoot_${options.sessionId}`, options.scene);
   visualRoot.parent = root;
@@ -99,20 +141,30 @@ export function createCharacterRoot(options: CreateCharacterRootOptions): Charac
 
   const audioRoot = new TransformNode(`AudioRoot_${options.sessionId}`, options.scene);
   audioRoot.parent = root;
-  audioRoot.position.y = options.runtimeConfig.audioRootOffsetY;
 
   const nameplateAnchor = new TransformNode(`NameplateAnchor_${options.sessionId}`, options.scene);
   nameplateAnchor.parent = root;
-  nameplateAnchor.position.y = options.runtimeConfig.nameplateOffsetY;
 
   const cameraTargetAnchor = new TransformNode(`CameraTargetAnchor_${options.sessionId}`, options.scene);
   cameraTargetAnchor.parent = root;
-  cameraTargetAnchor.position.y = options.runtimeConfig.cameraTargetOffsetY;
+
+  syncCharacterRuntimeRigAnchors(
+    {
+      groundCheck,
+      wallCheckLeft,
+      wallCheckRight,
+      audioRoot,
+      nameplateAnchor,
+      cameraTargetAnchor
+    },
+    options.runtimeConfig
+  );
 
   return {
     characterRoot: root,
     networkRoot,
     collisionBody,
+    rootDebugBody,
     groundCheck,
     wallCheckLeft,
     wallCheckRight,
@@ -128,6 +180,7 @@ export function createCharacterRoot(options: CreateCharacterRootOptions): Charac
     cameraTargetAnchor,
     dispose: () => {
       collisionMaterial.dispose(true, true);
+      rootDebugMaterial.dispose(true, true);
       root.dispose(false, true);
     }
   };

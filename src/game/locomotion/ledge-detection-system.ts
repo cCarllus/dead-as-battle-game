@@ -135,7 +135,7 @@ export function computeHangTarget(input: {
   facingDirection: Vector3;
   runtimeConfig: CharacterRuntimeConfig;
 }): Vector3 {
-  const hangDistance = input.runtimeConfig.colliderRadius + input.runtimeConfig.ledge.hangForwardOffset;
+  const hangDistance = input.runtimeConfig.collider.standing.radius + input.runtimeConfig.ledge.hangForwardOffset;
   const hangRight = new Vector3(input.facingDirection.z, 0, -input.facingDirection.x).normalize();
   const hangPosition = input.edgePoint
     .add(input.wallNormal.scale(hangDistance))
@@ -152,14 +152,14 @@ export function computeClimbEndPosition(input: {
   forwardOffset?: number;
 }): Vector3 | null {
   const standDepth =
-    input.runtimeConfig.colliderRadius +
+    input.runtimeConfig.collider.standing.radius +
     input.runtimeConfig.ledge.topStandOffset +
     (input.forwardOffset ?? 0);
   const standProbePosition = input.topPoint.add(input.facingDirection.scale(standDepth));
   const standGround = input.groundedSystem.detect({
     position: {
       x: standProbePosition.x,
-      y: input.topPoint.y + input.runtimeConfig.collisionClearanceY + CLEARANCE_ORIGIN_Y,
+      y: input.topPoint.y + input.runtimeConfig.collider.collisionClearanceY + CLEARANCE_ORIGIN_Y,
       z: standProbePosition.z
     },
     wasGrounded: false
@@ -171,7 +171,7 @@ export function computeClimbEndPosition(input: {
 
   return new Vector3(
     standProbePosition.x,
-    standGround.groundY + input.runtimeConfig.collisionClearanceY,
+    standGround.groundY + input.runtimeConfig.collider.collisionClearanceY,
     standProbePosition.z
   );
 }
@@ -195,7 +195,7 @@ function castProbe(options: {
   const shapeRadius = options.shapeRadius
     ?? Math.max(
       SHAPE_QUERY_RADIUS_MIN,
-      options.runtimeConfig.colliderRadius * SHAPE_QUERY_RADIUS_SCALE
+      options.runtimeConfig.collider.standing.radius * SHAPE_QUERY_RADIUS_SCALE
     );
 
   let hitPoint: Vector3 | null = null;
@@ -289,7 +289,7 @@ export function createLedgeDetectionSystem(
   };
 
   const canStandAt = (standPosition: Vector3, probes: LedgeDetectionProbe[]): boolean => {
-    const clearanceSampleRadius = options.runtimeConfig.colliderRadius * CLEARANCE_SAMPLE_RADIUS_SCALE;
+    const clearanceSampleRadius = options.runtimeConfig.collider.standing.radius * CLEARANCE_SAMPLE_RADIUS_SCALE;
     const sampleOffsets = buildSampleOffsets(clearanceSampleRadius);
 
     return sampleOffsets.every((offset, index) => {
@@ -387,7 +387,10 @@ export function createLedgeDetectionSystem(
       return setAttempt(input.kind, "head-blocked-for-hang", probes);
     }
 
-    const topProbeInset = Math.max(TOP_PROBE_INSET_MIN, runtimeConfig.colliderRadius * TOP_PROBE_INSET_SCALE);
+    const topProbeInset = Math.max(
+      TOP_PROBE_INSET_MIN,
+      runtimeConfig.collider.standing.radius * TOP_PROBE_INSET_SCALE
+    );
     const topProbeOrigin = chestHit.point
       .add(facingDirection.scale(topProbeInset));
     topProbeOrigin.y =
@@ -402,7 +405,7 @@ export function createLedgeDetectionSystem(
       length:
         ledgeConfig.maxClimbHeight +
         ledgeConfig.topClearanceHeight +
-        runtimeConfig.colliderHeight,
+        runtimeConfig.collider.standing.height,
       label: `${input.kind}-top-down`,
       probes,
       predicate: (mesh) => options.isEnvironmentMesh(mesh)

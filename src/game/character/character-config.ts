@@ -1,4 +1,10 @@
 // Responsável por centralizar tuning estrutural do runtime padrão de personagem jogável.
+import {
+  cloneColliderConfig,
+  createColliderProfile,
+  type CharacterColliderConfig
+} from "./character-collider-config";
+
 export type CharacterLocomotionConfig = {
   walkSpeed: number;
   runSpeed: number;
@@ -65,47 +71,37 @@ export type CharacterLedgeConfig = {
 };
 
 export type CharacterRuntimeConfig = {
-  colliderHeight: number;
-  colliderRadius: number;
-  crouchColliderHeight: number;
-  rollingColliderHeight: number;
-  rollColliderCenterY: number;
-  hangingColliderHeight: number;
-  hangingColliderCenterY: number;
-  climbingColliderHeight: number;
-  climbingColliderCenterY: number;
-  mantleColliderHeight: number;
-  mantleColliderCenterY: number;
-  collisionClearanceY: number;
-  cameraTargetOffsetY: number;
-  nameplateOffsetY: number;
-  groundCheckOffsetY: number;
-  wallCheckOffsetY: number;
-  wallCheckHorizontalOffset: number;
-  audioRootOffsetY: number;
+  collider: CharacterColliderConfig;
+  anchors: {
+    cameraTargetOffsetY: number;
+    nameplateOffsetY: number;
+    groundCheckOffsetY: number;
+    wallCheckOffsetY: number;
+    wallCheckHorizontalOffset: number;
+    audioRootOffsetY: number;
+  };
   locomotion: CharacterLocomotionConfig;
   ledge: CharacterLedgeConfig;
 };
 
 export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> = {
-  colliderHeight: 2.4,
-  colliderRadius: 0.44,
-  crouchColliderHeight: 1.72,
-  rollingColliderHeight: 1.42,
-  rollColliderCenterY: 0.71,
-  hangingColliderHeight: 1.34,
-  hangingColliderCenterY: 0.68,
-  climbingColliderHeight: 1.86,
-  climbingColliderCenterY: 0.96,
-  mantleColliderHeight: 2.08,
-  mantleColliderCenterY: 1.05,
-  collisionClearanceY: 0.02,
-  cameraTargetOffsetY: 1.28,
-  nameplateOffsetY: 2.92,
-  groundCheckOffsetY: 0.08,
-  wallCheckOffsetY: 1.18,
-  wallCheckHorizontalOffset: 0.58,
-  audioRootOffsetY: 1.02,
+  collider: {
+    standing: createColliderProfile(2.18, 0.41, 1.09),
+    crouch: createColliderProfile(1.62, 0.41, 0.81),
+    rolling: createColliderProfile(1.38, 0.41, 0.69),
+    hanging: createColliderProfile(1.28, 0.41, 0.64),
+    climbingUp: createColliderProfile(1.84, 0.41, 0.93),
+    mantle: createColliderProfile(2.02, 0.41, 1.02),
+    collisionClearanceY: 0.03
+  },
+  anchors: {
+    cameraTargetOffsetY: 1.24,
+    nameplateOffsetY: 2.82,
+    groundCheckOffsetY: 0.08,
+    wallCheckOffsetY: 1.14,
+    wallCheckHorizontalOffset: 0.56,
+    audioRootOffsetY: 1.0
+  },
   locomotion: {
     walkSpeed: 4.8,
     runSpeed: 8.9,
@@ -170,3 +166,19 @@ export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> 
     dropReleaseVelocity: -4.2
   }
 };
+
+export function cloneCharacterRuntimeConfig(config: CharacterRuntimeConfig): CharacterRuntimeConfig {
+  return {
+    collider: cloneColliderConfig(config.collider),
+    anchors: {
+      cameraTargetOffsetY: config.anchors.cameraTargetOffsetY,
+      nameplateOffsetY: config.anchors.nameplateOffsetY,
+      groundCheckOffsetY: config.anchors.groundCheckOffsetY,
+      wallCheckOffsetY: config.anchors.wallCheckOffsetY,
+      wallCheckHorizontalOffset: config.anchors.wallCheckHorizontalOffset,
+      audioRootOffsetY: config.anchors.audioRootOffsetY
+    },
+    locomotion: { ...config.locomotion },
+    ledge: { ...config.ledge }
+  };
+}

@@ -29,13 +29,20 @@ import {
   type AnimationGameplayState
 } from "../animation/animation-state";
 import { resolveHeroAnimationConfig } from "../animation/animation-registry";
-import { createCharacterRoot } from "../character/character-root";
-import type { CharacterRuntimeConfig } from "../character/character-config";
+import {
+  createCharacterRoot,
+  syncCharacterRuntimeRigAnchors
+} from "../character/character-root";
+import {
+  cloneCharacterRuntimeConfig,
+  type CharacterRuntimeConfig
+} from "../character/character-config";
 import { resolveCharacterDefinition } from "../character/character-registry";
 import {
   resolveHeroVisualConfig,
   type HeroVisualConfig
 } from "../animation/hero-visual-config";
+import { createColliderDebug } from "../debug/collider-debug";
 import type { MatchPlayerState } from "../../models/match-player.model";
 
 type PlayerLabelHandle = {
@@ -138,6 +145,7 @@ function applyHeroVisualConfig(
   calibration?: HeroRuntimeCalibration | null,
   poseOffset: Vector3 = Vector3.Zero()
 ): Vector3 {
+  const standingVisualOffset = heroConfig.visualAlignment.standingVisualOffset;
   const safeScale =
     Number.isFinite(heroConfig.visualScale) && heroConfig.visualScale > 0
       ? heroConfig.visualScale
@@ -153,9 +161,9 @@ function applyHeroVisualConfig(
   const finalScale = safeScale * normalizedScale;
 
   const resolvedVisualOffset = new Vector3(
-    heroConfig.visualOffset.x,
-    heroConfig.visualOffset.y + normalizedOffsetY + poseOffset.y,
-    heroConfig.visualOffset.z
+    standingVisualOffset.x,
+    standingVisualOffset.y + normalizedOffsetY + poseOffset.y,
+    standingVisualOffset.z
   );
   resolvedVisualOffset.x += poseOffset.x;
   resolvedVisualOffset.z += poseOffset.z;
@@ -268,8 +276,17 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   const gameplayRoot = runtimeRig.characterRoot;
   const visualRoot = runtimeRig.visualRoot;
   const collisionBody = runtimeRig.collisionBody;
+  const rootDebugBody = runtimeRig.rootDebugBody;
   const collisionMaterial = collisionBody.material as StandardMaterial;
+  const rootDebugMaterial = rootDebugBody.material as StandardMaterial;
   collisionBody.isVisible = true;
+  const colliderDebug = createColliderDebug({
+    scene: options.scene,
+    characterRoot: gameplayRoot,
+    visualRoot,
+    collisionBody,
+    runtimeConfig
+  });
 
   const label = createPlayerLabel(options.scene, options.player.sessionId);
   label.mesh.parent = runtimeRig.nameplateAnchor;
@@ -309,10 +326,16 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   const applyColliderDebugState = (): void => {
     const debugEnabled = isColliderDebugEnabled();
     const hasVisualSkin = !!skinHandle?.animationController;
+    rootDebugBody.position.copyFrom(collisionBody.position);
+    rootDebugBody.scaling.copyFrom(collisionBody.scaling);
+
     collisionBody.isVisible = debugEnabled || !hasVisualSkin;
+    rootDebugBody.isVisible = debugEnabled;
+    colliderDebug.setEnabled(debugEnabled);
     collisionMaterial.wireframe = debugEnabled;
     collisionMaterial.disableLighting = debugEnabled;
     collisionMaterial.alpha = debugEnabled ? 0.65 : 0.28;
+    rootDebugMaterial.alpha = debugEnabled ? 0.9 : 0;
 
     if (debugEnabled) {
       collisionMaterial.diffuseColor = new Color3(0.08, 0.95, 0.22);
@@ -329,7 +352,17 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       lastColliderDebugEnabled = debugEnabled;
       console.debug("[physics][collider-debug]", {
         sessionId: options.player.sessionId,
-        enabled: debugEnabled
+        enabled: debugEnabled,
+        standingCollider: runtimeConfig.collider.standing,
+        crouchCollider: runtimeConfig.collider.crouch,
+        currentCollider: {
+          positionY: Math.round(collisionBody.position.y * 1000) / 1000,
+          scaleY: Math.round(collisionBody.scaling.y * 1000) / 1000
+        },
+        visualAlignment: {
+          standingVisualOffsetY: currentHeroConfig.visualAlignment.standingVisualOffset.y,
+          crouchVisualOffsetY: currentHeroConfig.visualAlignment.crouchVisualOffsetY
+        }
       });
     }
   };
@@ -357,18 +390,19 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
 
     switch (animationGameplayState.locomotionState) {
       case "Crouch":
-        return new Vector3(0, currentHeroConfig.crouchVisualOffsetY, 0);
+        return new Vector3(0, currentHeroConfig.visualAlignment.crouchVisualOffsetY, 0);
       case "LedgeHang":
       case "Hanging":
         return new Vector3(
-          currentHeroConfig.hangVisualOffsetX,
-          currentHeroConfig.ledgeHangVisualOffsetY + currentHeroConfig.hangVisualOffsetY,
-          currentHeroConfig.hangVisualOffsetZ
+          currentHeroConfig.visualAlignment.hangVisualOffset.x,
+          currentHeroConfig.visualAlignment.ledgeHangVisualOffsetY +
+            currentHeroConfig.visualAlignment.hangVisualOffset.y,
+          currentHeroConfig.visualAlignment.hangVisualOffset.z
         );
       case "LedgeClimb":
       case "ClimbingUp":
       case "MantlingLowObstacle":
-        return new Vector3(0, currentHeroConfig.ledgeClimbVisualOffsetY, 0);
+        return new Vector3(0, currentHeroConfig.visualAlignment.ledgeClimbVisualOffsetY, 0);
       default:
         return Vector3.Zero();
     }
@@ -431,16 +465,16 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
 
     const bounds = visualRoot.getHierarchyBoundingVectors(true);
     const targetFloorY =
-      gameplayRoot.getAbsolutePosition().y - Math.max(0, runtimeConfig.collisionClearanceY);
+      gameplayRoot.getAbsolutePosition().y - Math.max(0, runtimeConfig.collider.collisionClearanceY);
     const floorDelta = bounds.min.y - targetFloorY;
 
-    if (Math.abs(floorDelta) <= currentHeroConfig.compactGroundingToleranceY) {
+    if (Math.abs(floorDelta) <= currentHeroConfig.visualAlignment.compactGroundingToleranceY) {
       return;
     }
 
     const clampedCorrectionY = Math.max(
-      -currentHeroConfig.compactGroundingMaxCorrectionY,
-      Math.min(currentHeroConfig.compactGroundingMaxCorrectionY, floorDelta)
+      -currentHeroConfig.visualAlignment.compactGroundingMaxCorrectionY,
+      Math.min(currentHeroConfig.visualAlignment.compactGroundingMaxCorrectionY, floorDelta)
     );
     visualRoot.position.y -= clampedCorrectionY;
     visualRoot.computeWorldMatrix(true);
@@ -465,11 +499,13 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
 
     if (!skinHandle?.animationController) {
       applyColliderDebugState();
+      colliderDebug.render();
       return;
     }
 
     applyColliderDebugState();
     applyGroundAnchoringCorrection();
+    colliderDebug.render();
   });
 
   const applyDisplay = (): void => {
@@ -480,6 +516,12 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
 
   const applyHeroSkin = (heroConfig: HeroVisualConfig): void => {
     runtimeConfig = resolveCharacterDefinition(heroConfig.id).runtimeConfig;
+    collisionBody.scaling.set(1, 1, 1);
+    collisionBody.position.y = runtimeConfig.collider.standing.centerY;
+    rootDebugBody.scaling.set(1, 1, 1);
+    rootDebugBody.position.y = runtimeConfig.collider.standing.centerY;
+    syncCharacterRuntimeRigAnchors(runtimeRig, runtimeConfig);
+    colliderDebug.syncRuntimeConfig(runtimeConfig);
     const animationConfig = resolveHeroAnimationConfig(heroConfig.id);
     currentHeroConfig = heroConfig;
     currentHeroCalibration = getHeroRuntimeCalibration(heroConfig.id);
@@ -512,7 +554,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
         const runtimeCalibration = calculateNormalizedCalibration(
           loadedVisual.rootNodes,
           visualRoot.scaling.x,
-          runtimeConfig.colliderHeight
+          runtimeConfig.collider.standing.height
         );
         const effectiveCalibration = runtimeCalibration ?? currentHeroCalibration;
         if (runtimeCalibration) {
@@ -591,11 +633,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       return runtimeRig.nameplateAnchor.getAbsolutePosition().clone();
     },
     getRuntimeConfig: () => {
-      return {
-        ...runtimeConfig,
-        locomotion: { ...runtimeConfig.locomotion },
-        ledge: { ...runtimeConfig.ledge }
-      };
+      return cloneCharacterRuntimeConfig(runtimeConfig);
     },
     setNickname: (nextNickname) => {
       nickname = nextNickname;
@@ -648,6 +686,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
         options.scene.onBeforeRenderObservable.remove(visualGroundingObserver);
         visualGroundingObserver = null;
       }
+      colliderDebug.dispose();
       runtimeRig.dispose();
     }
   };

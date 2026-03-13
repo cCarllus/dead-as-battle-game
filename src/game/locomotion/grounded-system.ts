@@ -38,9 +38,9 @@ function toDegrees(radians: number): number {
 export function createGroundedSystem(options: CreateGroundedSystemOptions): GroundedSystem {
   const downDirection = new Vector3(0, -1, 0);
   const ray = new Ray(Vector3.Zero(), downDirection, options.runtimeConfig.locomotion.groundedRayLength);
-  const rayOriginOffsetY = options.runtimeConfig.wallCheckOffsetY;
+  const rayOriginOffsetY = options.runtimeConfig.anchors.wallCheckOffsetY;
   const slopeLimitDegrees = options.runtimeConfig.locomotion.slopeLimitDegrees;
-  const positionSyncTolerance = Math.max(0.04, options.runtimeConfig.colliderRadius * 0.4);
+  const positionSyncTolerance = Math.max(0.04, options.runtimeConfig.collider.standing.radius * 0.4);
 
   return {
     detect: (input) => {
