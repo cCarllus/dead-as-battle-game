@@ -173,6 +173,65 @@ function resolveSafeAttackComboIndex(value: number): 0 | 1 | 2 | 3 {
   return clamped as 1 | 2 | 3;
 }
 
+function inspectArenaMeshes(meshes: AbstractMesh[]): void {
+  const verboseDebug =
+    (globalThis as { __DAB_ADVANCED_MOVEMENT_DEBUG__?: unknown }).__DAB_ADVANCED_MOVEMENT_DEBUG__ === true ||
+    import.meta.env.DEV;
+  if (!verboseDebug) {
+    return;
+  }
+
+  const validMeshes = meshes.filter((mesh) => !mesh.isDisposed() && !!mesh.getBoundingInfo());
+  if (validMeshes.length === 0) {
+    console.warn("[arena][diagnostic] No valid arena meshes found.");
+    return;
+  }
+
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  const nonCollidable: string[] = [];
+
+  validMeshes.forEach((mesh) => {
+    mesh.computeWorldMatrix(true);
+    const bounds = mesh.getBoundingInfo().boundingBox;
+    minY = Math.min(minY, bounds.minimumWorld.y);
+    maxY = Math.max(maxY, bounds.maximumWorld.y);
+    if (!mesh.checkCollisions) {
+      nonCollidable.push(mesh.name);
+    }
+  });
+
+  const floorCandidates = validMeshes.filter((mesh) => /(ground|floor|arena)/i.test(mesh.name));
+  const floorMesh = floorCandidates.length > 0 ? floorCandidates[0] : validMeshes[0];
+  floorMesh.computeWorldMatrix(true);
+  const floorBounds = floorMesh.getBoundingInfo().boundingBox;
+  const floorTopY = floorBounds.maximumWorld.y;
+
+  console.debug("[arena][diagnostic]", {
+    meshCount: validMeshes.length,
+    collidableMeshCount: validMeshes.length - nonCollidable.length,
+    worldMinY: Math.round(minY * 1000) / 1000,
+    worldMaxY: Math.round(maxY * 1000) / 1000,
+    floorMesh: floorMesh.name,
+    floorTopY: Math.round(floorTopY * 1000) / 1000,
+    nonCollidableMeshes: nonCollidable.slice(0, 12)
+  });
+
+  if (Math.abs(floorTopY) > 0.25) {
+    console.warn("[arena][diagnostic] Floor appears vertically offset from expected Y=0.", {
+      floorMesh: floorMesh.name,
+      floorTopY: Math.round(floorTopY * 1000) / 1000
+    });
+  }
+
+  if (nonCollidable.length > 0) {
+    console.warn("[arena][diagnostic] Arena meshes without collisions detected.", {
+      count: nonCollidable.length,
+      sample: nonCollidable.slice(0, 12)
+    });
+  }
+}
+
 export async function createGlobalMatchScene(
   options: GlobalMatchSceneOptions
 ): Promise<GlobalMatchSceneHandle> {
@@ -202,6 +261,7 @@ export async function createGlobalMatchScene(
   const physicsDebug = createPhysicsDebugLogger();
 
   const mapHandle = await loadGlobalMatchMap(scene, GLOBAL_MATCH_MAP_URL);
+  inspectArenaMeshes(mapHandle.meshes);
   const mapMeshIds = new Set<number>(mapHandle.meshes.map((mesh) => mesh.uniqueId));
   lightingSystem.setMapMeshes(mapHandle.meshes);
   if (physicsBootstrap.enabled && physicsBootstrap.usingHavok) {

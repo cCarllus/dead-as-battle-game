@@ -23,6 +23,8 @@ export type HeroVisualConfig = {
   hangVisualOffsetX: number;
   hangVisualOffsetY: number;
   hangVisualOffsetZ: number;
+  compactGroundingToleranceY: number;
+  compactGroundingMaxCorrectionY: number;
 };
 
 type HeroVisualSetup = {
@@ -39,6 +41,8 @@ type HeroVisualSetup = {
   hangVisualOffsetX: number;
   hangVisualOffsetY: number;
   hangVisualOffsetZ: number;
+  compactGroundingToleranceY: number;
+  compactGroundingMaxCorrectionY: number;
 };
 
 const DEFAULT_VISUAL_SETUP: HeroVisualSetup = {
@@ -54,7 +58,9 @@ const DEFAULT_VISUAL_SETUP: HeroVisualSetup = {
   ledgeClimbVisualOffsetY: 0,
   hangVisualOffsetX: 0,
   hangVisualOffsetY: 0,
-  hangVisualOffsetZ: 0
+  hangVisualOffsetZ: 0,
+  compactGroundingToleranceY: 0.015,
+  compactGroundingMaxCorrectionY: 1.2
 };
 
 const HERO_VISUAL_SETUP_BY_ID: Record<ChampionId, HeroVisualSetup> = {
@@ -67,7 +73,9 @@ const HERO_VISUAL_SETUP_BY_ID: Record<ChampionId, HeroVisualSetup> = {
     ledgeClimbVisualOffsetY: 0,
     hangVisualOffsetX: 0,
     hangVisualOffsetY: 0,
-    hangVisualOffsetZ: 0
+    hangVisualOffsetZ: 0,
+    compactGroundingToleranceY: 0.015,
+    compactGroundingMaxCorrectionY: 1.2
   }
 };
 
@@ -92,6 +100,8 @@ export function resolveHeroVisualConfig(heroId: string): HeroVisualConfig {
     ledgeClimbVisualOffsetY: visualSetup.ledgeClimbVisualOffsetY,
     hangVisualOffsetX: visualSetup.hangVisualOffsetX,
     hangVisualOffsetY: visualSetup.hangVisualOffsetY,
-    hangVisualOffsetZ: visualSetup.hangVisualOffsetZ
+    hangVisualOffsetZ: visualSetup.hangVisualOffsetZ,
+    compactGroundingToleranceY: visualSetup.compactGroundingToleranceY,
+    compactGroundingMaxCorrectionY: visualSetup.compactGroundingMaxCorrectionY
   };
 }

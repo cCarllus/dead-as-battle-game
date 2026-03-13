@@ -7,7 +7,8 @@ import {
   Scene,
   StandardMaterial,
   TransformNode,
-  Vector3
+  Vector3,
+  type Observer
 } from "@babylonjs/core";
 import {
   getHeroRuntimeCalibration,
@@ -100,6 +101,35 @@ function createPlayerLabel(scene: Scene, sessionId: string): PlayerLabelHandle {
       texture.dispose();
     }
   };
+}
+
+function isColliderDebugEnabled(): boolean {
+  const globals = globalThis as {
+    __DAB_COLLIDER_DEBUG__?: unknown;
+    __DAB_ADVANCED_MOVEMENT_DEBUG__?: unknown;
+  };
+  if (globals.__DAB_COLLIDER_DEBUG__ === true) {
+    return true;
+  }
+
+  if (globals.__DAB_COLLIDER_DEBUG__ === false) {
+    return false;
+  }
+
+  if (globals.__DAB_ADVANCED_MOVEMENT_DEBUG__ === true) {
+    return true;
+  }
+
+  if (typeof window !== "undefined") {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("debugCollider") === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 function applyHeroVisualConfig(
@@ -259,6 +289,8 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   let currentHeroCalibration: HeroRuntimeCalibration | null = getHeroRuntimeCalibration(currentHeroConfig.id);
   let expectedVisualRootOffset = Vector3.Zero();
   let lastContainmentDebugAtMs = 0;
+  let visualGroundingObserver: Observer<Scene> | null = null;
+  let lastColliderDebugEnabled = false;
 
   const disposeSkinHandle = (): void => {
     if (!skinHandle) {
@@ -272,6 +304,49 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
 
   const syncAnimationFromGameplay = (): void => {
     skinHandle?.animationController?.syncFromGameplay(animationGameplayState);
+  };
+
+  const applyColliderDebugState = (): void => {
+    const debugEnabled = isColliderDebugEnabled();
+    const hasVisualSkin = !!skinHandle?.animationController;
+    collisionBody.isVisible = debugEnabled || !hasVisualSkin;
+    collisionMaterial.wireframe = debugEnabled;
+    collisionMaterial.disableLighting = debugEnabled;
+    collisionMaterial.alpha = debugEnabled ? 0.65 : 0.28;
+
+    if (debugEnabled) {
+      collisionMaterial.diffuseColor = new Color3(0.08, 0.95, 0.22);
+      collisionMaterial.emissiveColor = new Color3(0.1, 0.35, 0.12);
+      collisionMaterial.specularColor = new Color3(0, 0, 0);
+    } else {
+      const accentColor = Color3.FromHexString(style.accentColorHex);
+      collisionMaterial.diffuseColor = accentColor;
+      collisionMaterial.emissiveColor = accentColor.scale(0.22);
+      collisionMaterial.specularColor = accentColor.scale(0.35);
+    }
+
+    if (debugEnabled !== lastColliderDebugEnabled) {
+      lastColliderDebugEnabled = debugEnabled;
+      console.debug("[physics][collider-debug]", {
+        sessionId: options.player.sessionId,
+        enabled: debugEnabled
+      });
+    }
+  };
+
+  const isGroundAnchoredVisualState = (): boolean => {
+    switch (animationGameplayState.locomotionState) {
+      case "Idle":
+      case "Grounded":
+      case "Walk":
+      case "Run":
+      case "Running":
+      case "Crouch":
+      case "Rolling":
+        return true;
+      default:
+        return false;
+    }
   };
 
   const resolvePoseOffset = (): Vector3 => {
@@ -339,6 +414,38 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     });
   };
 
+  const applyGroundAnchoringCorrection = (): void => {
+    if (!isGroundAnchoredVisualState()) {
+      visualRoot.position.copyFrom(expectedVisualRootOffset);
+      return;
+    }
+
+    const meshes = visualRoot.getChildMeshes(false);
+    if (meshes.length === 0) {
+      visualRoot.position.copyFrom(expectedVisualRootOffset);
+      return;
+    }
+
+    visualRoot.position.copyFrom(expectedVisualRootOffset);
+    visualRoot.computeWorldMatrix(true);
+
+    const bounds = visualRoot.getHierarchyBoundingVectors(true);
+    const targetFloorY =
+      gameplayRoot.getAbsolutePosition().y - Math.max(0, runtimeConfig.collisionClearanceY);
+    const floorDelta = bounds.min.y - targetFloorY;
+
+    if (Math.abs(floorDelta) <= currentHeroConfig.compactGroundingToleranceY) {
+      return;
+    }
+
+    const clampedCorrectionY = Math.max(
+      -currentHeroConfig.compactGroundingMaxCorrectionY,
+      Math.min(currentHeroConfig.compactGroundingMaxCorrectionY, floorDelta)
+    );
+    visualRoot.position.y -= clampedCorrectionY;
+    visualRoot.computeWorldMatrix(true);
+  };
+
   const applyCurrentVisualPose = (): void => {
     const poseOffset = resolvePoseOffset();
     expectedVisualRootOffset = applyHeroVisualConfig(
@@ -347,14 +454,26 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       currentHeroCalibration,
       poseOffset
     );
+    applyGroundAnchoringCorrection();
     debugVisualContainment();
   };
 
+  visualGroundingObserver = options.scene.onBeforeRenderObservable.add(() => {
+    if (isDisposed) {
+      return;
+    }
+
+    if (!skinHandle?.animationController) {
+      applyColliderDebugState();
+      return;
+    }
+
+    applyColliderDebugState();
+    applyGroundAnchoringCorrection();
+  });
+
   const applyDisplay = (): void => {
-    const accentColor = Color3.FromHexString(style.accentColorHex);
-    collisionMaterial.diffuseColor = accentColor;
-    collisionMaterial.emissiveColor = accentColor.scale(0.22);
-    collisionMaterial.specularColor = accentColor.scale(0.35);
+    applyColliderDebugState();
 
     label.setText(`${style.labelPrefix ?? ""}${nickname}`, style.labelColorHex);
   };
@@ -368,7 +487,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     skinLoadVersion += 1;
     const currentLoadVersion = skinLoadVersion;
     disposeSkinHandle();
-    collisionBody.isVisible = true;
+    applyColliderDebugState();
 
     if (!heroConfig.modelUrl) {
       return;
@@ -425,7 +544,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
           dispose: loadedVisual.dispose
         };
 
-        collisionBody.isVisible = false;
+        applyColliderDebugState();
         syncAnimationFromGameplay();
       })
       .catch((error) => {
@@ -525,6 +644,10 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       isDisposed = true;
       skinLoadVersion += 1;
       disposeSkinHandle();
+      if (visualGroundingObserver) {
+        options.scene.onBeforeRenderObservable.remove(visualGroundingObserver);
+        visualGroundingObserver = null;
+      }
       runtimeRig.dispose();
     }
   };
