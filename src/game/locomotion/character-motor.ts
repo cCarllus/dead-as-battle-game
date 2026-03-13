@@ -24,6 +24,8 @@ export type CharacterMotor = {
     forcedVelocity?: Vector3 | null;
     turnSpeedRadians: number;
   }) => CharacterMotorOutput;
+  setPlanarVelocity: (velocity: Vector3) => void;
+  getPlanarVelocity: () => Vector3;
   reset: () => void;
 };
 
@@ -57,7 +59,6 @@ export function createCharacterMotor(): CharacterMotor {
   return {
     step: (input) => {
       const safeDelta = Math.max(0, input.deltaSeconds);
-      const controlMultiplier = input.isGrounded ? 1 : input.airControl;
 
       if (input.forcedVelocity && input.canMove) {
         planarVelocity.copyFrom(input.forcedVelocity);
@@ -66,11 +67,23 @@ export function createCharacterMotor(): CharacterMotor {
         const normalizedDirection = hasDirection
           ? input.desiredDirection.normalizeToNew()
           : Vector3.Zero();
-        const targetVelocityX = input.canMove ? normalizedDirection.x * input.desiredSpeed * controlMultiplier : 0;
-        const targetVelocityZ = input.canMove ? normalizedDirection.z * input.desiredSpeed * controlMultiplier : 0;
 
-        planarVelocity.x = moveTowards(planarVelocity.x, targetVelocityX, input.acceleration * safeDelta);
-        planarVelocity.z = moveTowards(planarVelocity.z, targetVelocityZ, input.deceleration * safeDelta);
+        if (input.isGrounded) {
+          const targetVelocityX = input.canMove ? normalizedDirection.x * input.desiredSpeed : 0;
+          const targetVelocityZ = input.canMove ? normalizedDirection.z * input.desiredSpeed : 0;
+          planarVelocity.x = moveTowards(planarVelocity.x, targetVelocityX, input.acceleration * safeDelta);
+          planarVelocity.z = moveTowards(planarVelocity.z, targetVelocityZ, input.deceleration * safeDelta);
+        } else if (input.canMove && hasDirection) {
+          const airAcceleration = input.acceleration * clamp(input.airControl, 0, 1) * safeDelta;
+          const targetVelocityX = normalizedDirection.x * input.desiredSpeed;
+          const targetVelocityZ = normalizedDirection.z * input.desiredSpeed;
+          planarVelocity.x = moveTowards(planarVelocity.x, targetVelocityX, airAcceleration);
+          planarVelocity.z = moveTowards(planarVelocity.z, targetVelocityZ, airAcceleration);
+        } else {
+          const airDrag = input.deceleration * 0.18 * safeDelta;
+          planarVelocity.x = moveTowards(planarVelocity.x, 0, airDrag);
+          planarVelocity.z = moveTowards(planarVelocity.z, 0, airDrag);
+        }
       }
 
       const speed = Math.sqrt(planarVelocity.x * planarVelocity.x + planarVelocity.z * planarVelocity.z);
@@ -99,6 +112,13 @@ export function createCharacterMotor(): CharacterMotor {
         isMoving,
         speed
       };
+    },
+    setPlanarVelocity: (velocity) => {
+      planarVelocity.copyFrom(velocity);
+      planarVelocity.y = 0;
+    },
+    getPlanarVelocity: () => {
+      return planarVelocity.clone();
     },
     reset: () => {
       planarVelocity.set(0, 0, 0);

@@ -6,6 +6,7 @@ export type RollingStepResult = {
   direction: Vector3 | null;
   speed: number;
   alpha: number;
+  groundStickFactor: number;
   didStart: boolean;
   didEnd: boolean;
   forcesCompactCollider: boolean;
@@ -69,6 +70,7 @@ export function createRollingSystem(): RollingSystem {
           direction: rollingDirection.clone(),
           speed: rollingSpeed,
           alpha: active ? 1 - progress * 0.08 : 0,
+          groundStickFactor: active ? 1 : 0,
           didStart,
           didEnd,
           forcesCompactCollider: active || didEnd
@@ -80,6 +82,7 @@ export function createRollingSystem(): RollingSystem {
         direction: null,
         speed: 0,
         alpha: 0,
+        groundStickFactor: 0,
         didStart,
         didEnd,
         forcesCompactCollider: false

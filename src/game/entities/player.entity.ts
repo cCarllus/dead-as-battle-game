@@ -268,8 +268,11 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       case "Crouch":
         return currentHeroConfig.crouchVisualOffsetY;
       case "LedgeHang":
+      case "Hanging":
         return currentHeroConfig.ledgeHangVisualOffsetY;
       case "LedgeClimb":
+      case "ClimbingUp":
+      case "MantlingLowObstacle":
         return currentHeroConfig.ledgeClimbVisualOffsetY;
       default:
         return 0;

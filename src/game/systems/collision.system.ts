@@ -9,7 +9,7 @@ export type CollisionMoveResult = {
 
 export type CollisionSystem = {
   configureStaticMeshes: (meshes: AbstractMesh[]) => void;
-  setColliderHeight: (height: number, radius?: number) => void;
+  setColliderHeight: (height: number, radius?: number, centerY?: number) => void;
   getDebugState: () => {
     gameplayRootPosition: Vector3;
     ellipsoid: Vector3;
@@ -52,11 +52,11 @@ export function createCollisionSystem(options: CreateCollisionSystemOptions): Co
         mesh.isPickable = true;
       });
     },
-    setColliderHeight: (height, radius = DEFAULT_COLLIDER_RADIUS) => {
+    setColliderHeight: (height, radius = DEFAULT_COLLIDER_RADIUS, centerY) => {
       const safeHeight = Math.max(radius * 2 + 0.1, height);
       const halfHeight = safeHeight * 0.5 - radius;
       options.collisionBody.ellipsoid = new Vector3(radius, halfHeight, radius);
-      options.collisionBody.ellipsoidOffset = new Vector3(0, halfHeight, 0);
+      options.collisionBody.ellipsoidOffset = new Vector3(0, centerY ?? halfHeight, 0);
     },
     getDebugState: () => {
       return {

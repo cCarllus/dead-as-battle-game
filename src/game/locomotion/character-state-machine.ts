@@ -14,6 +14,7 @@ export type CharacterStateMachineInput = {
   isRolling: boolean;
   isLedgeHanging: boolean;
   isLedgeClimbing: boolean;
+  ledgeClimbMode?: "ledge" | "mantle" | null;
   didGroundJump: boolean;
   didDoubleJump: boolean;
   verticalVelocity: number;
@@ -60,12 +61,12 @@ export function createCharacterStateMachine(): CharacterStateMachine {
       }
 
       if (input.isLedgeClimbing) {
-        lastResolvedState = "LedgeClimb";
+        lastResolvedState = input.ledgeClimbMode === "mantle" ? "MantlingLowObstacle" : "ClimbingUp";
         return lastResolvedState;
       }
 
       if (input.isLedgeHanging) {
-        lastResolvedState = "LedgeHang";
+        lastResolvedState = "Hanging";
         return lastResolvedState;
       }
 
@@ -90,12 +91,12 @@ export function createCharacterStateMachine(): CharacterStateMachine {
       }
 
       if (!input.isGrounded && input.nowMs < jumpStartUntilMs) {
-        lastResolvedState = "JumpStart";
+        lastResolvedState = "Jumping";
         return lastResolvedState;
       }
 
       if (!input.isGrounded) {
-        lastResolvedState = "InAir";
+        lastResolvedState = input.verticalVelocity < -0.12 ? "Falling" : "InAir";
         return lastResolvedState;
       }
 
@@ -105,11 +106,11 @@ export function createCharacterStateMachine(): CharacterStateMachine {
       }
 
       if (input.isMoving) {
-        lastResolvedState = input.isSprinting ? "Run" : "Walk";
+        lastResolvedState = input.isSprinting ? "Running" : "Walk";
         return lastResolvedState;
       }
 
-      lastResolvedState = "Idle";
+      lastResolvedState = "Grounded";
       return lastResolvedState;
     },
     reset: () => {

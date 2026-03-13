@@ -38,7 +38,10 @@ export const SHARED_ANIMATION_ASSET_BY_COMMAND: Readonly<AnimationAssetCommandMa
   inAir: "jump_loop.glb",
   ...LEDGE_ANIMATION_ASSET_BY_COMMAND,
   crouchIdle: "crouch_idle.glb",
-  rolling: "quick-roll.glb",
+  rolling: {
+    fileName: "quick-roll.glb",
+    stripPositionTracks: true
+  },
   doubleJump: "jump.glb"
 };
 

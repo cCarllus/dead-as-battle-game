@@ -36,7 +36,13 @@ function resolveRunSpeed(): number {
 function isLedgeLocomotionState(
   locomotionState: MatchPlayerState["locomotionState"] | undefined
 ): boolean {
-  return locomotionState === "LedgeHang" || locomotionState === "LedgeClimb";
+  return (
+    locomotionState === "LedgeHang" ||
+    locomotionState === "Hanging" ||
+    locomotionState === "LedgeClimb" ||
+    locomotionState === "ClimbingUp" ||
+    locomotionState === "MantlingLowObstacle"
+  );
 }
 
 function canPlayerMove(player: MatchPlayerState, now: number): boolean {

@@ -382,7 +382,13 @@ export async function createGlobalMatchScene(
       return false;
     }
 
-    if (lastLocalLocomotionState === "LedgeHang" || lastLocalLocomotionState === "LedgeClimb") {
+    if (
+      lastLocalLocomotionState === "LedgeHang" ||
+      lastLocalLocomotionState === "Hanging" ||
+      lastLocalLocomotionState === "LedgeClimb" ||
+      lastLocalLocomotionState === "ClimbingUp" ||
+      lastLocalLocomotionState === "MantlingLowObstacle"
+    ) {
       return false;
     }
 

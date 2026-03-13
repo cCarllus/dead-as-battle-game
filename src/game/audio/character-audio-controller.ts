@@ -68,7 +68,7 @@ export function createCharacterAudioController(): CharacterAudioController {
         snapshot.isMoving &&
         !snapshot.isRolling &&
         !snapshot.isWallRunning &&
-        (snapshot.state === "Walk" || snapshot.state === "Run");
+        (snapshot.state === "Walk" || snapshot.state === "Run" || snapshot.state === "Running");
 
       const footstepIntervalMs = snapshot.isSprinting ? 240 : 330;
 

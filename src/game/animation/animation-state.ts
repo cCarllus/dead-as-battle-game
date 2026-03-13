@@ -79,31 +79,39 @@ export function resolveAnimationCommandFromGameplay(
   if (gameplayState.locomotionState) {
     switch (gameplayState.locomotionState) {
       case "JumpStart":
+      case "Jumping":
         return "jump";
       case "DoubleJump":
         return "doubleJump";
       case "InAir":
       case "inAir":
       case "Fall":
+      case "Falling":
         return "inAir";
       case "LedgeHang":
+      case "Hanging":
         return "ledgeHang";
       case "LedgeClimb":
+      case "ClimbingUp":
+      case "MantlingLowObstacle":
         return "ledgeClimb";
       case "Rolling":
         return "rolling";
       case "Crouch":
         return "crouchIdle";
+      case "Running":
       case "Run":
       case "run":
         return "run";
       case "Walk":
       case "walk":
         return "walk";
+      case "Grounded":
       case "Idle":
       case "idle":
-      default:
         return "idle";
+      default:
+        return "walk";
     }
   }
 

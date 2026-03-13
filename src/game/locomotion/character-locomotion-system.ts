@@ -1,4 +1,4 @@
-// Responsável por orquestrar movimento, salto, ledge grab/climb, câmera e áudio em um pipeline único de personagem.
+// Responsável por orquestrar locomoção avançada (jump/roll/hang/climb/mantle) com física previsível e snap estável.
 import { Vector3, type AbstractMesh, type Scene } from "@babylonjs/core";
 import type { AnimationGameplayState } from "../animation/animation-state";
 import { resolveAnimationGameplayState } from "../animation/animation-state-machine";
@@ -17,7 +17,7 @@ import type { GroundedSystem } from "./grounded-system";
 import { createJumpSystem } from "./jump-system";
 import { createLedgeClimbSystem } from "./ledge-climb-system";
 import { createLedgeDebug } from "./ledge-debug";
-import { createLedgeDetectionSystem } from "./ledge-detection-system";
+import { createLedgeDetectionSystem, type LedgeGrabCandidate } from "./ledge-detection-system";
 import { createLedgeHangSystem } from "./ledge-hang-system";
 import type {
   CharacterLocomotionSnapshot,
@@ -102,11 +102,48 @@ function resolveForwardFromRotation(rotationY: number): Vector3 {
   return new Vector3(Math.sin(rotationY), 0, Math.cos(rotationY));
 }
 
+function projectMovementOnGround(displacement: Vector3, groundNormal: Vector3 | null): Vector3 {
+  if (!groundNormal || groundNormal.lengthSquared() <= 0.0001) {
+    return displacement.clone();
+  }
+
+  const normal = groundNormal.normalizeToNew();
+  const projection = displacement.subtract(normal.scale(Vector3.Dot(displacement, normal)));
+  if (projection.lengthSquared() <= 0.0000001) {
+    return Vector3.Zero();
+  }
+
+  return projection;
+}
+
+function applyRunJumpImpulse(input: {
+  currentVelocity: Vector3;
+  forwardDirection: Vector3;
+  isSprinting: boolean;
+  runtimeConfig: CharacterRuntimeConfig;
+}): Vector3 {
+  const boost = input.isSprinting
+    ? input.runtimeConfig.locomotion.runJumpForwardBoost
+    : input.runtimeConfig.locomotion.normalJumpForwardBoost;
+  if (boost <= 0) {
+    return input.currentVelocity.clone();
+  }
+
+  const forward = input.forwardDirection.lengthSquared() > 0.0001
+    ? input.forwardDirection.normalizeToNew()
+    : new Vector3(0, 0, 1);
+  const next = input.currentVelocity.clone();
+  next.x += forward.x * boost;
+  next.z += forward.z * boost;
+  return next;
+}
+
 export function createCharacterLocomotionSystem(
   options: CreateCharacterLocomotionSystemOptions
 ): CharacterLocomotionSystem {
-  const locomotionConfig = options.runtimeConfig.locomotion;
-  const ledgeConfig = options.runtimeConfig.ledge;
+  const runtimeConfig = options.runtimeConfig;
+  const locomotionConfig = runtimeConfig.locomotion;
+  const ledgeConfig = runtimeConfig.ledge;
   const motor = createCharacterMotor();
   const jumpSystem = createJumpSystem({
     jumpBufferTimeMs: locomotionConfig.jumpBufferTimeMs,
@@ -118,7 +155,7 @@ export function createCharacterLocomotionSystem(
   const stateMachine = createCharacterStateMachine();
   const ledgeDetectionSystem = createLedgeDetectionSystem({
     scene: options.scene,
-    runtimeConfig: options.runtimeConfig,
+    runtimeConfig,
     groundedSystem: options.groundedSystem,
     isEnvironmentMesh: options.isEnvironmentMesh,
     isClimbableMesh: options.isClimbableMesh
@@ -132,15 +169,50 @@ export function createCharacterLocomotionSystem(
   let wasSprinting = false;
   let airborneTimeMs = 0;
   let sprintBurstUntilMs = 0;
+  let lastDetectionRejectLogAtMs = 0;
+
+  const restoreDefaultCollider = (): void => {
+    options.collisionSystem.setColliderHeight(runtimeConfig.colliderHeight, runtimeConfig.colliderRadius);
+  };
+
+  const updateColliderForState = (input: {
+    isRolling: boolean;
+    crouchAlpha: number;
+  }): void => {
+    if (input.isRolling) {
+      options.collisionSystem.setColliderHeight(
+        runtimeConfig.rollingColliderHeight,
+        runtimeConfig.colliderRadius,
+        runtimeConfig.rollColliderCenterY
+      );
+      return;
+    }
+
+    if (input.crouchAlpha > 0.05) {
+      const crouchedHeight =
+        runtimeConfig.colliderHeight +
+        (runtimeConfig.crouchColliderHeight - runtimeConfig.colliderHeight) * input.crouchAlpha;
+      options.collisionSystem.setColliderHeight(crouchedHeight, runtimeConfig.colliderRadius);
+      return;
+    }
+
+    restoreDefaultCollider();
+  };
 
   const renderLedgeDebug = (
-    candidate: ReturnType<typeof ledgeHangSystem.getActiveLedge>,
+    candidate: LedgeGrabCandidate | null,
     rootTransform:
       | CharacterLocomotionFrameInput["currentTransform"]
       | CharacterLocomotionFrameOutput["transform"]
-      | null
+      | null,
+    state: CharacterLocomotionSnapshot["state"],
+    velocity: Vector3,
+    verticalVelocity: number,
+    isGrounded: boolean,
+    slopeAngleDegrees: number | null,
+    attempt: ReturnType<typeof ledgeDetectionSystem.getLastAttempt> | null = null
   ): void => {
-    if (!candidate) {
+    if (!candidate && !attempt) {
       ledgeDebug.render(null);
       return;
     }
@@ -153,20 +225,34 @@ export function createCharacterLocomotionSystem(
 
     ledgeDebug.render({
       candidate,
+      probes: attempt?.probes ?? [],
+      attemptReason: attempt?.reason ?? null,
+      attemptKind: attempt?.kind ?? null,
       characterRootPosition,
-      colliderCenterPosition
+      colliderCenterPosition,
+      state,
+      velocity,
+      verticalVelocity,
+      isGrounded,
+      slopeAngleDegrees
     });
   };
 
   const logLedgeDebug = (
     label: string,
-    candidate: ReturnType<typeof ledgeHangSystem.getActiveLedge>,
+    candidate: LedgeGrabCandidate | null,
     rootTransform:
       | CharacterLocomotionFrameInput["currentTransform"]
       | CharacterLocomotionFrameOutput["transform"]
-      | null
+      | null,
+    state: CharacterLocomotionSnapshot["state"],
+    velocity: Vector3,
+    verticalVelocity: number,
+    isGrounded: boolean,
+    slopeAngleDegrees: number | null,
+    attempt: ReturnType<typeof ledgeDetectionSystem.getLastAttempt> | null = null
   ): void => {
-    if (!candidate) {
+    if (!candidate && !attempt) {
       return;
     }
 
@@ -178,9 +264,35 @@ export function createCharacterLocomotionSystem(
 
     ledgeDebug.log(label, {
       candidate,
+      probes: attempt?.probes ?? [],
+      attemptReason: attempt?.reason ?? null,
+      attemptKind: attempt?.kind ?? null,
       characterRootPosition,
-      colliderCenterPosition
+      colliderCenterPosition,
+      state,
+      velocity,
+      verticalVelocity,
+      isGrounded,
+      slopeAngleDegrees
     });
+
+    const explicitDebugEnabled = (globalThis as { __DAB_ADVANCED_MOVEMENT_DEBUG__?: unknown })
+      .__DAB_ADVANCED_MOVEMENT_DEBUG__;
+    if (explicitDebugEnabled === true) {
+      console.debug("[advanced-movement][collider]", {
+        state,
+        ellipsoid: {
+          x: collisionDebugState.ellipsoid.x,
+          y: collisionDebugState.ellipsoid.y,
+          z: collisionDebugState.ellipsoid.z
+        },
+        ellipsoidOffset: {
+          x: collisionDebugState.ellipsoidOffset.x,
+          y: collisionDebugState.ellipsoidOffset.y,
+          z: collisionDebugState.ellipsoidOffset.z
+        }
+      });
+    }
   };
 
   const buildFrameOutput = (
@@ -195,6 +307,7 @@ export function createCharacterLocomotionSystem(
       isRolling: boolean;
       isLedgeHanging: boolean;
       isLedgeClimbing: boolean;
+      ledgeClimbMode?: "ledge" | "mantle" | null;
       didGroundJump: boolean;
       didDoubleJump: boolean;
       didLand: boolean;
@@ -228,6 +341,7 @@ export function createCharacterLocomotionSystem(
       isRolling: params.isRolling,
       isLedgeHanging: params.isLedgeHanging,
       isLedgeClimbing: params.isLedgeClimbing,
+      ledgeClimbMode: params.ledgeClimbMode ?? null,
       didGroundJump: params.didGroundJump,
       didDoubleJump: params.didDoubleJump,
       verticalVelocity: params.verticalVelocity
@@ -291,15 +405,59 @@ export function createCharacterLocomotionSystem(
     };
   };
 
+  const buildLedgeFrameOutput = (
+    input: CharacterLocomotionFrameInput,
+    params: {
+      transform: CharacterLocomotionFrameOutput["transform"];
+      isLedgeHanging: boolean;
+      isLedgeClimbing: boolean;
+      ledgeClimbMode?: "ledge" | "mantle" | null;
+      isGrounded: boolean;
+      verticalVelocity: number;
+    }
+  ): CharacterLocomotionFrameOutput => {
+    return buildFrameOutput(input, {
+      transform: params.transform,
+      movementDirection: "none",
+      isGrounded: params.isGrounded,
+      isMoving: false,
+      isSprinting: false,
+      isCrouching: false,
+      isRolling: false,
+      isLedgeHanging: params.isLedgeHanging,
+      isLedgeClimbing: params.isLedgeClimbing,
+      ledgeClimbMode: params.ledgeClimbMode ?? null,
+      didGroundJump: false,
+      didDoubleJump: false,
+      didLand: false,
+      didCrouchEnter: false,
+      didCrouchExit: false,
+      didRollingStart: false,
+      didRollingEnd: false,
+      speedNormalized: 0,
+      lateralInput: 0,
+      forwardInput: 0,
+      crouchAlpha: 0,
+      rollingAlpha: 0,
+      verticalVelocity: params.verticalVelocity,
+      landingImpact: 0,
+      sprintIntent: {
+        isShiftPressed: false,
+        isForwardPressed: false
+      }
+    });
+  };
+
   return {
     step: (input) => {
+      const inputEnabled = input.isInputEnabled && input.combat.isAlive && !input.combat.isStunned;
+      const movementLocked = isCombatMovementLocked(input.combat);
+
       const activeHangLedge = ledgeHangSystem.getActiveLedge();
       const ledgeHangActive = activeHangLedge !== null;
       const ledgeClimbActive = ledgeClimbSystem.isActive();
-      const inputEnabled = input.isInputEnabled && input.combat.isAlive && !input.combat.isStunned;
-      const movementLocked = isCombatMovementLocked(input.combat);
       const movementEnabled = inputEnabled && !movementLocked && !ledgeHangActive && !ledgeClimbActive;
-      renderLedgeDebug(null, null);
+      let pendingLedgeAttempt: ReturnType<typeof ledgeDetectionSystem.getLastAttempt> | null = null;
 
       const forwardInput = movementEnabled
         ? (input.inputState.forward ? 1 : 0) - (input.inputState.backward ? 1 : 0)
@@ -337,166 +495,37 @@ export function createCharacterLocomotionSystem(
       );
       doubleJumpSystem.resetIfGrounded(groundedBefore.isGrounded && !ledgeHangActive && !ledgeClimbActive);
 
-      if (ledgeHangActive) {
-        const shouldForceRelease =
-          input.isFlyModeEnabled ||
-          !input.combat.isAlive ||
-          input.combat.isStunned;
-        const wantsDrop =
-          ledgeConfig.dropFromLedgeEnabled &&
-          (input.inputState.backward || input.inputState.crouch);
-
-        if (shouldForceRelease || wantsDrop) {
-          logLedgeDebug("release", activeHangLedge, input.currentTransform);
-          ledgeHangSystem.release(input.nowMs);
-          jumpSystem.setVerticalVelocity(ledgeConfig.dropReleaseVelocity);
-        } else if (jumpPressedEdge) {
-          const activeLedge = ledgeHangSystem.consumeForClimb(input.nowMs);
-          if (activeLedge) {
-            logLedgeDebug("climb-start", activeLedge, {
-              x: activeLedge.hangPosition.x,
-              y: activeLedge.hangPosition.y,
-              z: activeLedge.hangPosition.z,
-              rotationY: activeLedge.rotationY
-            });
-            ledgeClimbSystem.start({
-              ledge: activeLedge,
-              nowMs: input.nowMs,
-              durationMs: ledgeConfig.climbDurationOverrideMs
-            });
-
-            const climbFrame = ledgeClimbSystem.step({ nowMs: input.nowMs });
-            if (climbFrame.transform) {
-              renderLedgeDebug(activeLedge, climbFrame.transform);
-              options.collisionSystem.setColliderHeight(
-                options.runtimeConfig.colliderHeight,
-                options.runtimeConfig.colliderRadius
-              );
-              jumpSystem.setVerticalVelocity(0);
-              airborneTimeMs = 0;
-              wasGrounded = false;
-
-              return buildFrameOutput(input, {
-                transform: climbFrame.transform,
-                movementDirection: "none",
-                isGrounded: false,
-                isMoving: false,
-                isSprinting: false,
-                isCrouching: false,
-                isRolling: false,
-                isLedgeHanging: false,
-                isLedgeClimbing: true,
-                didGroundJump: false,
-                didDoubleJump: false,
-                didLand: false,
-                didCrouchEnter: false,
-                didCrouchExit: false,
-                didRollingStart: false,
-                didRollingEnd: false,
-                speedNormalized: 0,
-                lateralInput: 0,
-                forwardInput: 0,
-                crouchAlpha: 0,
-                rollingAlpha: 0,
-                verticalVelocity: 0,
-                landingImpact: 0,
-                sprintIntent: {
-                  isShiftPressed: false,
-                  isForwardPressed: false
-                }
-              });
-            }
-          }
-        } else {
-          const lockedTransform = ledgeHangSystem.getLockedTransform();
-          if (lockedTransform) {
-            renderLedgeDebug(activeHangLedge, lockedTransform);
-            options.collisionSystem.setColliderHeight(
-              options.runtimeConfig.colliderHeight,
-              options.runtimeConfig.colliderRadius
-            );
-            jumpSystem.setVerticalVelocity(0);
-            airborneTimeMs = 0;
-            wasGrounded = false;
-
-            return buildFrameOutput(input, {
-              transform: lockedTransform,
-              movementDirection: "none",
-              isGrounded: false,
-              isMoving: false,
-              isSprinting: false,
-              isCrouching: false,
-              isRolling: false,
-              isLedgeHanging: true,
-              isLedgeClimbing: false,
-              didGroundJump: false,
-              didDoubleJump: false,
-              didLand: false,
-              didCrouchEnter: false,
-              didCrouchExit: false,
-              didRollingStart: false,
-              didRollingEnd: false,
-              speedNormalized: 0,
-              lateralInput: 0,
-              forwardInput: 0,
-              crouchAlpha: 0,
-              rollingAlpha: 0,
-              verticalVelocity: 0,
-              landingImpact: 0,
-              sprintIntent: {
-                isShiftPressed: false,
-                isForwardPressed: false
-              }
-            });
-          }
-        }
-      }
-
       if (ledgeClimbActive) {
         if (input.isFlyModeEnabled || !input.combat.isAlive || input.combat.isStunned) {
           ledgeClimbSystem.reset();
           jumpSystem.setVerticalVelocity(ledgeConfig.dropReleaseVelocity);
         } else {
           const climbFrame = ledgeClimbSystem.step({ nowMs: input.nowMs });
-          if (climbFrame.transform) {
-            renderLedgeDebug(climbFrame.ledge, climbFrame.transform);
-            options.collisionSystem.setColliderHeight(
-              options.runtimeConfig.colliderHeight,
-              options.runtimeConfig.colliderRadius
-            );
+          if (climbFrame.transform && climbFrame.ledge) {
+            restoreDefaultCollider();
             jumpSystem.setVerticalVelocity(0);
+            motor.setPlanarVelocity(Vector3.Zero());
             airborneTimeMs = 0;
+
+            renderLedgeDebug(
+              climbFrame.ledge,
+              climbFrame.transform,
+              climbFrame.locomotionState,
+              Vector3.Zero(),
+              0,
+              false,
+              climbFrame.ledge.slopeAngleDegrees
+            );
 
             if (!climbFrame.didFinish) {
               wasGrounded = false;
-              return buildFrameOutput(input, {
+              return buildLedgeFrameOutput(input, {
                 transform: climbFrame.transform,
-                movementDirection: "none",
-                isGrounded: false,
-                isMoving: false,
-                isSprinting: false,
-                isCrouching: false,
-                isRolling: false,
                 isLedgeHanging: false,
                 isLedgeClimbing: true,
-                didGroundJump: false,
-                didDoubleJump: false,
-                didLand: false,
-                didCrouchEnter: false,
-                didCrouchExit: false,
-                didRollingStart: false,
-                didRollingEnd: false,
-                speedNormalized: 0,
-                lateralInput: 0,
-                forwardInput: 0,
-                crouchAlpha: 0,
-                rollingAlpha: 0,
-                verticalVelocity: 0,
-                landingImpact: 0,
-                sprintIntent: {
-                  isShiftPressed: false,
-                  isForwardPressed: false
-                }
+                ledgeClimbMode: climbFrame.ledge.kind === "mantle" ? "mantle" : "ledge",
+                isGrounded: false,
+                verticalVelocity: 0
               });
             }
 
@@ -513,78 +542,137 @@ export function createCharacterLocomotionSystem(
             if (!isGroundedResolved) {
               wasGrounded = false;
               jumpSystem.setVerticalVelocity(ledgeConfig.dropReleaseVelocity);
-              return buildFrameOutput(input, {
+              return buildLedgeFrameOutput(input, {
                 transform: climbFrame.transform,
-                movementDirection: "none",
-                isGrounded: false,
-                isMoving: false,
-                isSprinting: false,
-                isCrouching: false,
-                isRolling: false,
                 isLedgeHanging: false,
                 isLedgeClimbing: false,
-                didGroundJump: false,
-                didDoubleJump: false,
-                didLand: false,
-                didCrouchEnter: false,
-                didCrouchExit: false,
-                didRollingStart: false,
-                didRollingEnd: false,
-                speedNormalized: 0,
-                lateralInput: 0,
-                forwardInput: 0,
-                crouchAlpha: 0,
-                rollingAlpha: 0,
-                verticalVelocity: ledgeConfig.dropReleaseVelocity,
-                landingImpact: 0,
-                sprintIntent: {
-                  isShiftPressed: false,
-                  isForwardPressed: false
-                }
+                isGrounded: false,
+                verticalVelocity: ledgeConfig.dropReleaseVelocity
               });
             }
 
             wasGrounded = true;
-            return buildFrameOutput(input, {
-              transform: {
-                x: climbFrame.transform.x,
-                y: finalGrounding.groundY + options.runtimeConfig.collisionClearanceY,
-                z: climbFrame.transform.z,
-                rotationY: climbFrame.transform.rotationY
-              },
-              movementDirection: "none",
-              isGrounded: true,
-              isMoving: false,
-              isSprinting: false,
-              isCrouching: false,
-              isRolling: false,
+            const finalTransform = {
+              x: climbFrame.transform.x,
+              y: finalGrounding.groundY + runtimeConfig.collisionClearanceY,
+              z: climbFrame.transform.z,
+              rotationY: climbFrame.transform.rotationY
+            };
+            return buildLedgeFrameOutput(input, {
+              transform: finalTransform,
               isLedgeHanging: false,
               isLedgeClimbing: false,
-              didGroundJump: false,
-              didDoubleJump: false,
-              didLand: false,
-              didCrouchEnter: false,
-              didCrouchExit: false,
-              didRollingStart: false,
-              didRollingEnd: false,
-              speedNormalized: 0,
-              lateralInput: 0,
-              forwardInput: 0,
-              crouchAlpha: 0,
-              rollingAlpha: 0,
-              verticalVelocity: 0,
-              landingImpact: 0,
-              sprintIntent: {
-                isShiftPressed: false,
-                isForwardPressed: false
-              }
+              isGrounded: true,
+              verticalVelocity: 0
             });
           }
         }
       }
 
+      if (ledgeHangActive && activeHangLedge) {
+        const shouldForceRelease =
+          input.isFlyModeEnabled ||
+          !input.combat.isAlive ||
+          input.combat.isStunned;
+        const wantsDrop =
+          ledgeConfig.dropFromLedgeEnabled &&
+          (input.inputState.backward || input.inputState.crouch);
+
+        if (shouldForceRelease || wantsDrop) {
+          logLedgeDebug(
+            "hang-release",
+            activeHangLedge,
+            input.currentTransform,
+            "Hanging",
+            Vector3.Zero(),
+            0,
+            false,
+            null
+          );
+          ledgeHangSystem.release(input.nowMs);
+          jumpSystem.setVerticalVelocity(ledgeConfig.dropReleaseVelocity);
+        } else if (jumpPressedEdge) {
+          const consumed = ledgeHangSystem.consumeForClimb(input.nowMs);
+          if (consumed) {
+            logLedgeDebug(
+              "climb-start",
+              consumed,
+              input.currentTransform,
+              consumed.kind === "mantle" ? "MantlingLowObstacle" : "ClimbingUp",
+              Vector3.Zero(),
+              0,
+              false,
+              consumed.slopeAngleDegrees
+            );
+            ledgeClimbSystem.start({
+              ledge: consumed,
+              nowMs: input.nowMs,
+              durationMs: consumed.kind === "mantle" ? ledgeConfig.mantleDurationMs : ledgeConfig.climbDurationMs,
+              startPosition: consumed.hangPosition,
+              endPosition: consumed.climbEndPosition
+            });
+
+            const climbFrame = ledgeClimbSystem.step({ nowMs: input.nowMs });
+            if (climbFrame.transform && climbFrame.ledge) {
+              restoreDefaultCollider();
+              jumpSystem.setVerticalVelocity(0);
+              motor.setPlanarVelocity(Vector3.Zero());
+              airborneTimeMs = 0;
+              wasGrounded = false;
+
+              renderLedgeDebug(
+                climbFrame.ledge,
+                climbFrame.transform,
+                climbFrame.locomotionState,
+                Vector3.Zero(),
+                0,
+                false,
+                climbFrame.ledge.slopeAngleDegrees
+              );
+
+              return buildLedgeFrameOutput(input, {
+                transform: climbFrame.transform,
+                isLedgeHanging: false,
+                isLedgeClimbing: true,
+                ledgeClimbMode: climbFrame.ledge.kind === "mantle" ? "mantle" : "ledge",
+                isGrounded: false,
+                verticalVelocity: 0
+              });
+            }
+          }
+        }
+
+        const lockedTransform = ledgeHangSystem.getLockedTransform();
+        if (lockedTransform && activeHangLedge) {
+          restoreDefaultCollider();
+          jumpSystem.setVerticalVelocity(0);
+          motor.setPlanarVelocity(Vector3.Zero());
+          airborneTimeMs = 0;
+          wasGrounded = false;
+
+          renderLedgeDebug(
+            activeHangLedge,
+            lockedTransform,
+            "Hanging",
+            Vector3.Zero(),
+            0,
+            false,
+            activeHangLedge.slopeAngleDegrees
+          );
+
+          return buildLedgeFrameOutput(input, {
+            transform: lockedTransform,
+            isLedgeHanging: true,
+            isLedgeClimbing: false,
+            isGrounded: false,
+            verticalVelocity: 0
+          });
+        }
+      }
+
       const canSprint =
         movementEnabled &&
+        groundedBefore.isGrounded &&
         input.canSprint &&
         input.inputState.sprint &&
         input.inputState.forward &&
@@ -617,6 +705,143 @@ export function createCharacterLocomotionSystem(
         input.inputState.crouch &&
         !rollingOutput.isRolling &&
         !hasDirectionalIntent;
+      const crouchOutput = crouchSystem.step({
+        deltaSeconds: input.deltaSeconds,
+        wantsCrouch: wantsStationaryCrouch,
+        forcedCrouch: rollingOutput.forcesCompactCollider
+      });
+      const isCrouchStateActive =
+        crouchOutput.isCrouched && wantsStationaryCrouch && !rollingOutput.forcesCompactCollider;
+
+      updateColliderForState({
+        isRolling: rollingOutput.isRolling,
+        crouchAlpha: crouchOutput.alpha
+      });
+
+      if (
+        !input.isFlyModeEnabled &&
+        movementEnabled &&
+        groundedBefore.isGrounded &&
+        jumpPressedEdge &&
+        !rollingOutput.isRolling &&
+        !isCrouchStateActive &&
+        hasDirectionalIntent
+      ) {
+        const mantleCandidate = ledgeDetectionSystem.detectMantle({
+          currentTransform: input.currentTransform,
+          approachDirection
+        });
+        if (mantleCandidate) {
+          logLedgeDebug(
+            "mantle-start",
+            mantleCandidate,
+            input.currentTransform,
+            "MantlingLowObstacle",
+            motor.getPlanarVelocity(),
+            jumpSystem.getVerticalVelocity(),
+            groundedBefore.isGrounded,
+            groundedBefore.slopeAngleDegrees
+          );
+          ledgeClimbSystem.start({
+            ledge: mantleCandidate,
+            nowMs: input.nowMs,
+            durationMs: ledgeConfig.mantleDurationMs,
+            startPosition: new Vector3(
+              input.currentTransform.x,
+              input.currentTransform.y,
+              input.currentTransform.z
+            ),
+            endPosition: mantleCandidate.climbEndPosition
+          });
+
+          const climbFrame = ledgeClimbSystem.step({ nowMs: input.nowMs });
+          if (climbFrame.transform && climbFrame.ledge) {
+            jumpSystem.setVerticalVelocity(0);
+            motor.setPlanarVelocity(Vector3.Zero());
+            airborneTimeMs = 0;
+            wasGrounded = false;
+            renderLedgeDebug(
+              climbFrame.ledge,
+              climbFrame.transform,
+              climbFrame.locomotionState,
+              Vector3.Zero(),
+              0,
+              false,
+              climbFrame.ledge.slopeAngleDegrees
+            );
+            return buildLedgeFrameOutput(input, {
+              transform: climbFrame.transform,
+              isLedgeHanging: false,
+              isLedgeClimbing: true,
+              ledgeClimbMode: "mantle",
+              isGrounded: false,
+              verticalVelocity: 0
+            });
+          }
+        } else {
+          pendingLedgeAttempt = ledgeDetectionSystem.getLastAttempt();
+        }
+      }
+
+      if (
+        !input.isFlyModeEnabled &&
+        inputEnabled &&
+        !movementLocked &&
+        !groundedBefore.isGrounded &&
+        jumpSystem.getVerticalVelocity() <= 0.15 &&
+        !rollingOutput.isRolling &&
+        !isCrouchStateActive &&
+        ledgeHangSystem.canGrab(input.nowMs)
+      ) {
+        const ledgeCandidate = ledgeDetectionSystem.detectLedge({
+          currentTransform: input.currentTransform,
+          approachDirection
+        });
+
+        if (ledgeCandidate && ledgeHangSystem.grab(ledgeCandidate, input.nowMs)) {
+          jumpSystem.setVerticalVelocity(0);
+          motor.setPlanarVelocity(Vector3.Zero());
+          airborneTimeMs = 0;
+          wasGrounded = false;
+
+          logLedgeDebug(
+            "hang-grab",
+            ledgeCandidate,
+            input.currentTransform,
+            "Hanging",
+            Vector3.Zero(),
+            0,
+            false,
+            ledgeCandidate.slopeAngleDegrees
+          );
+
+          const hangTransform = {
+            x: ledgeCandidate.hangPosition.x,
+            y: ledgeCandidate.hangPosition.y,
+            z: ledgeCandidate.hangPosition.z,
+            rotationY: ledgeCandidate.rotationY
+          };
+          renderLedgeDebug(
+            ledgeCandidate,
+            hangTransform,
+            "Hanging",
+            Vector3.Zero(),
+            0,
+            false,
+            ledgeCandidate.slopeAngleDegrees
+          );
+
+          return buildLedgeFrameOutput(input, {
+            transform: hangTransform,
+            isLedgeHanging: true,
+            isLedgeClimbing: false,
+            isGrounded: false,
+            verticalVelocity: 0
+          });
+        } else {
+          pendingLedgeAttempt = ledgeDetectionSystem.getLastAttempt();
+        }
+      }
 
       let didGroundJump = false;
       let didDoubleJump = false;
@@ -624,6 +849,13 @@ export function createCharacterLocomotionSystem(
       if (!input.isFlyModeEnabled && movementEnabled) {
         if (jumpSystem.consumeGroundJump(input.nowMs)) {
           jumpSystem.setVerticalVelocity(locomotionConfig.jumpVelocity);
+          const jumpBoostVelocity = applyRunJumpImpulse({
+            currentVelocity: motor.getPlanarVelocity(),
+            forwardDirection: hasDirectionalIntent ? desiredDirection : fallbackForward,
+            isSprinting: canSprint,
+            runtimeConfig
+          });
+          motor.setPlanarVelocity(jumpBoostVelocity);
           didGroundJump = true;
         } else if (
           jumpPressedEdge &&
@@ -635,98 +867,6 @@ export function createCharacterLocomotionSystem(
           didDoubleJump = true;
         }
       }
-
-      const crouchOutput = crouchSystem.step({
-        deltaSeconds: input.deltaSeconds,
-        wantsCrouch: wantsStationaryCrouch,
-        forcedCrouch: rollingOutput.forcesCompactCollider
-      });
-      const isCrouchStateActive =
-        crouchOutput.isCrouched && wantsStationaryCrouch && !rollingOutput.forcesCompactCollider;
-
-      const canAttemptLedgeGrab =
-        !input.isFlyModeEnabled &&
-        inputEnabled &&
-        !movementLocked &&
-        !groundedBefore.isGrounded &&
-        !rollingOutput.isRolling &&
-        !isCrouchStateActive &&
-        !didGroundJump &&
-        !didDoubleJump &&
-        ledgeHangSystem.canGrab(input.nowMs);
-
-      if (canAttemptLedgeGrab) {
-        const ledgeCandidate = ledgeDetectionSystem.detect({
-          currentTransform: input.currentTransform,
-          approachDirection
-        });
-
-        if (ledgeCandidate && ledgeHangSystem.grab(ledgeCandidate, input.nowMs)) {
-          renderLedgeDebug(ledgeCandidate, {
-            x: ledgeCandidate.hangPosition.x,
-            y: ledgeCandidate.hangPosition.y,
-            z: ledgeCandidate.hangPosition.z,
-            rotationY: ledgeCandidate.rotationY
-          });
-          logLedgeDebug("grab", ledgeCandidate, {
-            x: ledgeCandidate.hangPosition.x,
-            y: ledgeCandidate.hangPosition.y,
-            z: ledgeCandidate.hangPosition.z,
-            rotationY: ledgeCandidate.rotationY
-          });
-          options.collisionSystem.setColliderHeight(
-            options.runtimeConfig.colliderHeight,
-            options.runtimeConfig.colliderRadius
-          );
-          jumpSystem.setVerticalVelocity(0);
-          airborneTimeMs = 0;
-          wasGrounded = false;
-
-          return buildFrameOutput(input, {
-            transform: {
-              x: ledgeCandidate.hangPosition.x,
-              y: ledgeCandidate.hangPosition.y,
-              z: ledgeCandidate.hangPosition.z,
-              rotationY: ledgeCandidate.rotationY
-            },
-            movementDirection: "none",
-            isGrounded: false,
-            isMoving: false,
-            isSprinting: false,
-            isCrouching: false,
-            isRolling: false,
-            isLedgeHanging: true,
-            isLedgeClimbing: false,
-            didGroundJump: false,
-            didDoubleJump: false,
-            didLand: false,
-            didCrouchEnter: false,
-            didCrouchExit: false,
-            didRollingStart: false,
-            didRollingEnd: false,
-            speedNormalized: 0,
-            lateralInput: 0,
-            forwardInput: 0,
-            crouchAlpha: 0,
-            rollingAlpha: 0,
-            verticalVelocity: 0,
-            landingImpact: 0,
-            sprintIntent: {
-              isShiftPressed: false,
-              isForwardPressed: false
-            }
-          });
-        }
-      }
-
-      const colliderHeight = rollingOutput.isRolling
-        ? options.runtimeConfig.rollingColliderHeight
-        : crouchOutput.alpha > 0.05
-          ? options.runtimeConfig.colliderHeight +
-            (options.runtimeConfig.crouchColliderHeight - options.runtimeConfig.colliderHeight) *
-              crouchOutput.alpha
-          : options.runtimeConfig.colliderHeight;
-      options.collisionSystem.setColliderHeight(colliderHeight, options.runtimeConfig.colliderRadius);
 
       let desiredSpeed = locomotionConfig.walkSpeed;
       if (isCrouchStateActive) {
@@ -745,7 +885,7 @@ export function createCharacterLocomotionSystem(
         desiredSpeed,
         currentRotationY: input.currentTransform.rotationY,
         rotationDirection: rollingOutput.direction ?? desiredDirection,
-        isGrounded: groundedBefore.isGrounded,
+        isGrounded: groundedBefore.isGrounded && !didGroundJump && !didDoubleJump,
         canMove: movementEnabled && !input.isFlyModeEnabled,
         airControl: locomotionConfig.airControl,
         acceleration: groundedBefore.isGrounded ? locomotionConfig.acceleration : locomotionConfig.airAcceleration,
@@ -772,20 +912,48 @@ export function createCharacterLocomotionSystem(
           maxFallSpeed: locomotionConfig.maxFallSpeed,
           gravityScale: 1
         });
-
         verticalDisplacement = jumpOutput.verticalDisplacement;
         verticalVelocity = jumpOutput.verticalVelocity;
+
+        if (rollingOutput.isRolling && verticalVelocity > 0) {
+          jumpSystem.setVerticalVelocity(0);
+          verticalVelocity = 0;
+          verticalDisplacement = 0;
+        }
+
+        if (groundedBefore.isGrounded && verticalVelocity <= 0) {
+          const stickMultiplier = rollingOutput.groundStickFactor > 0 ? 1.2 : 1;
+          verticalDisplacement -= locomotionConfig.groundStickForce * stickMultiplier * input.deltaSeconds;
+        }
+      }
+
+      let horizontalDisplacement = new Vector3(
+        motorOutput.displacement.x,
+        0,
+        motorOutput.displacement.z
+      );
+
+      if (groundedBefore.isGrounded && groundedBefore.groundNormal) {
+        horizontalDisplacement = projectMovementOnGround(horizontalDisplacement, groundedBefore.groundNormal);
       }
 
       const collisionResult = options.collisionSystem.moveAndSlide(
-        new Vector3(motorOutput.displacement.x, 0, motorOutput.displacement.z)
+        new Vector3(
+          horizontalDisplacement.x,
+          verticalDisplacement,
+          horizontalDisplacement.z
+        )
       );
 
-      const projectedNextY = input.currentTransform.y + verticalDisplacement;
+      if (verticalDisplacement > 0 && collisionResult.appliedDisplacement.y < verticalDisplacement * 0.35) {
+        jumpSystem.setVerticalVelocity(Math.min(0, jumpSystem.getVerticalVelocity()));
+        verticalVelocity = jumpSystem.getVerticalVelocity();
+      }
+
       const groundedAfter = input.isFlyModeEnabled
         ? {
             isGrounded: false,
-            groundY: projectedNextY,
+            groundY: collisionResult.transform.y,
             distanceToGround: Number.POSITIVE_INFINITY,
             slopeAngleDegrees: 90,
             groundNormal: null,
@@ -794,26 +962,26 @@ export function createCharacterLocomotionSystem(
         : options.groundedSystem.detect({
             position: {
               x: collisionResult.transform.x,
-              y: projectedNextY,
+              y: collisionResult.transform.y,
               z: collisionResult.transform.z
             },
             wasGrounded: groundedBefore.isGrounded
           });
+
+      const snapDistance = Math.max(
+        runtimeConfig.collisionClearanceY,
+        locomotionConfig.groundedStickDistance + (rollingOutput.isRolling ? 0.1 : 0)
+      );
       const shouldSnapToGround =
         !input.isFlyModeEnabled &&
         !!groundedAfter.hitMesh &&
         verticalVelocity <= 0 &&
-        projectedNextY <=
-          groundedAfter.groundY +
-            Math.max(
-              options.runtimeConfig.collisionClearanceY,
-              options.runtimeConfig.locomotion.groundedStickDistance
-            );
+        collisionResult.transform.y <= groundedAfter.groundY + snapDistance;
       const isGroundedResolved = groundedAfter.isGrounded || shouldSnapToGround;
 
-      let nextY = projectedNextY;
+      let nextY = collisionResult.transform.y;
       if (!input.isFlyModeEnabled && isGroundedResolved && verticalVelocity <= 0.01) {
-        nextY = groundedAfter.groundY + options.runtimeConfig.collisionClearanceY;
+        nextY = groundedAfter.groundY + runtimeConfig.collisionClearanceY;
         jumpSystem.setVerticalVelocity(0);
         verticalVelocity = 0;
       }
@@ -841,7 +1009,9 @@ export function createCharacterLocomotionSystem(
         locomotionConfig.runSpeed * locomotionConfig.sprintBurstSpeedMultiplier,
         locomotionConfig.rollingInitialSpeed
       );
-      const speedNormalized = speedCap > 0 ? Math.max(0, Math.min(1, motorOutput.speed / speedCap)) : 0;
+      const speedNormalized = speedCap > 0
+        ? Math.max(0, Math.min(1, motorOutput.speed / speedCap))
+        : 0;
 
       const frameOutput = buildFrameOutput(input, {
         transform,
@@ -873,6 +1043,33 @@ export function createCharacterLocomotionSystem(
         }
       });
 
+      const planarVelocity = motor.getPlanarVelocity();
+      const velocity = new Vector3(planarVelocity.x, verticalVelocity, planarVelocity.z);
+      if (pendingLedgeAttempt && input.nowMs - lastDetectionRejectLogAtMs >= 140) {
+        lastDetectionRejectLogAtMs = input.nowMs;
+        logLedgeDebug(
+          "detect-reject",
+          null,
+          transform,
+          frameOutput.snapshot.state,
+          velocity,
+          verticalVelocity,
+          isGroundedResolved,
+          groundedAfter.slopeAngleDegrees,
+          pendingLedgeAttempt
+        );
+      }
+      renderLedgeDebug(
+        null,
+        transform,
+        frameOutput.snapshot.state,
+        velocity,
+        verticalVelocity,
+        isGroundedResolved,
+        groundedAfter.slopeAngleDegrees,
+        pendingLedgeAttempt
+      );
+
       return {
         ...frameOutput,
         isSprintBurstActive,
@@ -893,7 +1090,9 @@ export function createCharacterLocomotionSystem(
       wasSprinting = false;
       airborneTimeMs = 0;
       sprintBurstUntilMs = 0;
-      renderLedgeDebug(null, null);
+      lastDetectionRejectLogAtMs = 0;
+      restoreDefaultCollider();
+      ledgeDebug.render(null);
     },
     dispose: () => {
       ledgeDebug.dispose();

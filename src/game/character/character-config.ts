@@ -16,6 +16,9 @@ export type CharacterLocomotionConfig = {
   airAcceleration: number;
   airDeceleration: number;
   airControl: number;
+  normalJumpForwardBoost: number;
+  runJumpForwardBoost: number;
+  groundStickForce: number;
   turnSpeedRadians: number;
   jumpVelocity: number;
   doubleJumpVelocity: number;
@@ -39,16 +42,23 @@ export type CharacterLocomotionConfig = {
 };
 
 export type CharacterLedgeConfig = {
-  minimumLedgeHeight: number;
-  maximumLedgeHeight: number;
-  ledgeDetectionDistance: number;
+  minClimbHeight: number;
+  maxClimbHeight: number;
+  maxMantleSlopeAngleDegrees: number;
+  hangDetectionDistance: number;
+  wallDetectionDistance: number;
+  chestProbeHeight: number;
+  headProbeHeight: number;
+  topProbeHeightPadding: number;
+  mantleForwardOffset: number;
   topClearanceHeight: number;
   hangForwardOffset: number;
   hangVerticalOffset: number;
   hangLateralOffset: number;
   hangRotationOffsetRadians: number;
   topStandOffset: number;
-  climbDurationOverrideMs: number;
+  climbDurationMs: number;
+  mantleDurationMs: number;
   regrabCooldownMs: number;
   dropFromLedgeEnabled: boolean;
   dropReleaseVelocity: number;
@@ -59,6 +69,7 @@ export type CharacterRuntimeConfig = {
   colliderRadius: number;
   crouchColliderHeight: number;
   rollingColliderHeight: number;
+  rollColliderCenterY: number;
   collisionClearanceY: number;
   cameraTargetOffsetY: number;
   nameplateOffsetY: number;
@@ -75,6 +86,7 @@ export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> 
   colliderRadius: 0.44,
   crouchColliderHeight: 1.72,
   rollingColliderHeight: 1.42,
+  rollColliderCenterY: 0.62,
   collisionClearanceY: 0.02,
   cameraTargetOffsetY: 1.28,
   nameplateOffsetY: 2.92,
@@ -99,6 +111,9 @@ export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> 
     airAcceleration: 14,
     airDeceleration: 12,
     airControl: 0.3,
+    normalJumpForwardBoost: 0.45,
+    runJumpForwardBoost: 1.05,
+    groundStickForce: 22,
     turnSpeedRadians: 18,
     jumpVelocity: 8.2,
     doubleJumpVelocity: 7.6,
@@ -121,16 +136,23 @@ export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> 
     wallRunTiltRadians: (8 * Math.PI) / 180
   },
   ledge: {
-    minimumLedgeHeight: 1.05,
-    maximumLedgeHeight: 2.9,
-    ledgeDetectionDistance: 0.92,
+    minClimbHeight: 0.42,
+    maxClimbHeight: 2.9,
+    maxMantleSlopeAngleDegrees: 40,
+    hangDetectionDistance: 0.92,
+    wallDetectionDistance: 1.02,
+    chestProbeHeight: 1.08,
+    headProbeHeight: 1.72,
+    topProbeHeightPadding: 0.78,
+    mantleForwardOffset: 0.3,
     topClearanceHeight: 2.1,
     hangForwardOffset: 0.05,
     hangVerticalOffset: 2.08,
     hangLateralOffset: 0,
     hangRotationOffsetRadians: 0,
     topStandOffset: 0.28,
-    climbDurationOverrideMs: 780,
+    climbDurationMs: 780,
+    mantleDurationMs: 520,
     regrabCooldownMs: 280,
     dropFromLedgeEnabled: true,
     dropReleaseVelocity: -4.2

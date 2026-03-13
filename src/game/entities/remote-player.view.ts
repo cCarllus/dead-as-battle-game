@@ -139,7 +139,11 @@ function resolveAnimationGameplayState(options: {
   isUltimateActive: boolean;
 }): AnimationGameplayState {
   const isLedgeState =
-    options.locomotionState === "LedgeHang" || options.locomotionState === "LedgeClimb";
+    options.locomotionState === "LedgeHang" ||
+    options.locomotionState === "Hanging" ||
+    options.locomotionState === "LedgeClimb" ||
+    options.locomotionState === "ClimbingUp" ||
+    options.locomotionState === "MantlingLowObstacle";
   if (!options.isAlive) {
     return {
       ...createDefaultAnimationGameplayState(),
@@ -159,6 +163,7 @@ function resolveAnimationGameplayState(options: {
   const replicatedMovingState =
     options.locomotionState === "Walk" ||
     options.locomotionState === "Run" ||
+    options.locomotionState === "Running" ||
     options.locomotionState === "Rolling";
   const isMoving = replicatedMovingState || horizontalDistance >= movementThreshold;
 
@@ -178,8 +183,10 @@ function resolveAnimationGameplayState(options: {
   const isHitReacting = options.isStunned && !isBlocking && options.attackComboIndex === 0;
   const isJumping =
     options.locomotionState === "JumpStart" ||
+    options.locomotionState === "Jumping" ||
     options.locomotionState === "InAir" ||
     options.locomotionState === "Fall" ||
+    options.locomotionState === "Falling" ||
     options.locomotionState === "DoubleJump" ||
     Math.abs(deltaY) >= VERTICAL_MOVEMENT_EPSILON;
   const locomotionState = options.locomotionState;
@@ -188,7 +195,7 @@ function resolveAnimationGameplayState(options: {
     isDead: false,
     isMoving,
     movementDirection,
-    isSprinting: options.isSprinting || locomotionState === "Run",
+    isSprinting: options.isSprinting || locomotionState === "Run" || locomotionState === "Running",
     isJumping,
     isCrouching: options.isCrouching || locomotionState === "Crouch",
     isRolling: options.isRolling || locomotionState === "Rolling",
@@ -208,7 +215,10 @@ function shouldPreserveReplicatedLocomotionState(locomotionState: MatchPlayerSta
     locomotionState === "Rolling" ||
     locomotionState === "WallRun" ||
     locomotionState === "LedgeHang" ||
-    locomotionState === "LedgeClimb"
+    locomotionState === "Hanging" ||
+    locomotionState === "LedgeClimb" ||
+    locomotionState === "ClimbingUp" ||
+    locomotionState === "MantlingLowObstacle"
   );
 }
 
