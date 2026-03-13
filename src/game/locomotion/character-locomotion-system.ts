@@ -8,6 +8,7 @@ import {
   type CombatHookState
 } from "../combat/combat-hooks";
 import { resolveLandingImpactFromAirTime } from "../effects/landing-impact";
+import type { ShapeQueryService } from "../physics/shape-query-service";
 import type { CollisionSystem } from "../systems/collision.system";
 import { createCharacterMotor } from "./character-motor";
 import { createCharacterStateMachine } from "./character-state-machine";
@@ -67,6 +68,7 @@ export type CreateCharacterLocomotionSystemOptions = {
   groundedSystem: GroundedSystem;
   isEnvironmentMesh: (mesh: AbstractMesh) => boolean;
   isClimbableMesh: (mesh: AbstractMesh) => boolean;
+  shapeQueryService?: ShapeQueryService;
 };
 
 function resolveMovementDirectionFromAxes(forwardAxis: number, sideAxis: number): MovementDirection {
@@ -158,7 +160,8 @@ export function createCharacterLocomotionSystem(
     runtimeConfig,
     groundedSystem: options.groundedSystem,
     isEnvironmentMesh: options.isEnvironmentMesh,
-    isClimbableMesh: options.isClimbableMesh
+    isClimbableMesh: options.isClimbableMesh,
+    shapeQueryService: options.shapeQueryService
   });
   const ledgeDebug = createLedgeDebug(options.scene);
   const ledgeHangSystem = createLedgeHangSystem(ledgeConfig);
@@ -172,7 +175,7 @@ export function createCharacterLocomotionSystem(
   let lastDetectionRejectLogAtMs = 0;
 
   const restoreDefaultCollider = (): void => {
-    options.collisionSystem.setColliderHeight(runtimeConfig.colliderHeight, runtimeConfig.colliderRadius);
+    options.collisionSystem.setColliderProfile("default");
   };
 
   const updateColliderForState = (input: {
@@ -180,15 +183,12 @@ export function createCharacterLocomotionSystem(
     crouchAlpha: number;
   }): void => {
     if (input.isRolling) {
-      options.collisionSystem.setColliderHeight(
-        runtimeConfig.rollingColliderHeight,
-        runtimeConfig.colliderRadius,
-        runtimeConfig.rollColliderCenterY
-      );
+      options.collisionSystem.setColliderProfile("rolling");
       return;
     }
 
     if (input.crouchAlpha > 0.05) {
+      options.collisionSystem.setColliderProfile("default");
       const crouchedHeight =
         runtimeConfig.colliderHeight +
         (runtimeConfig.crouchColliderHeight - runtimeConfig.colliderHeight) * input.crouchAlpha;
@@ -452,6 +452,7 @@ export function createCharacterLocomotionSystem(
     step: (input) => {
       const inputEnabled = input.isInputEnabled && input.combat.isAlive && !input.combat.isStunned;
       const movementLocked = isCombatMovementLocked(input.combat);
+      options.collisionSystem.syncToTransform(input.currentTransform);
 
       const activeHangLedge = ledgeHangSystem.getActiveLedge();
       const ledgeHangActive = activeHangLedge !== null;
@@ -502,7 +503,7 @@ export function createCharacterLocomotionSystem(
         } else {
           const climbFrame = ledgeClimbSystem.step({ nowMs: input.nowMs });
           if (climbFrame.transform && climbFrame.ledge) {
-            restoreDefaultCollider();
+            options.collisionSystem.setColliderProfile("climbingUp");
             jumpSystem.setVerticalVelocity(0);
             motor.setPlanarVelocity(Vector3.Zero());
             airborneTimeMs = 0;
@@ -614,7 +615,7 @@ export function createCharacterLocomotionSystem(
 
             const climbFrame = ledgeClimbSystem.step({ nowMs: input.nowMs });
             if (climbFrame.transform && climbFrame.ledge) {
-              restoreDefaultCollider();
+              options.collisionSystem.setColliderProfile("climbingUp");
               jumpSystem.setVerticalVelocity(0);
               motor.setPlanarVelocity(Vector3.Zero());
               airborneTimeMs = 0;
@@ -644,7 +645,7 @@ export function createCharacterLocomotionSystem(
 
         const lockedTransform = ledgeHangSystem.getLockedTransform();
         if (lockedTransform && activeHangLedge) {
-          restoreDefaultCollider();
+          options.collisionSystem.setColliderProfile("hanging");
           jumpSystem.setVerticalVelocity(0);
           motor.setPlanarVelocity(Vector3.Zero());
           airborneTimeMs = 0;
@@ -691,13 +692,20 @@ export function createCharacterLocomotionSystem(
         nowMs: input.nowMs,
         deltaSeconds: input.deltaSeconds,
         wantsRolling: movementEnabled && input.inputState.rollPressed,
-        canRoll: groundedBefore.isGrounded && canSprint && hasDirectionalIntent,
+        canRoll:
+          groundedBefore.isGrounded &&
+          groundedBefore.distanceToGround <= locomotionConfig.groundedSnapDistance + 0.03 &&
+          jumpSystem.getVerticalVelocity() <= 0.2 &&
+          canSprint &&
+          hasDirectionalIntent,
+        isGrounded: groundedBefore.isGrounded,
         currentSpeed: canSprint ? locomotionConfig.runSpeed * sprintMultiplier : locomotionConfig.walkSpeed,
         forwardDirection: hasDirectionalIntent ? desiredDirection.clone() : fallbackForward,
         minSpeed: locomotionConfig.rollingMinSpeed,
         initialSpeed: locomotionConfig.rollingInitialSpeed,
         durationMs: locomotionConfig.rollingDurationMs,
-        cooldownMs: locomotionConfig.rollingCooldownMs
+        cooldownMs: locomotionConfig.rollingCooldownMs,
+        groundDetachGraceMs: 90
       });
 
       const wantsStationaryCrouch =
@@ -756,6 +764,7 @@ export function createCharacterLocomotionSystem(
 
           const climbFrame = ledgeClimbSystem.step({ nowMs: input.nowMs });
           if (climbFrame.transform && climbFrame.ledge) {
+            options.collisionSystem.setColliderProfile("mantle");
             jumpSystem.setVerticalVelocity(0);
             motor.setPlanarVelocity(Vector3.Zero());
             airborneTimeMs = 0;
@@ -799,6 +808,7 @@ export function createCharacterLocomotionSystem(
         });
 
         if (ledgeCandidate && ledgeHangSystem.grab(ledgeCandidate, input.nowMs)) {
+          options.collisionSystem.setColliderProfile("hanging");
           jumpSystem.setVerticalVelocity(0);
           motor.setPlanarVelocity(Vector3.Zero());
           airborneTimeMs = 0;

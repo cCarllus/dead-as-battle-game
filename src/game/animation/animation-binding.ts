@@ -11,6 +11,14 @@ import {
 import "@babylonjs/loaders/glTF";
 import type { AnimationCommand } from "./animation-command";
 import type { AnimationAssetDefinition } from "./animation-types";
+import {
+  filterPositionTrackForAxes,
+  isPositionTrackProperty,
+  logTrackContainment,
+  resolveBoneContainmentAxes,
+  resolveContainmentProfile,
+  resolveAnimationContainmentMode,
+} from "./animation-motion-containment";
 
 const animationAssetContainerCache = new WeakMap<Scene, Map<string, Promise<AssetContainer | null>>>();
 const warnedMissingAssetUrls = new Set<string>();
@@ -121,25 +129,16 @@ function collectMeshSkeletonTargets(rootNodes: TransformNode[]): AbstractMesh[] 
   return rootNodes.flatMap((rootNode) => rootNode.getChildMeshes(false));
 }
 
-function isPositionAnimationTargetProperty(targetProperty: string): boolean {
-  const normalized = targetProperty.trim().toLowerCase();
-  return (
-    normalized === "position" ||
-    normalized.startsWith("position.") ||
-    normalized === "translation" ||
-    normalized.startsWith("translation.")
-  );
-}
-
 function resolveAssetDefinition(
   assetDefinition: AnimationAssetDefinition
-): { fileName: string; groupName?: string; stripPositionTracks: boolean } {
+): { fileName: string; groupName?: string; stripPositionTracks: boolean; disableContainment: boolean } {
   return typeof assetDefinition === "string"
-    ? { fileName: assetDefinition, stripPositionTracks: false }
+    ? { fileName: assetDefinition, stripPositionTracks: false, disableContainment: false }
     : {
         fileName: assetDefinition.fileName,
         groupName: assetDefinition.groupName,
-        stripPositionTracks: assetDefinition.stripPositionTracks === true
+        stripPositionTracks: assetDefinition.stripPositionTracks === true,
+        disableContainment: assetDefinition.disableContainment === true
       };
 }
 
@@ -288,6 +287,17 @@ export async function loadBoundAnimationCommandFromAsset(
   }
 
   const blockedPositionTargetNames = resolveBlockedPositionTargetNames(container);
+  const containmentResolve = resolvedAssetDefinition.disableContainment
+    ? {
+        mode: resolveAnimationContainmentMode(),
+        profile: null,
+        source: "none" as const
+      }
+    : resolveContainmentProfile({
+        command: options.command,
+        locomotionState: undefined,
+        mode: resolveAnimationContainmentMode()
+      });
   const boundGroup = new AnimationGroup(
     `${options.sourceLabel}_${options.command}_${options.binding.bindingId}`,
     options.scene
@@ -306,7 +316,7 @@ export async function loadBoundAnimationCommandFromAsset(
     const targetProperty = targetedAnimation.animation.targetProperty;
     const shouldStripPositionTrack =
       typeof targetProperty === "string" &&
-      isPositionAnimationTargetProperty(targetProperty) &&
+      isPositionTrackProperty(targetProperty) &&
       (resolvedAssetDefinition.stripPositionTracks === true ||
         (sourceTargetName !== null &&
           blockedPositionTargetNames.has(normalizeNameForMatch(sourceTargetName))));
@@ -317,7 +327,70 @@ export async function loadBoundAnimationCommandFromAsset(
       return;
     }
 
-    boundGroup.addTargetedAnimation(targetedAnimation.animation.clone(true), resolvedTarget);
+    const clonedAnimation = targetedAnimation.animation.clone(true);
+    let filteredAnimation = clonedAnimation;
+    if (
+      containmentResolve.profile &&
+      typeof sourceTargetName === "string" &&
+      typeof targetProperty === "string" &&
+      isPositionTrackProperty(targetProperty)
+    ) {
+      const blockedAxes = resolveBoneContainmentAxes(containmentResolve.profile, sourceTargetName);
+      if (blockedAxes && (blockedAxes.x || blockedAxes.y || blockedAxes.z)) {
+        const trackFilterResult = filterPositionTrackForAxes({
+          animation: clonedAnimation,
+          targetProperty,
+          blockedAxes
+        });
+
+        if (trackFilterResult.suppressTrack || !trackFilterResult.filteredAnimation) {
+          const logKey = [
+            options.binding.bindingId,
+            options.command,
+            sourceTargetName,
+            targetProperty,
+            containmentResolve.source,
+            "suppress"
+          ].join(":");
+          logTrackContainment({
+            key: logKey,
+            command: options.command,
+            clipLabel: resolvedAssetDefinition.fileName,
+            targetName: sourceTargetName,
+            targetProperty,
+            blockedAxes,
+            action: "suppress",
+            source: containmentResolve.source,
+            loggerPrefix: options.loggerPrefix
+          });
+          skippedTargetCount += 1;
+          return;
+        }
+
+        filteredAnimation = trackFilterResult.filteredAnimation;
+        const logKey = [
+          options.binding.bindingId,
+          options.command,
+          sourceTargetName,
+          targetProperty,
+          containmentResolve.source,
+          "axis-filter"
+        ].join(":");
+        logTrackContainment({
+          key: logKey,
+          command: options.command,
+          clipLabel: resolvedAssetDefinition.fileName,
+          targetName: sourceTargetName,
+          targetProperty,
+          blockedAxes,
+          action: "axis-filter",
+          source: containmentResolve.source,
+          loggerPrefix: options.loggerPrefix
+        });
+      }
+    }
+
+    boundGroup.addTargetedAnimation(filteredAnimation, resolvedTarget);
     boundAnimationCount += 1;
   });
 

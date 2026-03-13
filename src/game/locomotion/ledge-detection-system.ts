@@ -1,6 +1,7 @@
 // Responsável por detectar ledge hang e mantle com múltiplos probes (parede/topo/clearance) e classificação por ângulo.
-import { Ray, Vector3, type AbstractMesh, type PickingInfo, type Scene } from "@babylonjs/core";
+import { Ray, Vector3, type AbstractMesh, type Scene } from "@babylonjs/core";
 import type { CharacterRuntimeConfig } from "../character/character-config";
+import type { ShapeQueryService } from "../physics/shape-query-service";
 import type { GroundedSystem } from "./grounded-system";
 
 export type LedgeCandidateKind = "hang" | "mantle";
@@ -68,10 +69,18 @@ export type CreateLedgeDetectionSystemOptions = {
   groundedSystem: GroundedSystem;
   isEnvironmentMesh: (mesh: AbstractMesh) => boolean;
   isClimbableMesh: (mesh: AbstractMesh) => boolean;
+  shapeQueryService?: ShapeQueryService;
+};
+
+type ProbeHit = {
+  point: Vector3;
+  mesh: AbstractMesh;
+  distance: number;
+  normal: Vector3 | null;
 };
 
 type ProbeCastResult = {
-  hitInfo: PickingInfo | null;
+  hit: ProbeHit | null;
   normal: Vector3 | null;
 };
 
@@ -90,6 +99,8 @@ const CLEARANCE_SAMPLE_RADIUS_SCALE = 0.62;
 const TOP_PROBE_INSET_SCALE = 0.42;
 const TOP_PROBE_INSET_MIN = 0.18;
 const HANG_HEAD_CLEARANCE_MARGIN = 0.08;
+const SHAPE_QUERY_RADIUS_SCALE = 0.2;
+const SHAPE_QUERY_RADIUS_MIN = 0.06;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -167,34 +178,81 @@ export function computeClimbEndPosition(input: {
 
 function castProbe(options: {
   scene: Scene;
+  runtimeConfig: CharacterRuntimeConfig;
+  shapeQueryService?: ShapeQueryService;
   origin: Vector3;
   direction: Vector3;
   length: number;
   label: string;
   probes: LedgeDetectionProbe[];
   predicate: (mesh: AbstractMesh) => boolean;
+  shapeRadius?: number;
 }): ProbeCastResult {
   const direction = options.direction.lengthSquared() > 0.0001
     ? options.direction.normalizeToNew()
     : Vector3.Forward();
-  const ray = new Ray(options.origin.clone(), direction, options.length);
-  const hitInfo = options.scene.pickWithRay(ray, options.predicate, false);
-  const normal = hitInfo?.hit ? hitInfo.getNormal(true)?.normalize() ?? null : null;
+
+  const shapeRadius = options.shapeRadius
+    ?? Math.max(
+      SHAPE_QUERY_RADIUS_MIN,
+      options.runtimeConfig.colliderRadius * SHAPE_QUERY_RADIUS_SCALE
+    );
+
+  let hitPoint: Vector3 | null = null;
+  let hitMesh: AbstractMesh | null = null;
+  let hitDistance: number | null = null;
+  let normal: Vector3 | null = null;
+
+  if (options.shapeQueryService) {
+    const shapeHit = options.shapeQueryService.sphereCast({
+      label: options.label,
+      origin: options.origin,
+      direction,
+      length: options.length,
+      radius: shapeRadius,
+      predicate: options.predicate
+    });
+
+    if (shapeHit.hit && shapeHit.point && shapeHit.mesh) {
+      hitPoint = shapeHit.point.clone();
+      hitMesh = shapeHit.mesh;
+      hitDistance = shapeHit.distance;
+      normal = shapeHit.normal ? shapeHit.normal.clone() : null;
+    }
+  }
+
+  if (!hitPoint || !hitMesh) {
+    const ray = new Ray(options.origin.clone(), direction, options.length);
+    const hitInfo = options.scene.pickWithRay(ray, options.predicate, false);
+    if (hitInfo?.hit && hitInfo.pickedPoint && hitInfo.pickedMesh) {
+      hitPoint = hitInfo.pickedPoint.clone();
+      hitMesh = hitInfo.pickedMesh;
+      hitDistance = typeof hitInfo.distance === "number" ? hitInfo.distance : options.length;
+      normal = hitInfo.getNormal(true)?.normalize() ?? normal;
+    }
+  }
 
   options.probes.push({
     label: options.label,
     origin: options.origin.clone(),
     direction: direction.clone(),
     length: options.length,
-    hit: !!hitInfo?.hit,
-    point: hitInfo?.hit && hitInfo.pickedPoint ? hitInfo.pickedPoint.clone() : null,
+    hit: !!hitPoint,
+    point: hitPoint ? hitPoint.clone() : null,
     normal: normal ? normal.clone() : null,
     slopeAngleDegrees: normal ? slopeAngleFromNormal(normal) : null,
-    meshName: hitInfo?.hit && hitInfo.pickedMesh ? hitInfo.pickedMesh.name : null
+    meshName: hitMesh?.name ?? null
   });
 
   return {
-    hitInfo: hitInfo?.hit ? hitInfo : null,
+    hit: hitPoint && hitMesh
+      ? {
+          point: hitPoint,
+          mesh: hitMesh,
+          distance: hitDistance ?? options.length,
+          normal: normal ? normal.clone() : null
+        }
+      : null,
     normal
   };
 }
@@ -243,6 +301,8 @@ export function createLedgeDetectionSystem(
 
       const clearanceProbe = castProbe({
         scene: options.scene,
+        runtimeConfig: options.runtimeConfig,
+        shapeQueryService: options.shapeQueryService,
         origin,
         direction: Vector3.UpReadOnly.clone(),
         length: options.runtimeConfig.ledge.topClearanceHeight,
@@ -251,7 +311,7 @@ export function createLedgeDetectionSystem(
         predicate: (mesh) => options.isEnvironmentMesh(mesh)
       });
 
-      return !clearanceProbe.hitInfo;
+      return !clearanceProbe.hit;
     });
   };
 
@@ -260,7 +320,7 @@ export function createLedgeDetectionSystem(
     const runtimeConfig = options.runtimeConfig;
     const ledgeConfig = runtimeConfig.ledge;
     const wallPredicate = input.kind === "hang"
-      ? (mesh: AbstractMesh) => options.isClimbableMesh(mesh)
+      ? (mesh: AbstractMesh) => options.isClimbableMesh(mesh) || options.isEnvironmentMesh(mesh)
       : (mesh: AbstractMesh) => options.isEnvironmentMesh(mesh);
     const wallProbeDistance =
       input.kind === "hang"
@@ -269,6 +329,8 @@ export function createLedgeDetectionSystem(
 
     const chestProbe = castProbe({
       scene: options.scene,
+      runtimeConfig,
+      shapeQueryService: options.shapeQueryService,
       origin: new Vector3(
         currentTransform.x,
         currentTransform.y + ledgeConfig.chestProbeHeight,
@@ -281,7 +343,8 @@ export function createLedgeDetectionSystem(
       predicate: wallPredicate
     });
 
-    if (!chestProbe.hitInfo?.pickedPoint || !chestProbe.hitInfo.pickedMesh) {
+    const chestHit = chestProbe.hit;
+    if (!chestHit) {
       return setAttempt(input.kind, "missing-front-wall-hit", probes);
     }
 
@@ -302,6 +365,8 @@ export function createLedgeDetectionSystem(
 
     const headProbe = castProbe({
       scene: options.scene,
+      runtimeConfig,
+      shapeQueryService: options.shapeQueryService,
       origin: new Vector3(
         currentTransform.x,
         currentTransform.y + ledgeConfig.headProbeHeight,
@@ -316,22 +381,22 @@ export function createLedgeDetectionSystem(
 
     if (
       input.kind === "hang" &&
-      headProbe.hitInfo &&
-      chestProbe.hitInfo.distance !== undefined &&
-      headProbe.hitInfo.distance !== undefined &&
-      headProbe.hitInfo.distance <= chestProbe.hitInfo.distance + HANG_HEAD_CLEARANCE_MARGIN
+      headProbe.hit &&
+      headProbe.hit.distance <= chestHit.distance + HANG_HEAD_CLEARANCE_MARGIN
     ) {
       return setAttempt(input.kind, "head-blocked-for-hang", probes);
     }
 
     const topProbeInset = Math.max(TOP_PROBE_INSET_MIN, runtimeConfig.colliderRadius * TOP_PROBE_INSET_SCALE);
-    const topProbeOrigin = chestProbe.hitInfo.pickedPoint
+    const topProbeOrigin = chestHit.point
       .add(facingDirection.scale(topProbeInset));
     topProbeOrigin.y =
       currentTransform.y + ledgeConfig.maxClimbHeight + ledgeConfig.topProbeHeightPadding;
 
     const topProbe = castProbe({
       scene: options.scene,
+      runtimeConfig,
+      shapeQueryService: options.shapeQueryService,
       origin: topProbeOrigin,
       direction: Vector3.DownReadOnly.clone(),
       length:
@@ -343,7 +408,8 @@ export function createLedgeDetectionSystem(
       predicate: (mesh) => options.isEnvironmentMesh(mesh)
     });
 
-    if (!topProbe.hitInfo?.pickedPoint || !topProbe.hitInfo.pickedMesh) {
+    const topHit = topProbe.hit;
+    if (!topHit) {
       return setAttempt(input.kind, "missing-top-surface", probes);
     }
 
@@ -360,11 +426,11 @@ export function createLedgeDetectionSystem(
     }
 
     const edgePoint = projectPointOntoPlane(
-      topProbe.hitInfo.pickedPoint.clone(),
-      chestProbe.hitInfo.pickedPoint.clone(),
+      topHit.point.clone(),
+      chestHit.point.clone(),
       wallNormal
     );
-    edgePoint.y = topProbe.hitInfo.pickedPoint.y;
+    edgePoint.y = topHit.point.y;
 
     const ledgeHeight = edgePoint.y - currentTransform.y;
     if (
@@ -378,7 +444,7 @@ export function createLedgeDetectionSystem(
     }
 
     const climbEndPosition = computeClimbEndPosition({
-      topPoint: topProbe.hitInfo.pickedPoint.clone(),
+      topPoint: topHit.point.clone(),
       facingDirection,
       runtimeConfig,
       groundedSystem: options.groundedSystem,
@@ -411,10 +477,10 @@ export function createLedgeDetectionSystem(
 
     const candidate: LedgeGrabCandidate = {
       kind: input.kind,
-      wallMesh: chestProbe.hitInfo.pickedMesh,
-      topMesh: topProbe.hitInfo.pickedMesh,
-      wallHitPoint: chestProbe.hitInfo.pickedPoint.clone(),
-      topHitPoint: topProbe.hitInfo.pickedPoint.clone(),
+      wallMesh: chestHit.mesh,
+      topMesh: topHit.mesh,
+      wallHitPoint: chestHit.point.clone(),
+      topHitPoint: topHit.point.clone(),
       ledgePoint: edgePoint.clone(),
       edgePoint,
       wallNormal: wallNormal.clone(),

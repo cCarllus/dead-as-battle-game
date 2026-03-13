@@ -17,6 +17,7 @@ import type {
 } from "../../models/match-player.model";
 import { createCharacterAudioController, type CharacterAudioController } from "../audio/character-audio-controller";
 import { resolveLocomotionCameraHooks } from "../camera/locomotion-camera-hooks";
+import { createPhysicsDebugLogger } from "../debug/physics-debug";
 import { createMotionLinesEffect } from "../effects/motion-lines";
 import { createWindParticlesSystem } from "../effects/wind-particles";
 import { createEffectManager } from "../effects/effect-manager";
@@ -28,7 +29,11 @@ import {
 } from "../locomotion/character-locomotion-system";
 import { createGroundedSystem } from "../locomotion/grounded-system";
 import { createCharacterLeanSystem } from "../movement/character-lean";
+import { createCharacterControllerAdapter } from "../physics/character-controller-adapter";
+import { bootstrapHavokPhysics } from "../physics/havok-bootstrap";
 import { MAX_FRAME_DELTA_SECONDS } from "../physics/player-physics";
+import { createPhysicsWorld } from "../physics/physics-world";
+import { createShapeQueryService } from "../physics/shape-query-service";
 import { createCollisionSystem, type CollisionSystem } from "../systems/collision.system";
 import { createCombatInputSystem } from "../systems/combat-input.system";
 import { createLightingSystem } from "../systems/lighting.system";
@@ -94,6 +99,7 @@ type LocalGameplayRuntime = {
   collisionSystem: CollisionSystem;
   locomotionSystem: CharacterLocomotionSystem;
   audioController: CharacterAudioController;
+  shapeQueryService: ReturnType<typeof createShapeQueryService>;
   ownerCollisionBodyId: number;
   ownerHeroId: string;
 };
@@ -178,6 +184,14 @@ export async function createGlobalMatchScene(
 
   const scene = new Scene(engine);
   scene.clearColor = new Color4(0.015, 0.03, 0.06, 1);
+  const physicsBootstrap = await bootstrapHavokPhysics(scene, {
+    loggerPrefix: "[physics]",
+    enableRecast: false
+  });
+  const physicsWorld = createPhysicsWorld({
+    scene,
+    loggerPrefix: "[physics][world]"
+  });
 
   const cameraController = createCameraController({ scene });
   const camera = cameraController.camera;
@@ -185,10 +199,14 @@ export async function createGlobalMatchScene(
   const windParticles = createWindParticlesSystem(scene);
   const motionLines = createMotionLinesEffect(options.canvas);
   const characterLean = createCharacterLeanSystem();
+  const physicsDebug = createPhysicsDebugLogger();
 
   const mapHandle = await loadGlobalMatchMap(scene, GLOBAL_MATCH_MAP_URL);
   const mapMeshIds = new Set<number>(mapHandle.meshes.map((mesh) => mesh.uniqueId));
   lightingSystem.setMapMeshes(mapHandle.meshes);
+  if (physicsBootstrap.enabled && physicsBootstrap.usingHavok) {
+    physicsWorld.registerStaticMeshes(mapHandle.meshes);
+  }
 
   const playerViewManager = createPlayerViewManager({
     scene,
@@ -255,6 +273,7 @@ export async function createGlobalMatchScene(
       return;
     }
 
+    localGameplayRuntime.shapeQueryService.dispose();
     localGameplayRuntime.audioController.dispose();
     localGameplayRuntime.locomotionSystem.dispose();
     localGameplayRuntime.collisionSystem.dispose();
@@ -277,19 +296,36 @@ export async function createGlobalMatchScene(
     }
 
     disposeLocalGameplayRuntime();
+    const runtimeConfig = localView.getRuntimeConfig();
+    const shapeQueryService = createShapeQueryService({
+      scene,
+      resolveMeshFromBody: (body) => physicsWorld.resolveMeshFromBody(body)
+    });
+    const characterControllerAdapter = physicsBootstrap.enabled && physicsBootstrap.usingHavok
+      ? createCharacterControllerAdapter({
+          scene,
+          gameplayRoot: localView.gameplayRoot,
+          collisionBody: localView.collisionBody,
+          runtimeConfig,
+          shapeQueryService
+        })
+      : null;
 
     const collisionSystem = createCollisionSystem({
       scene,
       gameplayRoot: localView.gameplayRoot,
-      collisionBody: localView.collisionBody
+      collisionBody: localView.collisionBody,
+      runtimeConfig,
+      characterControllerAdapter
     });
 
     collisionSystem.configureStaticMeshes(mapHandle.meshes);
-    const runtimeConfig = localView.getRuntimeConfig();
 
     const groundedSystem = createGroundedSystem({
       scene,
       runtimeConfig,
+      getControllerGroundInfo: () => collisionSystem.getGroundInfo(),
+      getControllerRootPosition: () => localView.gameplayRoot.position.clone(),
       isGroundMesh: (mesh: AbstractMesh) => {
         return mapMeshIds.has(mesh.uniqueId);
       }
@@ -301,7 +337,8 @@ export async function createGlobalMatchScene(
       collisionSystem,
       groundedSystem,
       isEnvironmentMesh: (mesh) => mapMeshIds.has(mesh.uniqueId),
-      isClimbableMesh: (mesh) => isClimbableSurfaceMesh(mesh)
+      isClimbableMesh: (mesh) => isClimbableSurfaceMesh(mesh),
+      shapeQueryService
     });
     const audioController = createCharacterAudioController();
 
@@ -309,6 +346,7 @@ export async function createGlobalMatchScene(
       collisionSystem,
       locomotionSystem,
       audioController,
+      shapeQueryService,
       ownerCollisionBodyId: localView.collisionBody.uniqueId,
       ownerHeroId: localView.heroId
     };
@@ -685,6 +723,28 @@ export async function createGlobalMatchScene(
     });
     maybeEmitLocalSprintIntent(frameOutput.snapshot.sprintIntent);
 
+    const collisionVelocity = runtime.collisionSystem.getCurrentVelocity();
+    const groundInfo = runtime.collisionSystem.getGroundInfo();
+    physicsDebug.render({
+      state: frameOutput.snapshot.state,
+      grounded: frameOutput.isGrounded,
+      slopeAngle: groundInfo ? groundInfo.slopeAngleDegrees : null,
+      horizontalSpeed: Math.hypot(collisionVelocity.x, collisionVelocity.z),
+      verticalVelocity: frameOutput.snapshot.verticalVelocity,
+      colliderProfile: runtime.collisionSystem.getActiveColliderProfile(),
+      rootPosition: localView.gameplayRoot.position.clone(),
+      visualOffset: localView.visualRoot.position.clone(),
+      velocity: collisionVelocity,
+      groundInfo: groundInfo
+        ? {
+            supportedState: groundInfo.supportedState,
+            slopeAngleDegrees: groundInfo.slopeAngleDegrees,
+            isSurfaceDynamic: groundInfo.isSurfaceDynamic
+          }
+        : null,
+      shapeQueries: runtime.shapeQueryService.getDebugSnapshot()
+    });
+
     characterLean.update(localView.visualRoot, {
       deltaSeconds,
       isGrounded: frameOutput.isGrounded,
@@ -851,13 +911,16 @@ export async function createGlobalMatchScene(
       playerViewManager.dispose();
       disposeLocalGameplayRuntime();
       characterLean.reset(null);
+      physicsDebug.dispose();
 
       lightingSystem.dispose();
       windParticles.dispose();
       motionLines.dispose();
+      physicsWorld.dispose();
       mapHandle.dispose();
       cameraController.dispose();
 
+      scene.disablePhysicsEngine();
       scene.dispose();
       engine.stopRenderLoop();
       engine.dispose();

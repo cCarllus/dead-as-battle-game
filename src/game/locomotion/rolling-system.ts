@@ -18,12 +18,14 @@ export type RollingSystem = {
     deltaSeconds: number;
     wantsRolling: boolean;
     canRoll: boolean;
+    isGrounded: boolean;
     currentSpeed: number;
     forwardDirection: Vector3;
     minSpeed: number;
     initialSpeed: number;
     durationMs: number;
     cooldownMs: number;
+    groundDetachGraceMs?: number;
   }) => RollingStepResult;
   reset: () => void;
 };
@@ -34,6 +36,7 @@ export function createRollingSystem(): RollingSystem {
   let rollingCooldownUntil = 0;
   let rollingSpeed = 0;
   let rollingDirection = Vector3.Zero();
+  let airborneSinceMs = 0;
 
   return {
     step: (input) => {
@@ -53,12 +56,25 @@ export function createRollingSystem(): RollingSystem {
         rollingCooldownUntil = input.nowMs + input.cooldownMs;
         rollingSpeed = Math.max(input.currentSpeed * 1.12, input.initialSpeed);
         rollingDirection = input.forwardDirection.normalizeToNew();
+        airborneSinceMs = 0;
       }
 
       if (active) {
         const elapsedMs = input.nowMs - rollingStartedAt;
         const progress = Math.min(1, elapsedMs / Math.max(1, input.durationMs));
         rollingSpeed = Math.max(input.minSpeed, rollingSpeed - input.deltaSeconds * 12.4);
+        const detachGraceMs = input.groundDetachGraceMs ?? 90;
+
+        if (!input.isGrounded) {
+          if (airborneSinceMs <= 0) {
+            airborneSinceMs = input.nowMs;
+          } else if (input.nowMs - airborneSinceMs >= detachGraceMs) {
+            active = false;
+            didEnd = true;
+          }
+        } else {
+          airborneSinceMs = 0;
+        }
 
         if (elapsedMs >= input.durationMs) {
           active = false;
@@ -94,6 +110,7 @@ export function createRollingSystem(): RollingSystem {
       rollingCooldownUntil = 0;
       rollingSpeed = 0;
       rollingDirection = Vector3.Zero();
+      airborneSinceMs = 0;
     }
   };
 }

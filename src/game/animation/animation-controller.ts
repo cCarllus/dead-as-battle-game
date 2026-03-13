@@ -1,5 +1,5 @@
 // Responsável por reproduzir AnimationGroups com prioridade override -> shared -> embedded fallback.
-import type { AnimationGroup } from "@babylonjs/core";
+import { Vector3, type AnimationGroup } from "@babylonjs/core";
 import {
   LOOPED_ANIMATION_COMMANDS,
   type AnimationCommand
@@ -9,6 +9,13 @@ import {
   resolveAnimationCommandFromGameplay
 } from "./animation-state";
 import type { AnimationCommandGroupMap, HeroAnimationConfig } from "./animation-types";
+import {
+  applyAxisLockToTargetPosition,
+  logRuntimeContainment,
+  resolveBoneContainmentAxes,
+  resolveContainmentProfile,
+  resolvePositionFromTarget
+} from "./animation-motion-containment";
 
 export type CreateAnimationControllerOptions = {
   overrideAnimationGroupsByCommand: AnimationCommandGroupMap;
@@ -291,6 +298,89 @@ export function createAnimationController(options: CreateAnimationControllerOpti
   let currentRequestedCommand: AnimationCommand | null = null;
   let currentPlaybackCommand: AnimationCommand | null = null;
   let currentGroup: AnimationGroup | null = null;
+  let currentGameplayState: AnimationGameplayState | null = null;
+  let baselineByTarget = new WeakMap<object, Vector3>();
+  let lastContainmentSignature = "";
+
+  const applyRuntimeContainment = (): void => {
+    if (!currentGroup) {
+      return;
+    }
+
+    const containment = resolveContainmentProfile({
+      command: currentPlaybackCommand,
+      locomotionState: currentGameplayState?.locomotionState
+    });
+    if (!containment.profile) {
+      return;
+    }
+
+    const containmentSignature = [
+      containment.mode,
+      containment.source,
+      currentPlaybackCommand ?? "none",
+      currentGameplayState?.locomotionState ?? "none",
+      currentGroup.name
+    ].join(":");
+    if (lastContainmentSignature !== containmentSignature) {
+      lastContainmentSignature = containmentSignature;
+      baselineByTarget = new WeakMap<object, Vector3>();
+    }
+
+    const processedTargets = new Set<object>();
+    const filteredTargetNames = new Set<string>();
+    let maxVerticalDrift = 0;
+    let maxHorizontalDrift = 0;
+
+    currentGroup.targetedAnimations.forEach((targetedAnimation) => {
+      const target = targetedAnimation.target as object | null | undefined;
+      if (!target || processedTargets.has(target)) {
+        return;
+      }
+      processedTargets.add(target);
+
+      const targetName = (targetedAnimation.target as { name?: unknown } | undefined)?.name;
+      const normalizedName = typeof targetName === "string" ? targetName : "<unnamed>";
+      const blockedAxes = resolveBoneContainmentAxes(containment.profile, normalizedName);
+      if (!blockedAxes || (!blockedAxes.x && !blockedAxes.y && !blockedAxes.z)) {
+        return;
+      }
+
+      const currentPosition = resolvePositionFromTarget(target);
+      if (!currentPosition) {
+        return;
+      }
+
+      const baseline = baselineByTarget.get(target) ?? currentPosition.clone();
+      baselineByTarget.set(target, baseline);
+
+      const drift = currentPosition.subtract(baseline);
+      const horizontalDrift = Math.hypot(drift.x, drift.z);
+      maxVerticalDrift = Math.max(maxVerticalDrift, Math.abs(drift.y));
+      maxHorizontalDrift = Math.max(maxHorizontalDrift, horizontalDrift);
+
+      const didApply = applyAxisLockToTargetPosition(target, baseline, blockedAxes);
+      if (didApply) {
+        const axisLabel = `${blockedAxes.x ? "X" : ""}${blockedAxes.y ? "Y" : ""}${blockedAxes.z ? "Z" : ""}`;
+        filteredTargetNames.add(`${normalizedName}:${axisLabel || "none"}`);
+      }
+    });
+
+    if (filteredTargetNames.size > 0) {
+      logRuntimeContainment({
+        key: containmentSignature,
+        command: currentPlaybackCommand,
+        locomotionState: currentGameplayState?.locomotionState,
+        profile: containment.profile,
+        source: containment.source,
+        clipName: currentGroup.name,
+        filteredTargetNames: Array.from(filteredTargetNames),
+        maxVerticalDrift,
+        maxHorizontalDrift,
+        loggerPrefix: options.loggerPrefix
+      });
+    }
+  };
 
   const restartCurrentGroup = (): void => {
     if (!currentGroup || !currentPlaybackCommand) {
@@ -378,13 +468,16 @@ export function createAnimationController(options: CreateAnimationControllerOpti
     currentGroup = playableAnimation.group;
     currentRequestedCommand = requestedCommand;
     currentPlaybackCommand = playableAnimation.playbackCommand;
+    applyRuntimeContainment();
   };
 
   return {
     play,
     syncFromGameplay: (gameplayState) => {
+      currentGameplayState = gameplayState;
       const nextCommand = resolveAnimationCommandFromGameplay(gameplayState);
       play(nextCommand, gameplayState.restartCommand === nextCommand);
+      applyRuntimeContainment();
     },
     stop: () => {
       if (!currentGroup) {
@@ -395,6 +488,9 @@ export function createAnimationController(options: CreateAnimationControllerOpti
       currentGroup = null;
       currentRequestedCommand = null;
       currentPlaybackCommand = null;
+      currentGameplayState = null;
+      baselineByTarget = new WeakMap<object, Vector3>();
+      lastContainmentSignature = "";
     },
     getCurrentCommand: () => currentRequestedCommand,
     dispose: () => {
@@ -405,6 +501,9 @@ export function createAnimationController(options: CreateAnimationControllerOpti
       currentGroup = null;
       currentRequestedCommand = null;
       currentPlaybackCommand = null;
+      currentGameplayState = null;
+      baselineByTarget = new WeakMap<object, Vector3>();
+      lastContainmentSignature = "";
       warnedMissingMappings.clear();
       warnedMissingGroups.clear();
       warnedEmbeddedFallbackUsage.clear();

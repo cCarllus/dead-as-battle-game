@@ -17,6 +17,10 @@ import {
   createAnimationController,
   type AnimationController
 } from "../animation/animation-controller";
+import {
+  isVisualOffsetEnabled,
+  resolveAnimationContainmentMode
+} from "../animation/animation-motion-containment";
 import type { AnimationCommand } from "../animation/animation-command";
 import { loadHeroVisualAssets } from "../animation/animation-loader";
 import {
@@ -102,8 +106,8 @@ function applyHeroVisualConfig(
   visualRoot: TransformNode,
   heroConfig: HeroVisualConfig,
   calibration?: HeroRuntimeCalibration | null,
-  poseOffsetY = 0
-): void {
+  poseOffset: Vector3 = Vector3.Zero()
+): Vector3 {
   const safeScale =
     Number.isFinite(heroConfig.visualScale) && heroConfig.visualScale > 0
       ? heroConfig.visualScale
@@ -118,13 +122,18 @@ function applyHeroVisualConfig(
       : 0;
   const finalScale = safeScale * normalizedScale;
 
-  visualRoot.position.set(
+  const resolvedVisualOffset = new Vector3(
     heroConfig.visualOffset.x,
-    heroConfig.visualOffset.y + normalizedOffsetY + poseOffsetY,
+    heroConfig.visualOffset.y + normalizedOffsetY + poseOffset.y,
     heroConfig.visualOffset.z
   );
+  resolvedVisualOffset.x += poseOffset.x;
+  resolvedVisualOffset.z += poseOffset.z;
+
+  visualRoot.position.copyFrom(resolvedVisualOffset);
   visualRoot.rotation.set(0, heroConfig.visualYaw, 0);
   visualRoot.scaling.set(finalScale, finalScale, finalScale);
+  return resolvedVisualOffset;
 }
 
 function calculateNormalizedCalibration(
@@ -248,6 +257,8 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
   let nickname = options.player.nickname;
   let currentHeroConfig = resolveHeroVisualConfig(options.player.heroId);
   let currentHeroCalibration: HeroRuntimeCalibration | null = getHeroRuntimeCalibration(currentHeroConfig.id);
+  let expectedVisualRootOffset = Vector3.Zero();
+  let lastContainmentDebugAtMs = 0;
 
   const disposeSkinHandle = (): void => {
     if (!skinHandle) {
@@ -263,25 +274,80 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
     skinHandle?.animationController?.syncFromGameplay(animationGameplayState);
   };
 
-  const resolvePoseOffsetY = (): number => {
+  const resolvePoseOffset = (): Vector3 => {
+    const isOffsetEnabled = isVisualOffsetEnabled();
+    if (!isOffsetEnabled) {
+      return Vector3.Zero();
+    }
+
     switch (animationGameplayState.locomotionState) {
       case "Crouch":
-        return currentHeroConfig.crouchVisualOffsetY;
+        return new Vector3(0, currentHeroConfig.crouchVisualOffsetY, 0);
       case "LedgeHang":
       case "Hanging":
-        return currentHeroConfig.ledgeHangVisualOffsetY;
+        return new Vector3(
+          currentHeroConfig.hangVisualOffsetX,
+          currentHeroConfig.ledgeHangVisualOffsetY + currentHeroConfig.hangVisualOffsetY,
+          currentHeroConfig.hangVisualOffsetZ
+        );
       case "LedgeClimb":
       case "ClimbingUp":
       case "MantlingLowObstacle":
-        return currentHeroConfig.ledgeClimbVisualOffsetY;
+        return new Vector3(0, currentHeroConfig.ledgeClimbVisualOffsetY, 0);
       default:
-        return 0;
+        return Vector3.Zero();
     }
   };
 
+  const debugVisualContainment = (): void => {
+    const explicitDebugEnabled = (globalThis as { __DAB_ADVANCED_MOVEMENT_DEBUG__?: unknown })
+      .__DAB_ADVANCED_MOVEMENT_DEBUG__;
+    if (explicitDebugEnabled !== true) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastContainmentDebugAtMs < 160) {
+      return;
+    }
+    lastContainmentDebugAtMs = now;
+
+    const rootToMeshOffset = visualRoot.position.clone();
+    const residual = rootToMeshOffset.subtract(expectedVisualRootOffset);
+    const horizontalResidual = Math.hypot(residual.x, residual.z);
+    const verticalResidual = Math.abs(residual.y);
+
+    console.debug("[animation][containment][visual-metrics]", {
+      sessionId: options.player.sessionId,
+      locomotionState: animationGameplayState.locomotionState ?? "Idle",
+      clip: skinHandle?.animationController?.getCurrentCommand() ?? "none",
+      containmentMode: resolveAnimationContainmentMode(),
+      visualOffsetEnabled: isVisualOffsetEnabled(),
+      rootToMeshOffset: {
+        x: Math.round(rootToMeshOffset.x * 1000) / 1000,
+        y: Math.round(rootToMeshOffset.y * 1000) / 1000,
+        z: Math.round(rootToMeshOffset.z * 1000) / 1000
+      },
+      expectedVisualOffset: {
+        x: Math.round(expectedVisualRootOffset.x * 1000) / 1000,
+        y: Math.round(expectedVisualRootOffset.y * 1000) / 1000,
+        z: Math.round(expectedVisualRootOffset.z * 1000) / 1000
+      },
+      visualHeightError: Math.round(verticalResidual * 1000) / 1000,
+      driftVerticalResidual: Math.round(verticalResidual * 1000) / 1000,
+      driftHorizontalResidual: Math.round(horizontalResidual * 1000) / 1000
+    });
+  };
+
   const applyCurrentVisualPose = (): void => {
-    const poseOffsetY = resolvePoseOffsetY();
-    applyHeroVisualConfig(visualRoot, currentHeroConfig, currentHeroCalibration, poseOffsetY);
+    const poseOffset = resolvePoseOffset();
+    expectedVisualRootOffset = applyHeroVisualConfig(
+      visualRoot,
+      currentHeroConfig,
+      currentHeroCalibration,
+      poseOffset
+    );
+    debugVisualContainment();
   };
 
   const applyDisplay = (): void => {
@@ -443,6 +509,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
       };
       applyCurrentVisualPose();
       syncAnimationFromGameplay();
+      debugVisualContainment();
     },
     playAnimationCommand: (command) => {
       skinHandle?.animationController?.play(command);

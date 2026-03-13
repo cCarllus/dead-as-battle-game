@@ -70,6 +70,12 @@ export type CharacterRuntimeConfig = {
   crouchColliderHeight: number;
   rollingColliderHeight: number;
   rollColliderCenterY: number;
+  hangingColliderHeight: number;
+  hangingColliderCenterY: number;
+  climbingColliderHeight: number;
+  climbingColliderCenterY: number;
+  mantleColliderHeight: number;
+  mantleColliderCenterY: number;
   collisionClearanceY: number;
   cameraTargetOffsetY: number;
   nameplateOffsetY: number;
@@ -86,7 +92,13 @@ export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> 
   colliderRadius: 0.44,
   crouchColliderHeight: 1.72,
   rollingColliderHeight: 1.42,
-  rollColliderCenterY: 0.62,
+  rollColliderCenterY: 0.71,
+  hangingColliderHeight: 1.34,
+  hangingColliderCenterY: 0.68,
+  climbingColliderHeight: 1.86,
+  climbingColliderCenterY: 0.96,
+  mantleColliderHeight: 2.08,
+  mantleColliderCenterY: 1.05,
   collisionClearanceY: 0.02,
   cameraTargetOffsetY: 1.28,
   nameplateOffsetY: 2.92,
