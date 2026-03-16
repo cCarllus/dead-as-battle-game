@@ -1,5 +1,6 @@
 // Responsible for running the modular shoulder camera with orbit look, smooth follow, FOV reactions, and collision recovery.
 import { TargetCamera, TransformNode, Vector3, type Scene } from "@babylonjs/core";
+import { createCameraAimingSystem, type CameraAimState } from "./camera-aiming";
 import { createCameraCollisionSystem } from "./camera-collision";
 import { createCameraDebugSystem } from "./camera-debug";
 import {
@@ -12,6 +13,11 @@ import {
   resolveConfiguredBaseFovRadians,
   type ThirdPersonCameraConfig
 } from "./camera-config";
+import {
+  DEFAULT_SHOULDER_CROSSHAIR_CONFIG,
+  LEFT_SHOULDER_SIDE,
+  RIGHT_SHOULDER_SIDE
+} from "./crosshair-config";
 import { createCameraShakeSystem, type CameraShakePreset } from "./camera-shake";
 import { createCameraStateController } from "./camera-state-controller";
 import { createCameraTiltSystem } from "./camera-tilt";
@@ -35,6 +41,9 @@ export type ThirdPersonCamera = {
   tick: (input: ThirdPersonCameraFrameInput) => void;
   triggerShake: (preset: CameraShakePreset, scale?: number) => void;
   getGroundForward: () => Vector3;
+  getAimState: () => CameraAimState | null;
+  toggleShoulderSide: () => number;
+  getShoulderSide: () => number;
   dispose: () => void;
 };
 
@@ -82,6 +91,19 @@ function resolveGroundForward(yaw: number): Vector3 {
   }
 
   return forward.normalize();
+}
+
+function resolvePlanarForward(direction: Vector3 | null, fallbackYaw: number): Vector3 {
+  if (!direction || direction.lengthSquared() <= 0.0001) {
+    return resolveGroundForward(fallbackYaw);
+  }
+
+  const planarForward = new Vector3(direction.x, 0, direction.z);
+  if (planarForward.lengthSquared() <= 0.0001) {
+    return resolveGroundForward(fallbackYaw);
+  }
+
+  return planarForward.normalize();
 }
 
 function rotateVectorAroundAxis(vector: Vector3, axis: Vector3, angle: number): Vector3 {
@@ -140,6 +162,13 @@ export function createThirdPersonCamera(
   );
   camera.minZ = 0.05;
   camera.fov = resolveConfiguredBaseFovRadians(config);
+  let currentShoulderSide = RIGHT_SHOULDER_SIDE;
+  const aimingSystem = createCameraAimingSystem({
+    scene: options.scene,
+    camera,
+    crosshairConfig: DEFAULT_SHOULDER_CROSSHAIR_CONFIG,
+    getShoulderSide: () => currentShoulderSide
+  });
 
   const targetNode = new TransformNode("globalMatchCameraTarget", options.scene);
 
@@ -155,6 +184,7 @@ export function createThirdPersonCamera(
   const currentCameraPosition = camera.position.clone();
   let currentCameraFovPercent = DEFAULT_CAMERA_SETTINGS_PERCENT;
   let currentCameraDistanceOffset = 0;
+  let currentAimState: CameraAimState | null = null;
 
   const applyViewSettings = (settings: { cameraFovPercent: number }): void => {
     currentCameraFovPercent = clampCameraSettingsPercent(
@@ -212,7 +242,8 @@ export function createThirdPersonCamera(
 
       const stateOutput = stateController.resolve({
         snapshot: input.snapshot,
-        isSprintBurstActive: input.isSprintBurstActive
+        isSprintBurstActive: input.isSprintBurstActive,
+        shoulderSide: currentShoulderSide
       });
       stateOutput.distance += currentCameraDistanceOffset;
 
@@ -308,12 +339,16 @@ export function createThirdPersonCamera(
       );
       camera.setTarget(currentFocusPoint);
       camera.fov = damp(camera.fov, stateOutput.desiredFovRadians, config.fovLerpSpeed, safeDelta);
+      const aimState = aimingSystem.sample();
+      currentAimState = aimState;
 
       debugSystem.render({
         focusPoint: currentFocusPoint,
         shoulderAnchor,
         desiredCameraPosition,
         finalCameraPosition: currentCameraPosition,
+        aimRayOrigin: aimState.rayOrigin,
+        aimTargetPoint: aimState.aimPoint,
         currentFovRadians: camera.fov,
         targetFovRadians: stateOutput.desiredFovRadians,
         locomotionState: input.snapshot.state,
@@ -324,12 +359,34 @@ export function createThirdPersonCamera(
       shake.triggerPreset(preset, scale);
     },
     getGroundForward: () => {
-      return resolveGroundForward(currentYaw);
+      return resolvePlanarForward(currentAimState?.rayDirection ?? null, currentYaw);
+    },
+    getAimState: () => {
+      if (!currentAimState) {
+        return null;
+      }
+
+      return {
+        ...currentAimState,
+        rayOrigin: currentAimState.rayOrigin.clone(),
+        rayDirection: currentAimState.rayDirection.clone(),
+        aimPoint: currentAimState.aimPoint.clone(),
+        hitPoint: currentAimState.hitPoint?.clone() ?? null
+      };
+    },
+    toggleShoulderSide: () => {
+      currentShoulderSide =
+        currentShoulderSide === RIGHT_SHOULDER_SIDE ? LEFT_SHOULDER_SIDE : RIGHT_SHOULDER_SIDE;
+      return currentShoulderSide;
+    },
+    getShoulderSide: () => {
+      return currentShoulderSide;
     },
     dispose: () => {
       headBob.reset();
       shake.reset();
       tilt.reset();
+      aimingSystem.dispose();
       collisionSystem.dispose();
       debugSystem.dispose();
       targetNode.dispose();

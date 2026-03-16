@@ -88,6 +88,19 @@ export type GlobalMatchSceneHandle = {
   getPlayerScreenPosition: (sessionId: string) => { x: number; y: number } | null;
   getPlayerNameplateScreenPosition: (sessionId: string) => { x: number; y: number } | null;
   getPlayerWorldPosition: (sessionId: string) => { x: number; y: number; z: number } | null;
+  getCrosshairScreenPosition: () => {
+    normalizedX: number;
+    normalizedY: number;
+    scale: number;
+    opacity: number;
+  } | null;
+  getCameraAimPoint: () => { x: number; y: number; z: number } | null;
+  getCameraAimRay: () => {
+    origin: { x: number; y: number; z: number };
+    direction: { x: number; y: number; z: number };
+  } | null;
+  toggleShoulderSide: () => number;
+  getShoulderSide: () => number;
   getCameraGroundForward: () => { x: number; z: number };
   applyViewSettings: (
     settings: Pick<GameSettings, "cameraFovPercent" | "renderDistanceViewPercent">
@@ -1016,6 +1029,56 @@ export async function createGlobalMatchScene(
     },
     getPlayerWorldPosition: (sessionId) => {
       return playerViewManager.getPlayerWorldPosition(sessionId);
+    },
+    getCrosshairScreenPosition: () => {
+      const aimState = cameraController.getAimState();
+      if (!aimState) {
+        return null;
+      }
+
+      return {
+        normalizedX: aimState.normalizedScreenX,
+        normalizedY: aimState.normalizedScreenY,
+        scale: aimState.scale,
+        opacity: aimState.opacity
+      };
+    },
+    getCameraAimPoint: () => {
+      const aimState = cameraController.getAimState();
+      if (!aimState) {
+        return null;
+      }
+
+      return {
+        x: aimState.aimPoint.x,
+        y: aimState.aimPoint.y,
+        z: aimState.aimPoint.z
+      };
+    },
+    getCameraAimRay: () => {
+      const aimState = cameraController.getAimState();
+      if (!aimState) {
+        return null;
+      }
+
+      return {
+        origin: {
+          x: aimState.rayOrigin.x,
+          y: aimState.rayOrigin.y,
+          z: aimState.rayOrigin.z
+        },
+        direction: {
+          x: aimState.rayDirection.x,
+          y: aimState.rayDirection.y,
+          z: aimState.rayDirection.z
+        }
+      };
+    },
+    toggleShoulderSide: () => {
+      return cameraController.toggleShoulderSide();
+    },
+    getShoulderSide: () => {
+      return cameraController.getShoulderSide();
     },
     getCameraGroundForward: () => {
       const forward = cameraController.getGroundForward();

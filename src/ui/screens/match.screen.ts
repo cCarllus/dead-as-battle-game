@@ -18,6 +18,7 @@ import { createCombatFeedbackSystem, type CombatFeedbackSystem } from "../../gam
 import { createGlobalMatchScene, type GlobalMatchSceneHandle } from "../../game/scenes/global-match.scene";
 import { createDamageNumberEffect, type DamageNumberEffect } from "../effects/damage-number.effect";
 import { bind, qs } from "../components/dom";
+import { createCrosshairController } from "../crosshair-controller";
 import { setMenuIconContent } from "../components/menu-icon";
 import { mountSettingsModal } from "../components/settings-modal";
 import template from "../layout/match.html?raw";
@@ -345,6 +346,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const hudRadarSouth = qs<HTMLElement>(screen, '[data-slot="match-radar-direction-south"]');
   const hudRadarWest = qs<HTMLElement>(screen, '[data-slot="match-radar-direction-west"]');
   const hudOverheadBarsLayer = qs<HTMLElement>(screen, '[data-slot="match-overhead-bars-layer"]');
+  const hudCrosshair = qs<HTMLElement>(screen, '[data-slot="match-crosshair"]');
   const hudHealthFill = qs<HTMLElement>(screen, '[data-slot="match-hud-health-fill"]');
   const hudResourceFill = qs<HTMLElement>(screen, '[data-slot="match-hud-resource-fill"]');
   const hudHealthValue = qs<HTMLElement>(screen, '[data-slot="match-hud-health-value"]');
@@ -376,6 +378,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const controlCopyJump = qs<HTMLElement>(screen, '[data-slot="match-control-copy-jump"]');
   const controlCopyRoll = qs<HTMLElement>(screen, '[data-slot="match-control-copy-roll"]');
   const controlCopyFly = qs<HTMLElement>(screen, '[data-slot="match-control-copy-fly"]');
+  const controlCopyShoulder = qs<HTMLElement>(screen, '[data-slot="match-control-copy-shoulder"]');
   const controlKeySprint = qs<HTMLElement>(screen, '[data-slot="match-control-key-sprint"]');
   const controlKeyJump = qs<HTMLElement>(screen, '[data-slot="match-control-key-jump"]');
   const hudStaminaRoot = qs<HTMLElement>(screen, '[data-slot="match-hud-stamina"]');
@@ -428,6 +431,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   controlCopyJump.textContent = t(locale, "match.controls.jump");
   controlCopyRoll.textContent = t(locale, "match.controls.roll");
   controlCopyFly.textContent = t(locale, "match.controls.flyMode");
+  controlCopyShoulder.textContent = t(locale, "match.controls.swapShoulder");
   controlKeySprint.textContent = t(locale, "match.controls.key.shift");
   controlKeyJump.textContent = t(locale, "match.controls.key.space");
   deathModalTitle.textContent = locale === "pt-BR" ? "Você morreu" : "You Died";
@@ -511,6 +515,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const speechBubblesBySessionId = new Map<string, MatchSpeechBubbleEntry>();
   const overheadBarsBySessionId = new Map<string, MatchOverheadBarEntry>();
   const radarMarkersBySessionId = new Map<string, HTMLSpanElement>();
+  let crosshairController: ReturnType<typeof createCrosshairController> | null = null;
 
   chatInput.maxLength = CHAT_MAX_MESSAGE_LENGTH;
   chatInput.placeholder = locale === "pt-BR" ? "Digite e pressione Enter" : "Type and press Enter";
@@ -1135,6 +1140,39 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     return inputState.gameplayEnabled && isMatchReady && !hasFatalError && !deathModalOpen && !chatComposerOpen;
   };
 
+  crosshairController = createCrosshairController({
+    element: hudCrosshair,
+    resolveState: () => {
+      const crosshairState = sceneHandle?.getCrosshairScreenPosition() ?? null;
+      const visible =
+        !!crosshairState &&
+        isMatchReady &&
+        !hasFatalError &&
+        !deathModalOpen &&
+        !chatComposerOpen &&
+        !isSettingsModalOpen() &&
+        !(pauseMenuSystem?.isOpen() ?? false);
+
+      if (!crosshairState) {
+        return {
+          normalizedX: 0.5,
+          normalizedY: 0.5,
+          scale: 1,
+          opacity: 0,
+          visible: false
+        };
+      }
+
+      return {
+        normalizedX: crosshairState.normalizedX,
+        normalizedY: crosshairState.normalizedY,
+        scale: crosshairState.scale,
+        opacity: crosshairState.opacity,
+        visible
+      };
+    }
+  });
+
   const renderScoreboardVisibility = (): void => {
     const isVisible =
       isScoreboardRequested &&
@@ -1700,6 +1738,21 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       return;
     }
 
+    if (event.code === "KeyQ") {
+      if (event.repeat) {
+        event.preventDefault();
+        return;
+      }
+
+      if (!hasGameplayInputPermission() || isTypingOnInputField()) {
+        return;
+      }
+
+      event.preventDefault();
+      sceneHandle?.toggleShoulderSide();
+      return;
+    }
+
     if (event.code === "KeyG") {
       if (event.repeat) {
         event.preventDefault();
@@ -1934,6 +1987,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     fullscreenSystem.dispose();
     hideFullscreenNotice();
     settingsModal.dispose();
+    crosshairController?.dispose();
+    crosshairController = null;
 
     sceneHandle?.dispose();
     sceneHandle = null;

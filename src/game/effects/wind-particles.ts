@@ -100,7 +100,8 @@ export function createWindParticlesSystem(scene: Scene): WindParticlesSystem {
       wind.direction2.copyFrom(
         backward.scale(3.2).add(sideways.scale(0.55)).add(new Vector3(0, 0.08, 0))
       );
-      wind.emitRate = input.isSprinting ? 36 + Math.floor(96 * safeFeedback) : 0;
+      // Disable camera-attached wind sprites because they read as floating white orbs in gameplay.
+      wind.emitRate = 0;
 
       dustEmitterPosition.set(input.playerPosition.x, input.playerPosition.y + 0.03, input.playerPosition.z);
       dust.emitRate = input.isGrounded && input.isSprinting ? 8 + Math.floor(26 * safeFeedback) : 0;

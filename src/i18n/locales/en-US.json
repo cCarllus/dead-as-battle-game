@@ -106,6 +106,7 @@
   "match.controls.jump": "Jump",
   "match.controls.roll": "Roll",
   "match.controls.flyMode": "Fly Mode",
+  "match.controls.swapShoulder": "Swap Shoulder",
   "match.controls.key.shift": "Shift",
   "match.controls.key.space": "Space",
   "match.scoreboard.title": "Match Scoreboard",

@@ -14,6 +14,8 @@ export type CameraDebugFrameInput = {
   shoulderAnchor: Vector3;
   desiredCameraPosition: Vector3;
   finalCameraPosition: Vector3;
+  aimRayOrigin: Vector3 | null;
+  aimTargetPoint: Vector3 | null;
   currentFovRadians: number;
   targetFovRadians: number;
   locomotionState: string;
@@ -74,15 +76,21 @@ export function createCameraDebugSystem(
   const focusMarker = createMarker(scene, "dabCameraFocusMarker", new Color3(1, 0.25, 0.25), 0.12);
   const shoulderMarker = createMarker(scene, "dabCameraShoulderMarker", new Color3(0.25, 0.78, 1), 0.12);
   const finalMarker = createMarker(scene, "dabCameraFinalMarker", new Color3(1, 0.92, 0.25), 0.14);
+  const aimMarker = createMarker(scene, "dabCameraAimMarker", new Color3(0.45, 1, 0.76), 0.1);
   let collisionLine: LinesMesh | null = null;
+  let aimLine: LinesMesh | null = null;
   let lastLogAtMs = 0;
 
   const setVisible = (visible: boolean): void => {
     focusMarker.mesh.isVisible = visible;
     shoulderMarker.mesh.isVisible = visible;
     finalMarker.mesh.isVisible = visible;
+    aimMarker.mesh.isVisible = visible;
     if (collisionLine) {
       collisionLine.isVisible = visible;
+    }
+    if (aimLine) {
+      aimLine.isVisible = visible;
     }
   };
 
@@ -112,6 +120,24 @@ export function createCameraDebugSystem(
       collisionLine.color = lineColor;
       collisionLine.isVisible = true;
 
+      if (input.aimRayOrigin && input.aimTargetPoint) {
+        aimMarker.mesh.position.copyFrom(input.aimTargetPoint);
+        aimLine = MeshBuilder.CreateLines(
+          "dabCameraAimRay",
+          {
+            points: [input.aimRayOrigin, input.aimTargetPoint],
+            instance: aimLine ?? undefined,
+            updatable: true
+          },
+          scene
+        );
+        aimLine.isPickable = false;
+        aimLine.color = new Color3(0.45, 1, 0.76);
+        aimLine.isVisible = true;
+      } else if (aimLine) {
+        aimLine.isVisible = false;
+      }
+
       const now = Date.now();
       if (now - lastLogAtMs < debugLogIntervalMs) {
         return;
@@ -132,10 +158,18 @@ export function createCameraDebugSystem(
           x: Math.round(input.finalCameraPosition.x * 1000) / 1000,
           y: Math.round(input.finalCameraPosition.y * 1000) / 1000,
           z: Math.round(input.finalCameraPosition.z * 1000) / 1000
-        }
+        },
+        aimTargetPoint: input.aimTargetPoint
+          ? {
+              x: Math.round(input.aimTargetPoint.x * 1000) / 1000,
+              y: Math.round(input.aimTargetPoint.y * 1000) / 1000,
+              z: Math.round(input.aimTargetPoint.z * 1000) / 1000
+            }
+          : null
       });
     },
     dispose: () => {
+      aimLine?.dispose();
       collisionLine?.dispose();
       focusMarker.mesh.dispose();
       focusMarker.material.dispose();
@@ -143,6 +177,8 @@ export function createCameraDebugSystem(
       shoulderMarker.material.dispose();
       finalMarker.mesh.dispose();
       finalMarker.material.dispose();
+      aimMarker.mesh.dispose();
+      aimMarker.material.dispose();
     }
   };
 }

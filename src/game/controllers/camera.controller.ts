@@ -1,5 +1,6 @@
 // Responsável por adaptar a nova câmera shoulder third-person ao contrato usado pela cena de gameplay.
 import type { Scene, TargetCamera, TransformNode, Vector3 } from "@babylonjs/core";
+import type { CameraAimState } from "../camera/camera-aiming";
 import type { CameraShakePreset } from "../camera/camera-shake";
 import {
   createThirdPersonCamera,
@@ -21,6 +22,9 @@ export type CameraController = {
   tick: (input: CameraControllerFrameInput) => void;
   triggerShake: (preset: CameraShakePreset, scale?: number) => void;
   getGroundForward: () => Vector3;
+  getAimState: () => CameraAimState | null;
+  toggleShoulderSide: () => number;
+  getShoulderSide: () => number;
   dispose: () => void;
 };
 

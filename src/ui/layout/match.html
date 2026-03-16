@@ -94,6 +94,16 @@
 
       <div class="dab-match__overhead-bars-layer" data-slot="match-overhead-bars-layer" aria-hidden="true"></div>
       <div class="dab-match__speech-layer" data-slot="match-speech-layer" aria-hidden="true"></div>
+      <div class="dab-match__crosshair-layer" aria-hidden="true">
+        <div class="dab-match__crosshair" data-slot="match-crosshair" hidden>
+          <span class="dab-match__crosshair-ring"></span>
+          <span class="dab-match__crosshair-core"></span>
+          <span class="dab-match__crosshair-tick is-top"></span>
+          <span class="dab-match__crosshair-tick is-bottom"></span>
+          <span class="dab-match__crosshair-tick is-left"></span>
+          <span class="dab-match__crosshair-tick is-right"></span>
+        </div>
+      </div>
 
       <div class="dab-match__hud-frame dab-match__hud-frame--bottom-left">
         <aside class="dab-match__chat-feed" data-slot="match-chat-feed" role="log" aria-live="polite"></aside>
@@ -188,6 +198,10 @@
             <div class="dab-match__control-row">
               <span class="dab-match__control-copy" data-slot="match-control-copy-fly">Fly Mode</span>
               <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text">F</span></span>
+            </div>
+            <div class="dab-match__control-row">
+              <span class="dab-match__control-copy" data-slot="match-control-copy-shoulder">Swap Shoulder</span>
+              <span class="dab-match__control-key"><span class="dab-match__control-keycap is-text">Q</span></span>
             </div>
           </div>
         </aside>

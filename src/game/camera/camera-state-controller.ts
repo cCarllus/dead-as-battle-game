@@ -8,6 +8,7 @@ import {
 export type CameraStateFrameInput = {
   snapshot: CharacterLocomotionSnapshot;
   isSprintBurstActive: boolean;
+  shoulderSide: number;
 };
 
 export type CameraStateFrameOutput = {
@@ -51,6 +52,7 @@ export function createCameraStateController(
   return {
     resolve: (input) => {
       const { snapshot } = input;
+      const shoulderSide = input.shoulderSide >= 0 ? 1 : -1;
       const crouchBlend = clamp01(Math.max(snapshot.crouchAlpha, snapshot.isCrouching ? 1 : 0));
       const rollBlend = clamp01(Math.max(snapshot.rollingAlpha, snapshot.isRolling ? 1 : 0));
       const hanging = isLedgeHangState(snapshot.state);
@@ -59,10 +61,10 @@ export function createCameraStateController(
 
       let distance = config.baseDistance;
       let cameraHeightOffset = config.baseHeight;
-      let shoulderOffsetX = config.shoulderOffsetX;
+      let shoulderOffsetX = config.shoulderOffsetX * shoulderSide;
       let shoulderOffsetY = config.shoulderOffsetY;
       let shoulderOffsetZ = config.shoulderOffsetZ;
-      let focusOffsetX = config.targetShoulderOffsetX;
+      let focusOffsetX = config.targetShoulderOffsetX * shoulderSide;
       let focusLeadDistance = config.targetLeadDistance;
       let targetOffsetY = config.cameraTargetOffsetY;
       let desiredFovRadians = resolveConfiguredBaseFovRadians(config);
