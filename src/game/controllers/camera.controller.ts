@@ -15,6 +15,8 @@ export type CameraControllerViewSettings = {
 
 export type CameraController = {
   camera: TargetCamera;
+  followPivotNode: TransformNode;
+  lookTargetNode: TransformNode;
   targetNode: TransformNode;
   addPointerDelta: (deltaX: number, deltaY: number) => void;
   syncLook: (isPointerLocked: boolean, isInputEnabled: boolean) => void;
@@ -47,7 +49,7 @@ export function createCameraController(options: CreateCameraControllerOptions): 
   return createThirdPersonCamera({
     scene: options.scene,
     config: mergeThirdPersonCameraConfig({
-      baseDistance: options.radius,
+      cameraDistance: options.radius,
       sensitivityX: options.mouseSensitivity,
       sensitivityY: options.mouseSensitivity,
       minPitch:
@@ -58,7 +60,7 @@ export function createCameraController(options: CreateCameraControllerOptions): 
         legacyPitchMin !== undefined && legacyPitchMax !== undefined
           ? Math.max(legacyPitchMin, legacyPitchMax)
           : undefined,
-      cameraTargetOffsetY: options.targetVerticalOffset,
+      lookTargetHeight: options.targetVerticalOffset,
       targetShoulderOffsetX: options.targetLateralOffset
     })
   });

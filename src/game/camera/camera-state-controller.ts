@@ -59,16 +59,16 @@ export function createCameraStateController(
       const climbing = isLedgeClimbState(snapshot.state);
       const parkour = isParkourState(snapshot);
 
-      let distance = config.baseDistance;
-      let cameraHeightOffset = config.baseHeight;
+      let distance = config.cameraDistance;
+      let cameraHeightOffset = config.cameraHeightOffset;
       let shoulderOffsetX = config.shoulderOffsetX * shoulderSide;
       let shoulderOffsetY = config.shoulderOffsetY;
       let shoulderOffsetZ = config.shoulderOffsetZ;
       let focusOffsetX = config.targetShoulderOffsetX * shoulderSide;
       let focusLeadDistance = config.targetLeadDistance;
-      let targetOffsetY = config.cameraTargetOffsetY;
+      let targetOffsetY = config.lookTargetHeight;
       let desiredFovRadians = resolveConfiguredBaseFovRadians(config);
-      let followLerpSpeed = config.followLerpSpeed;
+      let followLerpSpeed = config.positionLerpSpeed;
       let rotationLerpSpeed = config.rotationLerpSpeed;
       let rollRadians = 0;
 

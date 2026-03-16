@@ -1,14 +1,14 @@
 // Responsible for centralizing shoulder-camera tuning so combat framing and reactions stay easy to tune.
 export type ThirdPersonCameraConfig = {
-  baseDistance: number;
+  cameraDistance: number;
   minDistance: number;
-  baseHeight: number;
+  cameraHeightOffset: number;
   shoulderOffsetX: number;
   shoulderOffsetY: number;
   shoulderOffsetZ: number;
   targetShoulderOffsetX: number;
   targetLeadDistance: number;
-  cameraTargetOffsetY: number;
+  lookTargetHeight: number;
   crouchHeightOffset: number;
   crouchTargetOffsetY: number;
   sprintDistanceOffset: number;
@@ -28,14 +28,14 @@ export type ThirdPersonCameraConfig = {
   parkourHeightOffset: number;
   parkourTargetOffsetY: number;
   parkourFollowLerpMultiplier: number;
-  baseFovRadians: number;
+  cameraFovRadians: number;
   sprintFovRadians: number;
   rollFovRadians: number;
   parkourFovRadians: number;
   userFovAdjustmentRadians: number;
   minAllowedFovRadians: number;
   maxAllowedFovRadians: number;
-  followLerpSpeed: number;
+  positionLerpSpeed: number;
   rotationLerpSpeed: number;
   fovLerpSpeed: number;
   collisionLerpSpeed: number;
@@ -61,20 +61,20 @@ export type ThirdPersonCameraConfig = {
 export const DEFAULT_CAMERA_SETTINGS_PERCENT = 50;
 
 export const DEFAULT_THIRD_PERSON_CAMERA_CONFIG: Readonly<ThirdPersonCameraConfig> = {
-  baseDistance: 3.02,
+  cameraDistance: 3.22,
   minDistance: 1.4,
-  baseHeight: 0.48,
-  shoulderOffsetX: 1.18,
-  shoulderOffsetY: 0.28,
-  shoulderOffsetZ: 0.2,
-  targetShoulderOffsetX: 0.24,
-  targetLeadDistance: 0.38,
-  cameraTargetOffsetY: 0.32,
+  cameraHeightOffset: 0.42,
+  shoulderOffsetX: 1.02,
+  shoulderOffsetY: 0.22,
+  shoulderOffsetZ: 0.18,
+  targetShoulderOffsetX: 0.18,
+  targetLeadDistance: 0.62,
+  lookTargetHeight: 0.28,
   crouchHeightOffset: -0.22,
   crouchTargetOffsetY: -0.16,
-  sprintDistanceOffset: 0.08,
-  sprintLeadOffset: 0.05,
-  sprintFollowLerpMultiplier: 1.08,
+  sprintDistanceOffset: 0.1,
+  sprintLeadOffset: 0.08,
+  sprintFollowLerpMultiplier: 1.1,
   rollDistanceOffset: -0.16,
   rollHeightOffset: -0.14,
   rollLeadOffset: 0.18,
@@ -89,15 +89,15 @@ export const DEFAULT_THIRD_PERSON_CAMERA_CONFIG: Readonly<ThirdPersonCameraConfi
   parkourHeightOffset: 0.1,
   parkourTargetOffsetY: 0.06,
   parkourFollowLerpMultiplier: 1.12,
-  baseFovRadians: (68 * Math.PI) / 180,
-  sprintFovRadians: (72 * Math.PI) / 180,
+  cameraFovRadians: (67 * Math.PI) / 180,
+  sprintFovRadians: (71 * Math.PI) / 180,
   rollFovRadians: (74 * Math.PI) / 180,
-  parkourFovRadians: (73 * Math.PI) / 180,
+  parkourFovRadians: (72 * Math.PI) / 180,
   userFovAdjustmentRadians: 0,
   minAllowedFovRadians: (56 * Math.PI) / 180,
   maxAllowedFovRadians: (98 * Math.PI) / 180,
-  followLerpSpeed: 12.2,
-  rotationLerpSpeed: 21.5,
+  positionLerpSpeed: 12.8,
+  rotationLerpSpeed: 20.5,
   fovLerpSpeed: 8.5,
   collisionLerpSpeed: 24,
   collisionRecoveryLerpSpeed: 8.5,
@@ -149,7 +149,7 @@ export function mergeThirdPersonCameraConfig(
 }
 
 export function resolveConfiguredBaseFovRadians(config: ThirdPersonCameraConfig): number {
-  const desiredFov = config.baseFovRadians + config.userFovAdjustmentRadians;
+  const desiredFov = config.cameraFovRadians + config.userFovAdjustmentRadians;
   return Math.min(config.maxAllowedFovRadians, Math.max(config.minAllowedFovRadians, desiredFov));
 }
 
@@ -190,17 +190,17 @@ export function resolveFovAdjustmentRadiansFromPercent(
     safePercent < DEFAULT_CAMERA_SETTINGS_PERCENT
       ? lerp(
           config.minAllowedFovRadians,
-          config.baseFovRadians,
+          config.cameraFovRadians,
           (safePercent - 1) / (DEFAULT_CAMERA_SETTINGS_PERCENT - 1)
         )
       : lerp(
-          config.baseFovRadians,
+          config.cameraFovRadians,
           config.maxAllowedFovRadians,
           (safePercent - DEFAULT_CAMERA_SETTINGS_PERCENT) /
             (100 - DEFAULT_CAMERA_SETTINGS_PERCENT)
         );
 
-  return targetFovRadians - config.baseFovRadians;
+  return targetFovRadians - config.cameraFovRadians;
 }
 
 export function resolveCameraDistanceOffsetFromPercent(percent: number): number {

@@ -34,6 +34,8 @@ export type ThirdPersonCameraFrameInput = {
 
 export type ThirdPersonCamera = {
   camera: TargetCamera;
+  followPivotNode: TransformNode;
+  lookTargetNode: TransformNode;
   targetNode: TransformNode;
   addPointerDelta: (deltaX: number, deltaY: number) => void;
   syncLook: (isPointerLocked: boolean, isInputEnabled: boolean) => void;
@@ -157,7 +159,7 @@ export function createThirdPersonCamera(
 
   const camera = new TargetCamera(
     "globalMatchCamera",
-    new Vector3(0, config.baseHeight + 1.4, -config.baseDistance),
+    new Vector3(0, config.cameraHeightOffset + 1.4, -config.cameraDistance),
     options.scene
   );
   camera.minZ = 0.05;
@@ -170,7 +172,9 @@ export function createThirdPersonCamera(
     getShoulderSide: () => currentShoulderSide
   });
 
-  const targetNode = new TransformNode("globalMatchCameraTarget", options.scene);
+  const followPivotNode = new TransformNode("globalMatchCameraFollowPivot", options.scene);
+  const lookTargetNode = new TransformNode("globalMatchCameraLookTarget", options.scene);
+  const targetNode = lookTargetNode;
 
   let accumulatedMouseDeltaX = 0;
   let accumulatedMouseDeltaY = 0;
@@ -180,6 +184,7 @@ export function createThirdPersonCamera(
   let currentPitch = desiredPitch;
   let landingDrop = 0;
   let elapsedSeconds = 0;
+  const currentFollowPivotPoint = new Vector3(0, 1.1, 0);
   const currentFocusPoint = new Vector3(0, 1.4, 0);
   const currentCameraPosition = camera.position.clone();
   let currentCameraFovPercent = DEFAULT_CAMERA_SETTINGS_PERCENT;
@@ -204,6 +209,8 @@ export function createThirdPersonCamera(
 
   return {
     camera,
+    followPivotNode,
+    lookTargetNode,
     targetNode,
     addPointerDelta: (deltaX, deltaY) => {
       accumulatedMouseDeltaX += deltaX;
@@ -288,11 +295,20 @@ export function createThirdPersonCamera(
       const groundForward = resolveGroundForward(currentYaw);
       const groundRight = new Vector3(groundForward.z, 0, -groundForward.x).normalize();
 
-      const desiredFocusPoint = new Vector3(
+      const desiredFollowPivotPoint = new Vector3(
         input.cameraTarget.x,
         input.cameraTarget.y,
         input.cameraTarget.z
       );
+      dampVector(
+        currentFollowPivotPoint,
+        desiredFollowPivotPoint,
+        stateOutput.followLerpSpeed,
+        safeDelta
+      );
+      followPivotNode.position.copyFrom(currentFollowPivotPoint);
+
+      const desiredFocusPoint = currentFollowPivotPoint.clone();
       desiredFocusPoint.addInPlace(groundRight.scale(stateOutput.focusOffsetX));
       desiredFocusPoint.addInPlace(groundForward.scale(stateOutput.focusLeadDistance));
       desiredFocusPoint.y += stateOutput.targetOffsetY + bobOffset - landingDrop;
@@ -304,7 +320,7 @@ export function createThirdPersonCamera(
       }
 
       dampVector(currentFocusPoint, desiredFocusPoint, stateOutput.followLerpSpeed, safeDelta);
-      targetNode.position.copyFrom(currentFocusPoint);
+      lookTargetNode.position.copyFrom(currentFocusPoint);
 
       const shoulderAnchor = currentFocusPoint
         .add(basis.right.scale(stateOutput.shoulderOffsetX))
@@ -389,7 +405,8 @@ export function createThirdPersonCamera(
       aimingSystem.dispose();
       collisionSystem.dispose();
       debugSystem.dispose();
-      targetNode.dispose();
+      followPivotNode.dispose();
+      lookTargetNode.dispose();
       camera.dispose();
     }
   };

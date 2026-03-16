@@ -11,8 +11,8 @@ export type ShoulderCrosshairConfig = {
 };
 
 export const DEFAULT_SHOULDER_CROSSHAIR_CONFIG: Readonly<ShoulderCrosshairConfig> = {
-  screenOffsetX: 0.024,
-  screenOffsetY: -0.096,
+  screenOffsetX: 0.05,
+  screenOffsetY: -0.06,
   scale: 1,
   opacity: 0.92,
   aimMaxDistance: 220
