@@ -6,6 +6,8 @@ export type GameSettings = {
   fullscreen: boolean;
   muteAll: boolean;
   masterVolume: number;
+  cameraFovPercent: number;
+  renderDistanceViewPercent: number;
 };
 
 export type SettingsStorageAdapter = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -23,7 +25,9 @@ export const DEFAULT_GAME_SETTINGS: Readonly<GameSettings> = Object.freeze({
   locale: "pt-BR",
   fullscreen: false,
   muteAll: false,
-  masterVolume: 80
+  masterVolume: 80,
+  cameraFovPercent: 50,
+  renderDistanceViewPercent: 50
 });
 
 function clampVolume(value: number, fallback: number): number {
@@ -34,6 +38,23 @@ function clampVolume(value: number, fallback: number): number {
   const normalized = Math.round(value);
   if (normalized < 0) {
     return 0;
+  }
+
+  if (normalized > 100) {
+    return 100;
+  }
+
+  return normalized;
+}
+
+function clampPercentRange(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  const normalized = Math.round(value);
+  if (normalized < 1) {
+    return 1;
   }
 
   if (normalized > 100) {
@@ -56,7 +77,9 @@ function cloneSettings(settings: Readonly<GameSettings>): GameSettings {
     locale: settings.locale,
     fullscreen: settings.fullscreen,
     muteAll: settings.muteAll,
-    masterVolume: settings.masterVolume
+    masterVolume: settings.masterVolume,
+    cameraFovPercent: settings.cameraFovPercent,
+    renderDistanceViewPercent: settings.renderDistanceViewPercent
   };
 }
 
@@ -77,7 +100,20 @@ export function normalizeGameSettings(value: unknown): GameSettings {
     locale: normalizeLocale(value.locale),
     fullscreen: value.fullscreen === true,
     muteAll: value.muteAll === true,
-    masterVolume: clampVolume(typeof value.masterVolume === "number" ? value.masterVolume : Number.NaN, DEFAULT_GAME_SETTINGS.masterVolume)
+    masterVolume: clampVolume(
+      typeof value.masterVolume === "number" ? value.masterVolume : Number.NaN,
+      DEFAULT_GAME_SETTINGS.masterVolume
+    ),
+    cameraFovPercent: clampPercentRange(
+      typeof value.cameraFovPercent === "number" ? value.cameraFovPercent : Number.NaN,
+      DEFAULT_GAME_SETTINGS.cameraFovPercent
+    ),
+    renderDistanceViewPercent: clampPercentRange(
+      typeof value.renderDistanceViewPercent === "number"
+        ? value.renderDistanceViewPercent
+        : Number.NaN,
+      DEFAULT_GAME_SETTINGS.renderDistanceViewPercent
+    )
   };
 }
 

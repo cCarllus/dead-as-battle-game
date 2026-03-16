@@ -622,46 +622,6 @@
   letter-spacing: 0.06em;
 }
 
-.dab-match__crosshair {
-  position: absolute;
-  inset: 50% auto auto 50%;
-  transform: translate(-50%, -50%);
-  width: 18px;
-  height: 18px;
-  pointer-events: none;
-  z-index: 33;
-}
-
-.dab-match__crosshair::before,
-.dab-match__crosshair::after {
-  content: "";
-  position: absolute;
-  inset: 50% auto auto 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(248, 250, 252, 0.42);
-}
-
-.dab-match__crosshair::before {
-  width: 18px;
-  height: 1px;
-}
-
-.dab-match__crosshair::after {
-  width: 1px;
-  height: 18px;
-}
-
-.dab-match__crosshair-dot {
-  position: absolute;
-  inset: 50% auto auto 50%;
-  width: 4px;
-  height: 4px;
-  transform: translate(-50%, -50%);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.45);
-}
-
 .dab-match__skills {
   --dab-skill-theme: var(--dab-hero-skill-theme, #facc15);
   display: grid;
@@ -1046,9 +1006,6 @@ button.dab-match__skill {
     height: 68px;
   }
 
-  .dab-match__crosshair {
-    display: none;
-  }
 }
 
 html,
@@ -7593,23 +7550,6 @@ button.dab-match__skill {
 .dab-match .dab-match__control-keycap.is-accent .dab-match__control-keycap-icon,
 .dab-match .dab-match__control-keycap.is-accent .dab-match__control-keycap-label {
   color: rgba(248, 250, 252, 0.9);
-}
-
-.dab-match .dab-match__crosshair {
-  width: 10px;
-  height: 10px;
-}
-
-.dab-match .dab-match__crosshair::before,
-.dab-match .dab-match__crosshair::after {
-  display: none;
-}
-
-.dab-match .dab-match__crosshair-dot {
-  width: 3px;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.66);
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.34);
 }
 
 @media (max-width: 900px) {

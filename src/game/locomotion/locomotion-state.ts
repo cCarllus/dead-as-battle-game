@@ -48,11 +48,4 @@ export type CharacterLocomotionSnapshot = {
     isShiftPressed: boolean;
     isForwardPressed: boolean;
   };
-  cameraProfile: {
-    crouchOffsetY: number;
-    rollingOffsetY: number;
-    sprintFovBoostRadians: number;
-    wallRunFovBoostRadians: number;
-    wallRunTiltRadians: number;
-  };
 };

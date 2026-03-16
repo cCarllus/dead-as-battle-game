@@ -452,6 +452,12 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     menu: screen,
     settingsService: actions.settingsService,
     onApplyAudioSettings: actions.onApplyAudioSettings,
+    onApplySettings: (settings) => {
+      sceneHandle?.applyViewSettings({
+        cameraFovPercent: settings.cameraFovPercent,
+        renderDistanceViewPercent: settings.renderDistanceViewPercent
+      });
+    },
     onApplyLocale: actions.onApplyLocale,
     onClearSession: actions.onClearSession
   });
@@ -1857,6 +1863,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       const connectedPlayers = actions.matchService.getPlayers();
       sceneHandle.setTeamMemberUserIds(Array.from(teamMemberUserIds));
       sceneHandle.setPlayers(connectedPlayers);
+      sceneHandle.applyViewSettings({
+        cameraFovPercent: actions.settingsService.load().cameraFovPercent,
+        renderDistanceViewPercent: actions.settingsService.load().renderDistanceViewPercent
+      });
       disposeScenePointerLockChanged = sceneHandle.onPointerLockChanged(onScenePointerLockChanged);
       wasPointerLocked = sceneHandle.isPointerLocked();
       setFlyUiState(sceneHandle.isFlyModeEnabled());

@@ -40,11 +40,6 @@ export type CharacterLocomotionConfig = {
   slopeLimitDegrees: number;
   sprintBurstDurationMs: number;
   sprintBurstSpeedMultiplier: number;
-  crouchCameraOffsetY: number;
-  rollingCameraOffsetY: number;
-  sprintFovBoostRadians: number;
-  wallRunFovBoostRadians: number;
-  wallRunTiltRadians: number;
 };
 
 export type CharacterLedgeConfig = {
@@ -136,12 +131,7 @@ export const DEFAULT_CHARACTER_RUNTIME_CONFIG: Readonly<CharacterRuntimeConfig> 
     wallDetectionDistance: 0.72,
     slopeLimitDegrees: 48,
     sprintBurstDurationMs: 180,
-    sprintBurstSpeedMultiplier: 1.12,
-    crouchCameraOffsetY: -0.26,
-    rollingCameraOffsetY: -0.38,
-    sprintFovBoostRadians: (10 * Math.PI) / 180,
-    wallRunFovBoostRadians: (6 * Math.PI) / 180,
-    wallRunTiltRadians: (8 * Math.PI) / 180
+    sprintBurstSpeedMultiplier: 1.12
   },
   ledge: {
     minClimbHeight: 0.42,

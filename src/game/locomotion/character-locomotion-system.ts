@@ -382,14 +382,7 @@ export function createCharacterLocomotionSystem(
       rollingAlpha: params.rollingAlpha,
       verticalVelocity: params.verticalVelocity,
       landingImpact: params.landingImpact,
-      sprintIntent: params.sprintIntent,
-      cameraProfile: {
-        crouchOffsetY: locomotionConfig.crouchCameraOffsetY,
-        rollingOffsetY: locomotionConfig.rollingCameraOffsetY,
-        sprintFovBoostRadians: locomotionConfig.sprintFovBoostRadians,
-        wallRunFovBoostRadians: 0,
-        wallRunTiltRadians: 0
-      }
+      sprintIntent: params.sprintIntent
     };
 
     return {

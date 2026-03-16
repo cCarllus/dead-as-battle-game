@@ -20,6 +20,7 @@ export type MountSettingsModalOptions = {
   menu: HTMLElement;
   settingsService: SettingsService;
   onApplyAudioSettings: (settings: GameSettings) => void;
+  onApplySettings?: (settings: GameSettings) => void;
   onApplyLocale: (locale: Locale) => boolean;
   onClearSession: () => void;
 };
@@ -29,7 +30,9 @@ function cloneSettings(settings: Readonly<GameSettings>): GameSettings {
     locale: settings.locale,
     fullscreen: settings.fullscreen,
     muteAll: settings.muteAll,
-    masterVolume: settings.masterVolume
+    masterVolume: settings.masterVolume,
+    cameraFovPercent: settings.cameraFovPercent,
+    renderDistanceViewPercent: settings.renderDistanceViewPercent
   };
 }
 
@@ -71,6 +74,7 @@ export function mountSettingsModal({
   menu,
   settingsService,
   onApplyAudioSettings,
+  onApplySettings,
   onApplyLocale,
   onClearSession
 }: MountSettingsModalOptions): SettingsModalController {
@@ -82,15 +86,24 @@ export function mountSettingsModal({
   const unsupportedHint = qs<HTMLElement>(menu, '[data-slot="settings-fullscreen-unsupported"]');
 
   const fullscreenField = qs<HTMLElement>(menu, '[data-setting-field="fullscreen"]');
+  const cameraFovField = qs<HTMLElement>(menu, '[data-setting-field="cameraFovPercent"]');
+  const renderDistanceViewField = qs<HTMLElement>(menu, '[data-setting-field="renderDistanceViewPercent"]');
   const masterVolumeField = qs<HTMLElement>(menu, '[data-setting-field="masterVolume"]');
 
   const fullscreenToggle = qs<HTMLInputElement>(menu, 'input[data-setting-toggle="fullscreen"]');
   const muteAllToggle = qs<HTMLInputElement>(menu, 'input[data-setting-toggle="muteAll"]');
 
   const masterVolumeInput = qs<HTMLInputElement>(menu, 'input[data-setting-slider="masterVolume"]');
+  const cameraFovInput = qs<HTMLInputElement>(menu, 'input[data-setting-slider="cameraFovPercent"]');
+  const renderDistanceViewInput = qs<HTMLInputElement>(
+    menu,
+    'input[data-setting-slider="renderDistanceViewPercent"]'
+  );
   const localeSelect = qs<HTMLSelectElement>(menu, 'select[data-setting-select="locale"]');
 
   const masterVolumeValue = qs<HTMLElement>(menu, '[data-setting-value="masterVolume"]');
+  const cameraFovValue = qs<HTMLElement>(menu, '[data-setting-value="cameraFovPercent"]');
+  const renderDistanceViewValue = qs<HTMLElement>(menu, '[data-setting-value="renderDistanceViewPercent"]');
 
   const cancelButton = qs<HTMLButtonElement>(menu, 'button[data-settings-action="cancel"]');
   const saveButton = qs<HTMLButtonElement>(menu, 'button[data-settings-action="save"]');
@@ -138,12 +151,20 @@ export function mountSettingsModal({
     localeSelect.value = draftSettings.locale;
 
     masterVolumeInput.value = String(draftSettings.masterVolume);
+    cameraFovInput.value = String(draftSettings.cameraFovPercent);
+    renderDistanceViewInput.value = String(draftSettings.renderDistanceViewPercent);
 
     updateSliderFill(masterVolumeInput);
+    updateSliderFill(cameraFovInput);
+    updateSliderFill(renderDistanceViewInput);
 
     masterVolumeValue.textContent = `${draftSettings.masterVolume}%`;
+    cameraFovValue.textContent = `${draftSettings.cameraFovPercent}%`;
+    renderDistanceViewValue.textContent = `${draftSettings.renderDistanceViewPercent}%`;
 
     updateVolumeFieldState();
+    cameraFovField.classList.remove("is-disabled");
+    renderDistanceViewField.classList.remove("is-disabled");
   };
 
   const showSavedToast = (): void => {
@@ -240,6 +261,7 @@ export function mountSettingsModal({
       draftSettings = cloneSettings(savedSettings);
       void applyFullscreenPreference(savedSettings.fullscreen);
       onApplyAudioSettings(savedSettings);
+      onApplySettings?.(savedSettings);
       closeModal();
       const localeChanged = onApplyLocale(savedSettings.locale);
 
@@ -263,7 +285,9 @@ export function mountSettingsModal({
       clearStorageByPrefixes(localStorage, STORAGE_CLEAR_PREFIXES);
       clearStorageByPrefixes(sessionStorage, STORAGE_CLEAR_PREFIXES);
       settingsService.clear();
-      onApplyAudioSettings(cloneSettings(DEFAULT_GAME_SETTINGS));
+      const defaultSettings = cloneSettings(DEFAULT_GAME_SETTINGS);
+      onApplyAudioSettings(defaultSettings);
+      onApplySettings?.(defaultSettings);
 
       closeModal();
       onClearSession();
@@ -281,6 +305,17 @@ export function mountSettingsModal({
     }),
     bind(masterVolumeInput, "input", () => {
       draftSettings.masterVolume = readVolumeInput(masterVolumeInput);
+      renderDraft();
+    }),
+    bind(cameraFovInput, "input", () => {
+      draftSettings.cameraFovPercent = Math.max(1, Math.min(100, Math.round(Number(cameraFovInput.value))));
+      renderDraft();
+    }),
+    bind(renderDistanceViewInput, "input", () => {
+      draftSettings.renderDistanceViewPercent = Math.max(
+        1,
+        Math.min(100, Math.round(Number(renderDistanceViewInput.value)))
+      );
       renderDraft();
     }),
     bind(panel, "click", (event) => {

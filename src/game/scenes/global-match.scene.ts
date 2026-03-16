@@ -1,12 +1,13 @@
 // Responsável por orquestrar a cena da partida global com arquitetura modular de gameplay (movimento, câmera, colisão, iluminação).
 import {
+  Color3,
+  Camera,
   Color4,
   Matrix,
+  Scene,
   Vector3,
   type AbstractMesh,
-  type ArcRotateCamera,
   type Engine,
-  type Scene,
   type TransformNode
 } from "@babylonjs/core";
 import type {
@@ -16,7 +17,7 @@ import type {
   MatchPlayerState,
   MatchPlayerWallRunSide
 } from "../../models/match-player.model";
-import { resolveLocomotionCameraHooks } from "../camera/locomotion-camera-hooks";
+import type { GameSettings } from "../../services/settings.service";
 import {
   createCombatStateMachine,
   type CombatStateMachineServerState
@@ -88,6 +89,9 @@ export type GlobalMatchSceneHandle = {
   getPlayerNameplateScreenPosition: (sessionId: string) => { x: number; y: number } | null;
   getPlayerWorldPosition: (sessionId: string) => { x: number; y: number; z: number } | null;
   getCameraGroundForward: () => { x: number; z: number };
+  applyViewSettings: (
+    settings: Pick<GameSettings, "cameraFovPercent" | "renderDistanceViewPercent">
+  ) => void;
   getContext: () => GlobalMatchSceneContext;
   dispose: () => void;
 };
@@ -168,6 +172,27 @@ function positionDistanceSquared(
   return dx * dx + dy * dy + dz * dz;
 }
 
+function clampPercent(value: number, fallback = 50): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  const normalized = Math.round(value);
+  if (normalized < 1) {
+    return 1;
+  }
+
+  if (normalized > 100) {
+    return 100;
+  }
+
+  return normalized;
+}
+
+function lerp(start: number, end: number, alpha: number): number {
+  return start + (end - start) * alpha;
+}
+
 function shouldHideLocalVisualForCamera(
   visualRoot: TransformNode,
   cameraPosition: Vector3
@@ -191,7 +216,7 @@ function shouldHideLocalVisualForCamera(
 
 function resolveProjectedPoint(
   scene: Scene,
-  camera: ArcRotateCamera,
+  camera: Camera,
   engine: Engine,
   worldPosition: Vector3
 ): { x: number; y: number } | null {
@@ -374,6 +399,50 @@ export async function createGlobalMatchScene(
   let isLocalVisualHiddenForCamera = false;
   let lastLocalLocomotionState: MatchPlayerLocomotionState = "Idle";
   let localGameplayRuntime: LocalCharacterGameplayRuntime | null = null;
+  let currentViewSettings: Pick<GameSettings, "cameraFovPercent" | "renderDistanceViewPercent"> = {
+    cameraFovPercent: 50,
+    renderDistanceViewPercent: 50
+  };
+
+  const applyRenderDistanceView = (percent: number): void => {
+    const safePercent = clampPercent(percent, currentViewSettings.renderDistanceViewPercent);
+    if (safePercent >= 100) {
+      scene.fogMode = Scene.FOGMODE_NONE;
+      camera.maxZ = 5000;
+      return;
+    }
+
+    const ratio = (safePercent - 1) / 99;
+    const maxViewDistance = lerp(45, 320, ratio);
+    const fogStart = maxViewDistance * 0.5;
+    scene.fogMode = Scene.FOGMODE_LINEAR;
+    scene.fogColor = new Color3(scene.clearColor.r, scene.clearColor.g, scene.clearColor.b);
+    scene.fogStart = fogStart;
+    scene.fogEnd = maxViewDistance;
+    camera.maxZ = maxViewDistance;
+  };
+
+  const applyViewSettings = (
+    settings: Pick<GameSettings, "cameraFovPercent" | "renderDistanceViewPercent">
+  ): void => {
+    currentViewSettings = {
+      cameraFovPercent: clampPercent(
+        settings.cameraFovPercent,
+        currentViewSettings.cameraFovPercent
+      ),
+      renderDistanceViewPercent: clampPercent(
+        settings.renderDistanceViewPercent,
+        currentViewSettings.renderDistanceViewPercent
+      )
+    };
+
+    cameraController.applyViewSettings({
+      cameraFovPercent: currentViewSettings.cameraFovPercent
+    });
+    applyRenderDistanceView(currentViewSettings.renderDistanceViewPercent);
+  };
+
+  applyViewSettings(currentViewSettings);
 
   const disposeLocalGameplayRuntime = (): void => {
     if (!localGameplayRuntime) {
@@ -814,23 +883,12 @@ export async function createGlobalMatchScene(
       movementIntensity: frameOutput.speedFeedback
     });
 
-    const cameraHooks = resolveLocomotionCameraHooks(frameOutput.snapshot);
     cameraController.tick({
       deltaSeconds,
-      playerTransform: frameOutput.transform,
-      isPointerLocked: pointerLocked,
-      isInputEnabled: inputEnabled,
-      isSprinting: frameOutput.isSprinting,
+      snapshot: frameOutput.snapshot,
+      cameraTarget: localView.getCameraTarget(),
       isSprintBurstActive: frameOutput.isSprintBurstActive,
-      speedFeedback: frameOutput.speedFeedback,
-      isMoving: frameOutput.isMoving,
-      isGrounded: frameOutput.isGrounded,
-      turnInput: frameOutput.lateralInput,
-      landingImpact: frameOutput.landingImpact,
-      targetOffsetY: cameraHooks.targetOffsetY,
-      lateralOffset: cameraHooks.lateralOffset,
-      additionalFovRadians: cameraHooks.additionalFovRadians,
-      wallRunTiltRadians: cameraHooks.wallRunTiltRadians
+      lockOnTarget: null
     });
 
     if (frameOutput.didStartSprint) {
@@ -966,6 +1024,7 @@ export async function createGlobalMatchScene(
         z: forward.z
       };
     },
+    applyViewSettings,
     getContext: () => context,
     dispose: () => {
       window.removeEventListener("resize", onWindowResize);
