@@ -7,8 +7,17 @@ export type CombatInputSystem = {
 export type CreateCombatInputSystemOptions = {
   canProcessInput: () => boolean;
   onAttackStart: () => void;
+  onSkillCast: (slot: 1 | 2 | 3 | 4 | 5) => void;
   onBlockStart: () => void;
   onBlockEnd: () => void;
+};
+
+const SKILL_SLOT_BY_KEY: Readonly<Record<string, 1 | 2 | 3 | 4 | 5>> = {
+  Digit1: 1,
+  Digit2: 2,
+  Digit3: 3,
+  Digit4: 4,
+  Digit5: 5
 };
 
 function isInteractiveElement(target: EventTarget | null): boolean {
@@ -75,6 +84,25 @@ export function createCombatInputSystem(options: CreateCombatInputSystemOptions)
     }
   };
 
+  const onKeyDown = (event: KeyboardEvent): void => {
+    const slot = SKILL_SLOT_BY_KEY[event.code];
+    if (!slot) {
+      return;
+    }
+
+    if (!canAcceptInput(event.target)) {
+      return;
+    }
+
+    if (event.repeat) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    options.onSkillCast(slot);
+  };
+
   const onMouseUp = (event: MouseEvent): void => {
     if (event.button !== 2) {
       return;
@@ -101,6 +129,7 @@ export function createCombatInputSystem(options: CreateCombatInputSystemOptions)
 
   window.addEventListener("mousedown", onMouseDown);
   window.addEventListener("mouseup", onMouseUp);
+  window.addEventListener("keydown", onKeyDown);
   window.addEventListener("contextmenu", onContextMenu);
   window.addEventListener("blur", onWindowBlur);
 
@@ -114,6 +143,7 @@ export function createCombatInputSystem(options: CreateCombatInputSystemOptions)
     dispose: () => {
       window.removeEventListener("mousedown", onMouseDown);
       window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("contextmenu", onContextMenu);
       window.removeEventListener("blur", onWindowBlur);
       releaseBlockIfNeeded();

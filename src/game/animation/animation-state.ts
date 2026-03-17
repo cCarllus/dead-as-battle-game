@@ -17,6 +17,7 @@ export type AnimationGameplayState = {
   isUltimateActive: boolean;
   isBlocking: boolean;
   attackComboIndex: 0 | 1 | 2 | 3;
+  activeSkillId: string;
   isHitReacting: boolean;
   locomotionState?: CharacterLocomotionState | LocomotionAnimationState;
   restartCommand?: AnimationCommand | null;
@@ -35,6 +36,7 @@ export function createDefaultAnimationGameplayState(): AnimationGameplayState {
     isUltimateActive: false,
     isBlocking: false,
     attackComboIndex: 0,
+    activeSkillId: "",
     isHitReacting: false,
     locomotionState: "Idle",
     restartCommand: null
@@ -60,12 +62,29 @@ export function resolveAnimationCommandFromGameplay(
     return "death";
   }
 
-  if (gameplayState.isUltimateActive) {
-    return "ultimate";
-  }
-
   if (gameplayState.attackComboIndex > 0) {
     return resolveAttackCommand(gameplayState.attackComboIndex as 1 | 2 | 3);
+  }
+
+  if (gameplayState.activeSkillId) {
+    switch (gameplayState.activeSkillId) {
+      case "fireball":
+        return "fireball";
+      case "kick-skill":
+        return "kickSkill";
+      case "reapet-kick":
+        return "repeatKick";
+      case "spell":
+        return "spell";
+      case "ultimate":
+        return "ultimate";
+      default:
+        break;
+    }
+  }
+
+  if (gameplayState.isUltimateActive) {
+    return "ultimate";
   }
 
   if (gameplayState.isBlocking) {

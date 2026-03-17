@@ -33,7 +33,9 @@ export type MovementSystemFrameInput = {
   isAlive: boolean;
   isUltimateActive: boolean;
   isBlocking: boolean;
+  combatState: "CombatIdle" | "AttackWindup" | "AttackActive" | "AttackRecovery" | "HitReact" | "SkillCast" | "Dead" | "Block";
   attackComboIndex: 0 | 1 | 2 | 3;
+  activeSkillId: string;
   isStunned: boolean;
 };
 
@@ -244,7 +246,9 @@ export function createMovementSystem(options: CreateMovementSystemOptions): Move
         isAlive: input.isAlive,
         isUltimateActive: input.isUltimateActive,
         isBlocking: input.isBlocking,
+        combatState: input.combatState,
         attackComboIndex: input.attackComboIndex,
+        activeSkillId: input.activeSkillId,
         isStunned: input.isStunned,
         locomotionState,
         movementDirection

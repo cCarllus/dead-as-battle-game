@@ -8,6 +8,7 @@ export const CLIENT_MATCH_EVENTS = {
   playerMoved: "match:player:moved",
   sprintIntent: "player:sprint:intent",
   ultimateActivate: "ultimate:activate",
+  skillCast: "skill:cast",
   attackStart: "attack:start",
   blockStart: "block:start",
   blockEnd: "block:end",
@@ -17,7 +18,11 @@ export const CLIENT_MATCH_EVENTS = {
   combatGuardBreak: "combat:guardBreak",
   combatKill: "combat:kill",
   combatUltimate: "combat:ultimate",
-  combatState: "combat:state"
+  combatState: "combat:state",
+  combatSkillCastStarted: "combat:skill_cast_started",
+  combatSkillCastFinished: "combat:skill_cast_finished",
+  combatPlayerDied: "combat:player_died",
+  combatRagdollEnabled: "combat:ragdoll_enabled"
 } as const;
 
 export type ClientMatchEventName = (typeof CLIENT_MATCH_EVENTS)[keyof typeof CLIENT_MATCH_EVENTS];

@@ -11,6 +11,8 @@ import type {
   MatchBlockEndedEventPayload,
   MatchBlockStartedEventPayload,
   MatchCombatBlockPayload,
+  MatchCombatPlayerDiedPayload,
+  MatchCombatRagdollPayload,
   MatchCombatGuardBreakPayload,
   MatchCombatHitPayload,
   MatchCombatKillPayload,
@@ -23,6 +25,8 @@ import type {
   MatchPlayerLocomotionState,
   MatchPlayerState,
   MatchPlayerWallRunSide,
+  MatchSkillCastFinishedEventPayload,
+  MatchSkillCastStartedEventPayload,
   MatchSnapshotPayload
 } from "../models/match-player.model";
 
@@ -61,6 +65,10 @@ export type MatchService = {
   onCombatKill: (callback: (payload: MatchCombatKillPayload) => void) => () => void;
   onCombatUltimate: (callback: (payload: MatchCombatUltimatePayload) => void) => () => void;
   onCombatState: (callback: (payload: MatchCombatStatePayload) => void) => () => void;
+  onSkillCastStarted: (callback: (payload: MatchSkillCastStartedEventPayload) => void) => () => void;
+  onSkillCastFinished: (callback: (payload: MatchSkillCastFinishedEventPayload) => void) => () => void;
+  onPlayerDied: (callback: (payload: MatchCombatPlayerDiedPayload) => void) => () => void;
+  onRagdollEnabled: (callback: (payload: MatchCombatRagdollPayload) => void) => () => void;
   onError: (callback: (error: Error) => void) => () => void;
   sendLocalMovement: (movement: {
     x: number;
@@ -76,6 +84,7 @@ export type MatchService = {
   }) => void;
   sendSprintIntent: (intent: { isShiftPressed: boolean; isForwardPressed: boolean }) => void;
   sendUltimateActivate: () => void;
+  sendSkillCast: (slot: 1 | 2 | 3 | 4 | 5) => void;
   sendAttackStart: () => void;
   sendBlockStart: () => void;
   sendBlockEnd: () => void;
@@ -105,6 +114,21 @@ function normalizeBoolean(value: unknown): boolean | null {
   }
 
   return value;
+}
+
+function normalizeRecordOfNumbers(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, number>>((acc, [key, entry]) => {
+    if (typeof entry !== "number" || !Number.isFinite(entry)) {
+      return acc;
+    }
+
+    acc[key] = entry;
+    return acc;
+  }, {});
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -180,6 +204,17 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
   const isAttacking = normalizeBoolean(candidate.isAttacking) ?? false;
   const attackComboIndex = normalizeNumber(candidate.attackComboIndex) ?? 0;
   const lastAttackAt = normalizeNumber(candidate.lastAttackAt) ?? 0;
+  const combatState = typeof candidate.combatState === "string" ? candidate.combatState : "CombatIdle";
+  const combatStateStartedAt = normalizeNumber(candidate.combatStateStartedAt) ?? 0;
+  const combatStateEndsAt = normalizeNumber(candidate.combatStateEndsAt) ?? 0;
+  const attackPhase = typeof candidate.attackPhase === "string" ? candidate.attackPhase : "None";
+  const activeActionId = normalizeText(candidate.activeActionId) ?? "";
+  const activeSkillId = normalizeText(candidate.activeSkillId) ?? "";
+  const queuedAttack = normalizeBoolean(candidate.queuedAttack) ?? false;
+  const lastDamagedAt = normalizeNumber(candidate.lastDamagedAt) ?? 0;
+  const deadAt = normalizeNumber(candidate.deadAt) ?? 0;
+  const respawnAvailableAt = normalizeNumber(candidate.respawnAvailableAt) ?? 0;
+  const skillCooldowns = normalizeRecordOfNumbers(candidate.skillCooldowns);
   const isBlocking = normalizeBoolean(candidate.isBlocking) ?? false;
   const blockStartedAt = normalizeNumber(candidate.blockStartedAt) ?? 0;
   const maxGuard = normalizeNumber(candidate.maxGuard) ?? DEFAULT_MAX_GUARD;
@@ -245,6 +280,17 @@ function normalizePlayer(value: unknown): MatchPlayerState | null {
     isAttacking: safeIsAlive ? isAttacking : false,
     attackComboIndex: safeAttackComboIndex,
     lastAttackAt,
+    combatState: safeIsAlive ? (combatState as MatchPlayerState["combatState"]) : "Dead",
+    combatStateStartedAt,
+    combatStateEndsAt,
+    attackPhase: attackPhase as MatchPlayerState["attackPhase"],
+    activeActionId: safeIsAlive ? activeActionId : "",
+    activeSkillId: safeIsAlive ? activeSkillId : "",
+    queuedAttack: safeIsAlive ? queuedAttack : false,
+    lastDamagedAt,
+    deadAt,
+    respawnAvailableAt,
+    skillCooldowns,
     isBlocking: safeIsAlive ? isBlocking : false,
     blockStartedAt,
     maxGuard: safeMaxGuard,
@@ -341,6 +387,7 @@ function normalizeAttackStartedPayload(payload: unknown): MatchAttackStartedEven
 
   return {
     sessionId,
+    attackId: normalizeText(candidate.attackId) ?? "",
     attackComboIndex: Math.max(1, Math.min(3, Math.floor(attackComboIndex))),
     startedAt
   };
@@ -428,10 +475,21 @@ function normalizeCombatHitPayload(payload: unknown): MatchCombatHitPayload | nu
   return {
     attackerSessionId,
     targetSessionId,
+    sourceType:
+      candidate.sourceType === "basic_melee" ||
+      candidate.sourceType === "skill" ||
+      candidate.sourceType === "ultimate" ||
+      candidate.sourceType === "environment"
+        ? candidate.sourceType
+        : "basic_melee",
+    sourceId: normalizeText(candidate.sourceId) ?? "",
     damage: Math.max(0, Math.floor(damage)),
     comboHitIndex: Math.max(1, Math.min(3, Math.floor(comboHitIndex))),
     wasBlocked,
-    didGuardBreak
+    didGuardBreak,
+    knockback: Math.max(0, normalizeNumber(candidate.knockback) ?? 0),
+    hitstunMs: Math.max(0, Math.floor(normalizeNumber(candidate.hitstunMs) ?? 0)),
+    targetHealth: Math.max(0, Math.floor(normalizeNumber(candidate.targetHealth) ?? 0))
   };
 }
 
@@ -500,9 +558,24 @@ function normalizeCombatStatePayload(payload: unknown): MatchCombatStatePayload 
 
   const candidate = payload as Partial<MatchCombatStatePayload>;
   const sessionId = normalizeText(candidate.sessionId);
+  const combatState =
+    typeof candidate.combatState === "string" ? candidate.combatState : null;
+  const combatStateStartedAt = normalizeNumber(candidate.combatStateStartedAt);
+  const combatStateEndsAt = normalizeNumber(candidate.combatStateEndsAt);
+  const attackPhase = typeof candidate.attackPhase === "string" ? candidate.attackPhase : null;
+  const activeActionId = normalizeText(candidate.activeActionId) ?? "";
+  const activeSkillId = normalizeText(candidate.activeSkillId) ?? "";
   const isAttacking = normalizeBoolean(candidate.isAttacking);
   const attackComboIndex = normalizeNumber(candidate.attackComboIndex);
   const lastAttackAt = normalizeNumber(candidate.lastAttackAt);
+  const queuedAttack = normalizeBoolean(candidate.queuedAttack);
+  const currentHealth = normalizeNumber(candidate.currentHealth);
+  const maxHealth = normalizeNumber(candidate.maxHealth);
+  const isAlive = normalizeBoolean(candidate.isAlive);
+  const lastDamagedAt = normalizeNumber(candidate.lastDamagedAt);
+  const deadAt = normalizeNumber(candidate.deadAt);
+  const respawnAvailableAt = normalizeNumber(candidate.respawnAvailableAt);
+  const skillCooldowns = normalizeRecordOfNumbers(candidate.skillCooldowns);
   const isBlocking = normalizeBoolean(candidate.isBlocking);
   const blockStartedAt = normalizeNumber(candidate.blockStartedAt);
   const maxGuard = normalizeNumber(candidate.maxGuard);
@@ -516,9 +589,20 @@ function normalizeCombatStatePayload(payload: unknown): MatchCombatStatePayload 
 
   if (
     !sessionId ||
+    !combatState ||
+    combatStateStartedAt === null ||
+    combatStateEndsAt === null ||
+    !attackPhase ||
     isAttacking === null ||
     attackComboIndex === null ||
     lastAttackAt === null ||
+    queuedAttack === null ||
+    currentHealth === null ||
+    maxHealth === null ||
+    isAlive === null ||
+    lastDamagedAt === null ||
+    deadAt === null ||
+    respawnAvailableAt === null ||
     isBlocking === null ||
     blockStartedAt === null ||
     maxGuard === null ||
@@ -535,9 +619,23 @@ function normalizeCombatStatePayload(payload: unknown): MatchCombatStatePayload 
 
   return {
     sessionId,
+    combatState: combatState as MatchCombatStatePayload["combatState"],
+    combatStateStartedAt,
+    combatStateEndsAt,
+    attackPhase: attackPhase as MatchCombatStatePayload["attackPhase"],
+    activeActionId,
+    activeSkillId,
     isAttacking,
     attackComboIndex: Math.max(0, Math.min(3, Math.floor(attackComboIndex))),
     lastAttackAt,
+    queuedAttack,
+    currentHealth: Math.max(0, Math.floor(currentHealth)),
+    maxHealth: Math.max(1, Math.floor(maxHealth)),
+    isAlive,
+    lastDamagedAt,
+    deadAt,
+    respawnAvailableAt,
+    skillCooldowns,
     isBlocking,
     blockStartedAt,
     maxGuard: Math.max(1, maxGuard),
@@ -548,6 +646,103 @@ function normalizeCombatStatePayload(payload: unknown): MatchCombatStatePayload 
     x,
     y,
     z
+  };
+}
+
+function normalizeSkillCastStartedPayload(payload: unknown): MatchSkillCastStartedEventPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchSkillCastStartedEventPayload>;
+  const sessionId = normalizeText(candidate.sessionId);
+  const skillId = normalizeText(candidate.skillId);
+  const skillSlot = normalizeNumber(candidate.skillSlot);
+  const startedAt = normalizeNumber(candidate.startedAt);
+  const endsAt = normalizeNumber(candidate.endsAt);
+  const cooldownEndsAt = normalizeNumber(candidate.cooldownEndsAt);
+  const isUltimate = normalizeBoolean(candidate.isUltimate);
+  if (
+    !sessionId ||
+    !skillId ||
+    skillSlot === null ||
+    startedAt === null ||
+    endsAt === null ||
+    cooldownEndsAt === null ||
+    isUltimate === null
+  ) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    skillId,
+    skillSlot: Math.max(1, Math.min(5, Math.floor(skillSlot))),
+    startedAt,
+    endsAt,
+    cooldownEndsAt,
+    isUltimate
+  };
+}
+
+function normalizeSkillCastFinishedPayload(payload: unknown): MatchSkillCastFinishedEventPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchSkillCastFinishedEventPayload>;
+  const sessionId = normalizeText(candidate.sessionId);
+  const skillId = normalizeText(candidate.skillId);
+  const finishedAt = normalizeNumber(candidate.finishedAt);
+  if (!sessionId || !skillId || finishedAt === null) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    skillId,
+    finishedAt
+  };
+}
+
+function normalizeCombatPlayerDiedPayload(payload: unknown): MatchCombatPlayerDiedPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchCombatPlayerDiedPayload>;
+  const sessionId = normalizeText(candidate.sessionId);
+  const killerSessionId =
+    candidate.killerSessionId === null ? null : normalizeText(candidate.killerSessionId);
+  const deadAt = normalizeNumber(candidate.deadAt);
+  const respawnAvailableAt = normalizeNumber(candidate.respawnAvailableAt);
+  if (!sessionId || deadAt === null || respawnAvailableAt === null) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    killerSessionId,
+    deadAt,
+    respawnAvailableAt
+  };
+}
+
+function normalizeCombatRagdollPayload(payload: unknown): MatchCombatRagdollPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as Partial<MatchCombatRagdollPayload>;
+  const sessionId = normalizeText(candidate.sessionId);
+  const enabledAt = normalizeNumber(candidate.enabledAt);
+  if (!sessionId || enabledAt === null) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    enabledAt
   };
 }
 
@@ -596,6 +791,7 @@ function normalizeCombatUltimatePayload(payload: unknown): MatchCombatUltimatePa
   const candidate = payload as Partial<MatchCombatUltimatePayload>;
   const sessionId = normalizeText(candidate.sessionId);
   const characterId = normalizeText(candidate.characterId);
+  const skillId = normalizeText(candidate.skillId) ?? "ultimate";
   const durationMs = normalizeNumber(candidate.durationMs);
   const startedAt = normalizeNumber(candidate.startedAt);
   const endsAt = normalizeNumber(candidate.endsAt);
@@ -613,6 +809,7 @@ function normalizeCombatUltimatePayload(payload: unknown): MatchCombatUltimatePa
   return {
     sessionId,
     characterId,
+    skillId,
     durationMs: Math.max(0, Math.floor(durationMs)),
     startedAt,
     endsAt
@@ -655,6 +852,17 @@ function clonePlayer(player: MatchPlayerState): MatchPlayerState {
     isAttacking: player.isAttacking,
     attackComboIndex: player.attackComboIndex,
     lastAttackAt: player.lastAttackAt,
+    combatState: player.combatState,
+    combatStateStartedAt: player.combatStateStartedAt,
+    combatStateEndsAt: player.combatStateEndsAt,
+    attackPhase: player.attackPhase,
+    activeActionId: player.activeActionId,
+    activeSkillId: player.activeSkillId,
+    queuedAttack: player.queuedAttack,
+    lastDamagedAt: player.lastDamagedAt,
+    deadAt: player.deadAt,
+    respawnAvailableAt: player.respawnAvailableAt,
+    skillCooldowns: { ...player.skillCooldowns },
     isBlocking: player.isBlocking,
     blockStartedAt: player.blockStartedAt,
     maxGuard: player.maxGuard,
@@ -688,6 +896,10 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
   const combatKillListeners = new Set<(payload: MatchCombatKillPayload) => void>();
   const combatUltimateListeners = new Set<(payload: MatchCombatUltimatePayload) => void>();
   const combatStateListeners = new Set<(payload: MatchCombatStatePayload) => void>();
+  const skillCastStartedListeners = new Set<(payload: MatchSkillCastStartedEventPayload) => void>();
+  const skillCastFinishedListeners = new Set<(payload: MatchSkillCastFinishedEventPayload) => void>();
+  const playerDiedListeners = new Set<(payload: MatchCombatPlayerDiedPayload) => void>();
+  const ragdollEnabledListeners = new Set<(payload: MatchCombatRagdollPayload) => void>();
   const errorListeners = new Set<(error: Error) => void>();
 
   const emitPlayersChanged = (): void => {
@@ -753,6 +965,30 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
     });
   };
 
+  const emitSkillCastStarted = (payload: MatchSkillCastStartedEventPayload): void => {
+    skillCastStartedListeners.forEach((listener) => {
+      listener(payload);
+    });
+  };
+
+  const emitSkillCastFinished = (payload: MatchSkillCastFinishedEventPayload): void => {
+    skillCastFinishedListeners.forEach((listener) => {
+      listener(payload);
+    });
+  };
+
+  const emitPlayerDied = (payload: MatchCombatPlayerDiedPayload): void => {
+    playerDiedListeners.forEach((listener) => {
+      listener(payload);
+    });
+  };
+
+  const emitRagdollEnabled = (payload: MatchCombatRagdollPayload): void => {
+    ragdollEnabledListeners.forEach((listener) => {
+      listener(payload);
+    });
+  };
+
   const emitError = (error: Error): void => {
     errorListeners.forEach((listener) => {
       listener(error);
@@ -808,13 +1044,24 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         existingPlayer.isAttacking !== incomingPlayer.isAttacking ||
         existingPlayer.attackComboIndex !== incomingPlayer.attackComboIndex ||
         existingPlayer.lastAttackAt !== incomingPlayer.lastAttackAt ||
+        existingPlayer.combatState !== incomingPlayer.combatState ||
+        existingPlayer.combatStateStartedAt !== incomingPlayer.combatStateStartedAt ||
+        existingPlayer.combatStateEndsAt !== incomingPlayer.combatStateEndsAt ||
+        existingPlayer.attackPhase !== incomingPlayer.attackPhase ||
+        existingPlayer.activeActionId !== incomingPlayer.activeActionId ||
+        existingPlayer.activeSkillId !== incomingPlayer.activeSkillId ||
+        existingPlayer.queuedAttack !== incomingPlayer.queuedAttack ||
+        existingPlayer.lastDamagedAt !== incomingPlayer.lastDamagedAt ||
+        existingPlayer.deadAt !== incomingPlayer.deadAt ||
+        existingPlayer.respawnAvailableAt !== incomingPlayer.respawnAvailableAt ||
         existingPlayer.isBlocking !== incomingPlayer.isBlocking ||
         existingPlayer.blockStartedAt !== incomingPlayer.blockStartedAt ||
         existingPlayer.maxGuard !== incomingPlayer.maxGuard ||
         existingPlayer.currentGuard !== incomingPlayer.currentGuard ||
         existingPlayer.isGuardBroken !== incomingPlayer.isGuardBroken ||
         existingPlayer.stunUntil !== incomingPlayer.stunUntil ||
-        existingPlayer.lastGuardDamagedAt !== incomingPlayer.lastGuardDamagedAt;
+        existingPlayer.lastGuardDamagedAt !== incomingPlayer.lastGuardDamagedAt ||
+        JSON.stringify(existingPlayer.skillCooldowns) !== JSON.stringify(incomingPlayer.skillCooldowns);
 
       if (changed) {
         playersBySessionId.set(sessionId, incomingPlayer);
@@ -917,6 +1164,11 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         isAttacking: true,
         attackComboIndex: attackStartedPayload.attackComboIndex,
         lastAttackAt: attackStartedPayload.startedAt,
+        combatState: "AttackWindup",
+        combatStateStartedAt: attackStartedPayload.startedAt,
+        attackPhase: "Windup",
+        activeActionId: attackStartedPayload.attackId,
+        activeSkillId: "",
         isBlocking: false,
         blockStartedAt: 0
       };
@@ -925,6 +1177,10 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         existingPlayer.isAttacking !== updatedPlayer.isAttacking ||
         existingPlayer.attackComboIndex !== updatedPlayer.attackComboIndex ||
         existingPlayer.lastAttackAt !== updatedPlayer.lastAttackAt ||
+        existingPlayer.combatState !== updatedPlayer.combatState ||
+        existingPlayer.combatStateStartedAt !== updatedPlayer.combatStateStartedAt ||
+        existingPlayer.attackPhase !== updatedPlayer.attackPhase ||
+        existingPlayer.activeActionId !== updatedPlayer.activeActionId ||
         existingPlayer.isBlocking !== updatedPlayer.isBlocking ||
         existingPlayer.blockStartedAt !== updatedPlayer.blockStartedAt;
       if (!didChange) {
@@ -1091,6 +1347,84 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       emitCombatUltimate(ultimatePayload);
     });
 
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.combatSkillCastStarted, (payload: unknown) => {
+      const skillPayload = normalizeSkillCastStartedPayload(payload);
+      if (!skillPayload) {
+        return;
+      }
+
+      const player = playersBySessionId.get(skillPayload.sessionId);
+      if (player) {
+        const updatedPlayer: MatchPlayerState = {
+          ...player,
+          combatState: "SkillCast",
+          combatStateStartedAt: skillPayload.startedAt,
+          combatStateEndsAt: skillPayload.endsAt,
+          attackPhase: "Windup",
+          activeActionId: skillPayload.skillId,
+          activeSkillId: skillPayload.skillId,
+          skillCooldowns: {
+            ...player.skillCooldowns,
+            [skillPayload.skillId]: skillPayload.cooldownEndsAt
+          }
+        };
+
+        playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
+        emitPlayerUpdated(updatedPlayer);
+        emitPlayersChanged();
+      }
+
+      emitSkillCastStarted(skillPayload);
+    });
+
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.combatSkillCastFinished, (payload: unknown) => {
+      const finishedPayload = normalizeSkillCastFinishedPayload(payload);
+      if (!finishedPayload) {
+        return;
+      }
+
+      emitSkillCastFinished(finishedPayload);
+    });
+
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.combatPlayerDied, (payload: unknown) => {
+      const deathPayload = normalizeCombatPlayerDiedPayload(payload);
+      if (!deathPayload) {
+        return;
+      }
+
+      const player = playersBySessionId.get(deathPayload.sessionId);
+      if (player) {
+        const updatedPlayer: MatchPlayerState = {
+          ...player,
+          isAlive: false,
+          currentHealth: 0,
+          combatState: "Dead",
+          deadAt: deathPayload.deadAt,
+          respawnAvailableAt: deathPayload.respawnAvailableAt,
+          attackPhase: "None",
+          activeActionId: "",
+          activeSkillId: "",
+          isAttacking: false,
+          isBlocking: false
+        };
+
+        playersBySessionId.set(updatedPlayer.sessionId, updatedPlayer);
+        emitPlayerUpdated(updatedPlayer);
+        emitPlayersChanged();
+      }
+
+      emitPlayerDied(deathPayload);
+    });
+
+    connectedRoom.onMessage(CLIENT_MATCH_EVENTS.combatRagdollEnabled, (payload: unknown) => {
+      const ragdollPayload = normalizeCombatRagdollPayload(payload);
+      if (!ragdollPayload) {
+        return;
+      }
+
+      emitRagdollEnabled(ragdollPayload);
+    });
+
     connectedRoom.onMessage(CLIENT_MATCH_EVENTS.combatState, (payload: unknown) => {
       const combatStatePayload = normalizeCombatStatePayload(payload);
       if (!combatStatePayload) {
@@ -1104,9 +1438,23 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
 
       const updatedPlayer: MatchPlayerState = {
         ...existingPlayer,
+        combatState: combatStatePayload.combatState,
+        combatStateStartedAt: combatStatePayload.combatStateStartedAt,
+        combatStateEndsAt: combatStatePayload.combatStateEndsAt,
+        attackPhase: combatStatePayload.attackPhase,
+        activeActionId: combatStatePayload.activeActionId,
+        activeSkillId: combatStatePayload.activeSkillId,
         isAttacking: combatStatePayload.isAttacking,
         attackComboIndex: combatStatePayload.attackComboIndex,
         lastAttackAt: combatStatePayload.lastAttackAt,
+        queuedAttack: combatStatePayload.queuedAttack,
+        currentHealth: combatStatePayload.currentHealth,
+        maxHealth: combatStatePayload.maxHealth,
+        isAlive: combatStatePayload.isAlive,
+        lastDamagedAt: combatStatePayload.lastDamagedAt,
+        deadAt: combatStatePayload.deadAt,
+        respawnAvailableAt: combatStatePayload.respawnAvailableAt,
+        skillCooldowns: { ...combatStatePayload.skillCooldowns },
         isBlocking: combatStatePayload.isBlocking,
         blockStartedAt: combatStatePayload.blockStartedAt,
         maxGuard: combatStatePayload.maxGuard,
@@ -1120,9 +1468,23 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       };
 
       const didChange =
+        existingPlayer.combatState !== updatedPlayer.combatState ||
+        existingPlayer.combatStateStartedAt !== updatedPlayer.combatStateStartedAt ||
+        existingPlayer.combatStateEndsAt !== updatedPlayer.combatStateEndsAt ||
+        existingPlayer.attackPhase !== updatedPlayer.attackPhase ||
+        existingPlayer.activeActionId !== updatedPlayer.activeActionId ||
+        existingPlayer.activeSkillId !== updatedPlayer.activeSkillId ||
         existingPlayer.isAttacking !== updatedPlayer.isAttacking ||
         existingPlayer.attackComboIndex !== updatedPlayer.attackComboIndex ||
         existingPlayer.lastAttackAt !== updatedPlayer.lastAttackAt ||
+        existingPlayer.queuedAttack !== updatedPlayer.queuedAttack ||
+        existingPlayer.currentHealth !== updatedPlayer.currentHealth ||
+        existingPlayer.maxHealth !== updatedPlayer.maxHealth ||
+        existingPlayer.isAlive !== updatedPlayer.isAlive ||
+        existingPlayer.lastDamagedAt !== updatedPlayer.lastDamagedAt ||
+        existingPlayer.deadAt !== updatedPlayer.deadAt ||
+        existingPlayer.respawnAvailableAt !== updatedPlayer.respawnAvailableAt ||
+        JSON.stringify(existingPlayer.skillCooldowns) !== JSON.stringify(updatedPlayer.skillCooldowns) ||
         existingPlayer.isBlocking !== updatedPlayer.isBlocking ||
         existingPlayer.blockStartedAt !== updatedPlayer.blockStartedAt ||
         existingPlayer.maxGuard !== updatedPlayer.maxGuard ||
@@ -1299,6 +1661,30 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
         combatStateListeners.delete(callback);
       };
     },
+    onSkillCastStarted: (callback) => {
+      skillCastStartedListeners.add(callback);
+      return () => {
+        skillCastStartedListeners.delete(callback);
+      };
+    },
+    onSkillCastFinished: (callback) => {
+      skillCastFinishedListeners.add(callback);
+      return () => {
+        skillCastFinishedListeners.delete(callback);
+      };
+    },
+    onPlayerDied: (callback) => {
+      playerDiedListeners.add(callback);
+      return () => {
+        playerDiedListeners.delete(callback);
+      };
+    },
+    onRagdollEnabled: (callback) => {
+      ragdollEnabledListeners.add(callback);
+      return () => {
+        ragdollEnabledListeners.delete(callback);
+      };
+    },
     onError: (callback) => {
       errorListeners.add(callback);
       return () => {
@@ -1339,6 +1725,15 @@ export function createMatchService(options: MatchServiceOptions): MatchService {
       }
 
       room.send(CLIENT_MATCH_EVENTS.ultimateActivate, {});
+    },
+    sendSkillCast: (slot) => {
+      if (!room) {
+        return;
+      }
+
+      room.send(CLIENT_MATCH_EVENTS.skillCast, {
+        slot
+      });
     },
     sendAttackStart: () => {
       if (!room) {

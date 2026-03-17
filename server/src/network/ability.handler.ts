@@ -1,4 +1,4 @@
-// Handler de rede para intents de habilidades (ultimate).
+// Handler de rede para intents legadas de habilidade (ultimate).
 import type { Room } from "@colyseus/core";
 import type { MatchUltimateActivatePayload } from "../models/match-player.model.js";
 import { MATCH_EVENTS } from "./match-events.js";
@@ -8,12 +8,12 @@ export type AbilityHandler = {
 };
 
 export function createAbilityHandler(options: {
-  queueUltimateActivate: (sessionId: string) => void;
+  queueSkillCast: (sessionId: string, slot: 1 | 2 | 3 | 4 | 5) => void;
 }): AbilityHandler {
   return {
     bind: (room) => {
       room.onMessage(MATCH_EVENTS.ultimateActivate, (client, _payload: MatchUltimateActivatePayload) => {
-        options.queueUltimateActivate(client.sessionId);
+        options.queueSkillCast(client.sessionId, 5);
       });
     }
   };

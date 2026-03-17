@@ -38,6 +38,8 @@ export type CombatHudState = {
   skills: {
     primary: HeroSkillSlotConfig;
     secondary: HeroSkillSlotConfig;
+    tertiary: HeroSkillSlotConfig;
+    utility: HeroSkillSlotConfig;
     ultimate: HeroSkillSlotConfig;
   };
   healthCurrent: number;

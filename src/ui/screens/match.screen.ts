@@ -52,6 +52,7 @@ const MATCH_KILL_FEED_ENTER_MS = MATCH_UI_CONFIG.killFeed.enterMs;
 const MATCH_CHAT_BUBBLE_TTL_MS = MATCH_UI_CONFIG.chatBubble.ttlMs;
 const MATCH_CHAT_BUBBLE_FADE_WINDOW_MS = MATCH_UI_CONFIG.chatBubble.fadeWindowMs;
 const MATCH_CHAT_BUBBLE_MAX_CHARS = MATCH_UI_CONFIG.chatBubble.maxChars;
+const DEATH_SCREEN_DELAY_MS = 1800;
 const MATCH_RADAR_RANGE_METERS = MATCH_UI_CONFIG.radar.rangeMeters;
 const MATCH_RADAR_MAX_MARKERS = MATCH_UI_CONFIG.radar.maxMarkers;
 const MATCH_RADAR_MARKER_EDGE_PADDING_PX = MATCH_UI_CONFIG.radar.markerEdgePaddingPx;
@@ -368,6 +369,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   const hudSkillUltimateIcon = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-ultimate-icon"]');
   const hudSkillPrimaryKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-primary-key"]');
   const hudSkillSecondaryKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-secondary-key"]');
+  const hudSkillTertiaryKey = hudSkillTertiaryIcon.parentElement?.querySelector<HTMLElement>(".dab-match__skill-key");
+  const hudSkillUtilityKey = hudSkillUtilityIcon.parentElement?.querySelector<HTMLElement>(".dab-match__skill-key");
   const hudSkillUltimateKey = qs<HTMLElement>(screen, '[data-slot="match-skill-slot-ultimate-key"]');
   const hudAttackControlIcon = qs<HTMLElement>(screen, '[data-slot="match-control-icon-attack"]');
   const hudHeavyControlIcon = qs<HTMLElement>(screen, '[data-slot="match-control-icon-heavy"]');
@@ -502,6 +505,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   let previousSprintBlocked = false;
   let staminaPulseTimeoutId: number | null = null;
   let deathModalOpen = false;
+  let deathModalRevealAtMs = 0;
   let respawnRequestPending = false;
   let hudFeedIntervalId: number | null = null;
   let didSeedChatHistory = false;
@@ -1336,6 +1340,14 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     hudSkillUltimateKey.textContent = combatHudState.skills.ultimate.key;
     hudSkillPrimary.title = combatHudState.skills.primary.name;
     hudSkillSecondary.title = combatHudState.skills.secondary.name;
+    if (hudSkillTertiaryKey) {
+      hudSkillTertiaryKey.textContent = combatHudState.skills.tertiary.key;
+    }
+    if (hudSkillUtilityKey) {
+      hudSkillUtilityKey.textContent = combatHudState.skills.utility.key;
+    }
+    hudSkillTertiaryIcon.parentElement?.setAttribute("title", combatHudState.skills.tertiary.name);
+    hudSkillUtilityIcon.parentElement?.setAttribute("title", combatHudState.skills.utility.name);
     hudSkillUltimate.title = combatHudState.skills.ultimate.name;
     hudSkillUltimate.style.setProperty("--dab-ultimate-charge", `${ultimatePercent}%`);
     hudUltimateKey.textContent = `[${combatHudState.skills.ultimate.key}] ULTIMATE`;
@@ -1364,6 +1376,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       hudDeaths.textContent = "0";
       setLocalCombatHud(null);
       respawnRequestPending = false;
+      deathModalRevealAtMs = 0;
       deathModalRespawnButton.disabled = false;
       deathModalRespawnButton.textContent = locale === "pt-BR" ? "Renascer" : "Respawn";
       setDeathModalOpen(false);
@@ -1382,7 +1395,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
     const isDead = !!localPlayer && !localPlayer.isAlive;
     if (isDead) {
-      setDeathModalOpen(true);
+      if (deathModalRevealAtMs <= 0) {
+        deathModalRevealAtMs = (localPlayer?.deadAt ?? Date.now()) + DEATH_SCREEN_DELAY_MS;
+      }
+      setDeathModalOpen(Date.now() >= deathModalRevealAtMs);
       return;
     }
 
@@ -1391,6 +1407,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       deathModalRespawnButton.disabled = false;
       deathModalRespawnButton.textContent = locale === "pt-BR" ? "Renascer" : "Respawn";
     }
+    deathModalRevealAtMs = 0;
     setDeathModalOpen(false);
   };
 
@@ -1553,6 +1570,9 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       characterId: payload.characterId,
       durationMs: payload.durationMs
     });
+  });
+  const disposeCombatRagdoll = actions.matchService.onRagdollEnabled((payload) => {
+    sceneHandle?.enablePlayerRagdoll(payload.sessionId);
   });
   const disposeChatHistory = actions.chatService.onHistory((history) => {
     if (didSeedChatHistory || history.length === 0) {
@@ -1776,7 +1796,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       }
 
       event.preventDefault();
-      actions.matchService.sendUltimateActivate();
+      actions.matchService.sendSkillCast(5);
       return;
     }
 
@@ -1905,6 +1925,9 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
         onLocalAttackRequested: () => {
           actions.matchService.sendAttackStart();
         },
+        onLocalSkillRequested: (slot) => {
+          actions.matchService.sendSkillCast(slot);
+        },
         onLocalBlockStartRequested: () => {
           actions.matchService.sendBlockStart();
         },
@@ -1978,6 +2001,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     disposeMatchError();
     disposeCombatKill();
     disposeCombatUltimate();
+    disposeCombatRagdoll();
     disposeChatHistory();
     disposeChatMessage();
 

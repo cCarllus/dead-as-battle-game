@@ -16,6 +16,8 @@ export type HeroCombatClientConfig = {
   skills: {
     primary: HeroSkillSlotConfig;
     secondary: HeroSkillSlotConfig;
+    tertiary: HeroSkillSlotConfig;
+    utility: HeroSkillSlotConfig;
     ultimate: HeroSkillSlotConfig;
   };
 };
@@ -28,9 +30,11 @@ const HERO_COMBAT_BASE_CONFIG_BY_ID: Record<ChampionId, HeroCombatBaseConfig> = 
     maxHealth: 1000,
     ultimateMax: 100,
     skills: {
-      primary: { key: "1", icon: "ST", name: "Strike" },
-      secondary: { key: "2", icon: "DS", name: "Dash" },
-      ultimate: { key: "G", icon: "OV", name: "Overdrive" }
+      primary: { key: "1", icon: "FB", name: "Fireball" },
+      secondary: { key: "2", icon: "KS", name: "Kick Skill" },
+      tertiary: { key: "3", icon: "RK", name: "Repeat Kick" },
+      utility: { key: "4", icon: "SP", name: "Spell" },
+      ultimate: { key: "5", icon: "UT", name: "Ultimate" }
     }
   }
 };

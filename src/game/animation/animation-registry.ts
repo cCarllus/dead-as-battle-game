@@ -1,13 +1,13 @@
 // Responsável por resolver configuração de animações por herói com fallback seguro.
 import { DEFAULT_CHAMPION_ID } from "../../data/champions.catalog";
-import { DEFAULT_HERO_ANIMATION_CONFIG } from "../heroes/default/default-animations";
+import { DEFAULT_CHAMPION_ANIMATION_PROFILE } from "./profiles/heroes/default-champion/default-champion.animation-profile";
 import { normalizeHeroAnimationConfig } from "./animation-overrides";
 import type { HeroAnimationConfig } from "./animation-types";
 
 const warnedHeroIdsWithoutConfig = new Set<string>();
 
 const HERO_ANIMATION_CONFIG_BY_ID = new Map<string, HeroAnimationConfig>([
-  [DEFAULT_HERO_ANIMATION_CONFIG.heroId, DEFAULT_HERO_ANIMATION_CONFIG]
+  [DEFAULT_CHAMPION_ANIMATION_PROFILE.heroId, DEFAULT_CHAMPION_ANIMATION_PROFILE]
 ]);
 
 export function resolveHeroAnimationConfig(heroId: string): HeroAnimationConfig {
@@ -24,6 +24,6 @@ export function resolveHeroAnimationConfig(heroId: string): HeroAnimationConfig 
   }
 
   const fallbackConfig =
-    HERO_ANIMATION_CONFIG_BY_ID.get(DEFAULT_CHAMPION_ID) ?? DEFAULT_HERO_ANIMATION_CONFIG;
+    HERO_ANIMATION_CONFIG_BY_ID.get(DEFAULT_CHAMPION_ID) ?? DEFAULT_CHAMPION_ANIMATION_PROFILE;
   return normalizeHeroAnimationConfig(fallbackConfig);
 }

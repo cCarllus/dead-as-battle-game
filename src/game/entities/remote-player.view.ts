@@ -134,7 +134,9 @@ function resolveAnimationGameplayState(options: {
   isRolling: boolean;
   isWallRunning: boolean;
   isBlocking: boolean;
+  combatState: MatchPlayerState["combatState"];
   attackComboIndex: 0 | 1 | 2 | 3;
+  activeSkillId: string;
   isStunned: boolean;
   isUltimateActive: boolean;
 }): AnimationGameplayState {
@@ -180,7 +182,8 @@ function resolveAnimationGameplayState(options: {
   }
 
   const isBlocking = !isLedgeState && options.isBlocking && options.attackComboIndex === 0;
-  const isHitReacting = options.isStunned && !isBlocking && options.attackComboIndex === 0;
+  const isHitReacting =
+    options.combatState === "HitReact" || (options.isStunned && !isBlocking && options.attackComboIndex === 0);
   const isJumping =
     options.locomotionState === "JumpStart" ||
     options.locomotionState === "Jumping" ||
@@ -203,6 +206,7 @@ function resolveAnimationGameplayState(options: {
     isUltimateActive: options.isUltimateActive,
     isBlocking,
     attackComboIndex: isLedgeState ? 0 : options.attackComboIndex,
+    activeSkillId: isLedgeState ? "" : options.activeSkillId,
     isHitReacting,
     locomotionState,
     restartCommand: null
@@ -303,6 +307,7 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
             isUltimateActive: animationOverride.isUltimateActive,
             isBlocking: animationOverride.isBlocking,
             attackComboIndex: animationOverride.attackComboIndex,
+            activeSkillId: animationOverride.activeSkillId,
             isHitReacting: animationOverride.isHitReacting,
             locomotionState: animationOverride.locomotionState,
             restartCommand: animationOverride.restartCommand ?? null
@@ -319,7 +324,9 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
             isRolling: player.isRolling,
             isWallRunning: player.isWallRunning,
             isBlocking: player.isBlocking,
+            combatState: player.combatState,
             attackComboIndex: serverAttackComboIndex,
+            activeSkillId: player.activeSkillId,
             isStunned: serverIsStunned,
             isUltimateActive: player.isUsingUltimate
           });
@@ -459,6 +466,7 @@ export function createRemotePlayerView(options: CreateRemotePlayerViewOptions): 
         isUltimateActive: false,
         isBlocking: false,
         attackComboIndex: 0,
+        activeSkillId: "",
         isHitReacting: false,
         locomotionState: "Idle"
       };

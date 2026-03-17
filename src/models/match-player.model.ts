@@ -5,6 +5,18 @@ export type MatchPlayerLocomotionState = CharacterLocomotionState;
 
 export type MatchPlayerWallRunSide = WallRunSide;
 
+export type MatchCombatStateName =
+  | "CombatIdle"
+  | "AttackWindup"
+  | "AttackActive"
+  | "AttackRecovery"
+  | "HitReact"
+  | "SkillCast"
+  | "Dead"
+  | "Block";
+
+export type MatchCombatAttackPhase = "None" | "Windup" | "Active" | "Recovery";
+
 export type MatchPlayerState = {
   sessionId: string;
   userId: string;
@@ -40,6 +52,17 @@ export type MatchPlayerState = {
   isAttacking: boolean;
   attackComboIndex: number;
   lastAttackAt: number;
+  combatState: MatchCombatStateName;
+  combatStateStartedAt: number;
+  combatStateEndsAt: number;
+  attackPhase: MatchCombatAttackPhase;
+  activeActionId: string;
+  activeSkillId: string;
+  queuedAttack: boolean;
+  lastDamagedAt: number;
+  deadAt: number;
+  respawnAvailableAt: number;
+  skillCooldowns: Record<string, number>;
   isBlocking: boolean;
   blockStartedAt: number;
   maxGuard: number;
@@ -80,8 +103,25 @@ export type MatchPlayerMovedPayload = {
 
 export type MatchAttackStartedEventPayload = {
   sessionId: string;
+  attackId: string;
   attackComboIndex: number;
   startedAt: number;
+};
+
+export type MatchSkillCastStartedEventPayload = {
+  sessionId: string;
+  skillId: string;
+  skillSlot: number;
+  startedAt: number;
+  endsAt: number;
+  cooldownEndsAt: number;
+  isUltimate: boolean;
+};
+
+export type MatchSkillCastFinishedEventPayload = {
+  sessionId: string;
+  skillId: string;
+  finishedAt: number;
 };
 
 export type MatchBlockStartedEventPayload = {
@@ -102,10 +142,15 @@ export type MatchPlayerRespawnedEventPayload = {
 export type MatchCombatHitPayload = {
   attackerSessionId: string;
   targetSessionId: string;
+  sourceType: "basic_melee" | "skill" | "ultimate" | "environment";
+  sourceId: string;
   damage: number;
   comboHitIndex: number;
   wasBlocked: boolean;
   didGuardBreak: boolean;
+  knockback: number;
+  hitstunMs: number;
+  targetHealth: number;
 };
 
 export type MatchCombatBlockPayload = {
@@ -126,9 +171,23 @@ export type MatchCombatGuardBreakPayload = {
 
 export type MatchCombatStatePayload = {
   sessionId: string;
+  combatState: MatchCombatStateName;
+  combatStateStartedAt: number;
+  combatStateEndsAt: number;
+  attackPhase: MatchCombatAttackPhase;
+  activeActionId: string;
+  activeSkillId: string;
   isAttacking: boolean;
   attackComboIndex: number;
   lastAttackAt: number;
+  queuedAttack: boolean;
+  currentHealth: number;
+  maxHealth: number;
+  isAlive: boolean;
+  lastDamagedAt: number;
+  deadAt: number;
+  respawnAvailableAt: number;
+  skillCooldowns: Record<string, number>;
   isBlocking: boolean;
   blockStartedAt: number;
   maxGuard: number;
@@ -154,7 +213,20 @@ export type MatchCombatKillPayload = {
 export type MatchCombatUltimatePayload = {
   sessionId: string;
   characterId: string;
+  skillId: string;
   durationMs: number;
   startedAt: number;
   endsAt: number;
+};
+
+export type MatchCombatPlayerDiedPayload = {
+  sessionId: string;
+  killerSessionId: string | null;
+  deadAt: number;
+  respawnAvailableAt: number;
+};
+
+export type MatchCombatRagdollPayload = {
+  sessionId: string;
+  enabledAt: number;
 };

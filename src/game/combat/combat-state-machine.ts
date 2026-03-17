@@ -1,243 +1,319 @@
-// Responsável por formalizar o estado de combate local previsto (ataque, cooldown, block e stun) sem booleans soltas na cena.
-export const COMBAT_RUNTIME_STATES = [
-  "Idle",
-  "Active",
-  "Cooldown",
-  "Block",
-  "Stunned"
-] as const;
-
-export type CombatRuntimeState = (typeof COMBAT_RUNTIME_STATES)[number];
+// Responsável por prever localmente fases de ataque/skill para feedback imediato sem assumir autoridade de dano.
+import {
+  resolveBasicAttackDefinition,
+  resolveCombatKitDefinition,
+  resolveSkillDefinition,
+  type CombatActionDefinition,
+  type CombatAttackPhase,
+  type CombatRuntimeState
+} from "./combat-definition";
 
 export type CombatStateMachineConfig = {
-  attackIntervalMs: number;
   comboResetMs: number;
-  attackAnimationWindowMs: number;
-  attackInputBufferMs: number;
   blockMaxHoldMs: number;
 };
 
 export type CombatStateMachineServerState = {
+  heroId: string;
   isAlive: boolean;
+  combatState: CombatRuntimeState;
+  attackPhase: CombatAttackPhase;
   isAttacking: boolean;
   attackComboIndex: number;
+  activeActionId: string;
+  activeSkillId: string;
   isBlocking: boolean;
   isGuardBroken: boolean;
   stunUntil: number;
+  skillCooldowns: Record<string, number>;
 };
 
 export type CombatStateSnapshot = {
   state: CombatRuntimeState;
+  attackPhase: CombatAttackPhase;
   comboChainIndex: 0 | 1 | 2 | 3;
   activeAttackComboIndex: 0 | 1 | 2 | 3;
-  bufferedAttackUntilMs: number;
-  lastAttackAtMs: number;
+  activeSkillId: string;
+  activeActionId: string;
   isBlocking: boolean;
-  blockStartedAtMs: number;
+  canQueueNextAttack: boolean;
+  canBeInterrupted: boolean;
+  canDealDamage: boolean;
+  isDead: boolean;
 };
 
 export type AttackRequestResult = {
   accepted: boolean;
-  buffered: boolean;
   comboIndex: 0 | 1 | 2 | 3;
+};
+
+export type SkillRequestResult = {
+  accepted: boolean;
+  skillId: string;
+  slot: 1 | 2 | 3 | 4 | 5;
 };
 
 export type CombatStateMachine = {
   reset: () => void;
   requestAttack: (nowMs: number, serverState: CombatStateMachineServerState) => AttackRequestResult;
+  requestSkill: (
+    slot: 1 | 2 | 3 | 4 | 5,
+    nowMs: number,
+    serverState: CombatStateMachineServerState
+  ) => SkillRequestResult;
   requestBlockStart: (nowMs: number, serverState: CombatStateMachineServerState) => boolean;
   requestBlockEnd: () => void;
   step: (nowMs: number, serverState: CombatStateMachineServerState) => CombatStateSnapshot;
   getSnapshot: (nowMs: number, serverState: CombatStateMachineServerState) => CombatStateSnapshot;
 };
 
-function resolveSafeAttackComboIndex(value: number): 0 | 1 | 2 | 3 {
+type PredictedActionRuntime = {
+  definition: CombatActionDefinition;
+  state: CombatRuntimeState;
+  phase: CombatAttackPhase;
+  phaseStartedAt: number;
+  phaseEndsAt: number;
+  comboIndex: 0 | 1 | 2 | 3;
+};
+
+function toComboIndex(value: number): 0 | 1 | 2 | 3 {
   if (!Number.isFinite(value) || value <= 0) {
     return 0;
   }
 
-  const clamped = Math.max(1, Math.min(3, Math.floor(value)));
-  return clamped as 1 | 2 | 3;
+  return Math.max(1, Math.min(3, Math.floor(value))) as 1 | 2 | 3;
 }
 
 function isCombatStunned(nowMs: number, serverState: CombatStateMachineServerState): boolean {
+  return !serverState.isAlive || serverState.isGuardBroken || nowMs < serverState.stunUntil;
+}
+
+function isServerActionLocked(serverState: CombatStateMachineServerState): boolean {
+  return (
+    serverState.combatState === "AttackWindup" ||
+    serverState.combatState === "AttackActive" ||
+    serverState.combatState === "AttackRecovery" ||
+    serverState.combatState === "SkillCast" ||
+    serverState.combatState === "HitReact" ||
+    serverState.combatState === "Dead"
+  );
+}
+
+function resolveComboResetMs(
+  serverState: CombatStateMachineServerState,
+  fallbackMs: number
+): number {
+  const kit = resolveCombatKitDefinition(serverState.heroId);
+  return kit.comboResetTimeMs > 0 ? kit.comboResetTimeMs : fallbackMs;
+}
+
+function buildSnapshot(
+  serverState: CombatStateMachineServerState,
+  predicted: PredictedActionRuntime | null,
+  comboChainIndex: 0 | 1 | 2 | 3,
+  predictedBlockActive: boolean
+): CombatStateSnapshot {
   if (!serverState.isAlive) {
-    return true;
+    return {
+      state: "Dead",
+      attackPhase: "None",
+      comboChainIndex: 0,
+      activeAttackComboIndex: 0,
+      activeSkillId: "",
+      activeActionId: "",
+      isBlocking: false,
+      canQueueNextAttack: false,
+      canBeInterrupted: false,
+      canDealDamage: false,
+      isDead: true
+    };
   }
 
-  if (serverState.isGuardBroken) {
-    return true;
-  }
+  const predictedActiveAttackComboIndex = predicted?.definition.comboIndex ?? 0;
+  const predictedActiveSkillId = predicted?.definition.skillId ?? "";
+  const state = predicted?.state ?? serverState.combatState;
+  const attackPhase = predicted?.phase ?? serverState.attackPhase;
 
-  return nowMs < serverState.stunUntil;
+  return {
+    state,
+    attackPhase,
+    comboChainIndex,
+    activeAttackComboIndex:
+      predictedActiveAttackComboIndex || (serverState.isAttacking ? toComboIndex(serverState.attackComboIndex) : 0),
+    activeSkillId: predictedActiveSkillId || serverState.activeSkillId,
+    activeActionId: predicted?.definition.id ?? serverState.activeActionId,
+    isBlocking: !predicted && (predictedBlockActive || serverState.isBlocking),
+    canQueueNextAttack: !!predicted?.definition.comboIndex && predicted.phase === "Recovery" && predicted.definition.comboQueueWindowMs > 0,
+    canBeInterrupted: predicted ? predicted.state !== "AttackActive" : true,
+    canDealDamage: attackPhase === "Active",
+    isDead: false
+  };
 }
 
 export function createCombatStateMachine(config: CombatStateMachineConfig): CombatStateMachine {
   let comboChainIndex: 0 | 1 | 2 | 3 = 0;
-  let activeAttackComboIndex: 0 | 1 | 2 | 3 = 0;
   let lastAttackAtMs = 0;
-  let attackUntilMs = 0;
-  let bufferedAttackUntilMs = 0;
+  let predictedAction: PredictedActionRuntime | null = null;
+  let queuedAttackRequested = false;
   let predictedBlockActive = false;
-  let blockStartedAtMs = 0;
 
   const reset = (): void => {
     comboChainIndex = 0;
-    activeAttackComboIndex = 0;
     lastAttackAtMs = 0;
-    attackUntilMs = 0;
-    bufferedAttackUntilMs = 0;
+    predictedAction = null;
+    queuedAttackRequested = false;
     predictedBlockActive = false;
-    blockStartedAtMs = 0;
   };
 
-  const commitAttack = (nowMs: number): AttackRequestResult => {
-    const shouldResetCombo =
-      comboChainIndex <= 0 ||
-      nowMs - lastAttackAtMs > config.comboResetMs;
-
-    comboChainIndex = shouldResetCombo
-      ? 1
-      : (((comboChainIndex % 3) + 1) as 1 | 2 | 3);
-    activeAttackComboIndex = comboChainIndex;
-    lastAttackAtMs = nowMs;
-    attackUntilMs = nowMs + config.attackAnimationWindowMs;
-    bufferedAttackUntilMs = 0;
+  const setPredictedAction = (definition: CombatActionDefinition, nowMs: number, comboIndex: 0 | 1 | 2 | 3): void => {
     predictedBlockActive = false;
-    blockStartedAtMs = 0;
-
-    return {
-      accepted: true,
-      buffered: false,
-      comboIndex: activeAttackComboIndex
+    predictedAction = {
+      definition,
+      state: definition.comboIndex ? "AttackWindup" : "SkillCast",
+      phase: "Windup",
+      phaseStartedAt: nowMs,
+      phaseEndsAt: nowMs + definition.windupMs,
+      comboIndex
     };
   };
 
-  const syncInternalState = (
-    nowMs: number,
-    serverState: CombatStateMachineServerState
-  ): CombatStateSnapshot => {
-    if (activeAttackComboIndex > 0 && nowMs >= attackUntilMs) {
-      activeAttackComboIndex = 0;
-      attackUntilMs = 0;
+  const advancePredictedAction = (nowMs: number, heroId: string): void => {
+    if (!predictedAction) {
+      return;
     }
 
-    if (comboChainIndex > 0 && nowMs - lastAttackAtMs > config.comboResetMs) {
-      comboChainIndex = 0;
+    if (nowMs < predictedAction.phaseEndsAt) {
+      return;
     }
 
-    const stunned = isCombatStunned(nowMs, serverState);
-    if (stunned) {
-      predictedBlockActive = false;
-      blockStartedAtMs = 0;
-      bufferedAttackUntilMs = 0;
+    if (predictedAction.phase === "Windup") {
+      predictedAction.phase = "Active";
+      predictedAction.phaseStartedAt = nowMs;
+      predictedAction.phaseEndsAt = nowMs + predictedAction.definition.activeMs;
+      predictedAction.state = predictedAction.definition.comboIndex ? "AttackActive" : "SkillCast";
+      return;
     }
 
-    const canCommitBufferedAttack =
-      bufferedAttackUntilMs > 0 &&
-      nowMs <= bufferedAttackUntilMs &&
-      !stunned &&
-      nowMs - lastAttackAtMs >= config.attackIntervalMs;
-    if (canCommitBufferedAttack) {
-      commitAttack(nowMs);
-    } else if (bufferedAttackUntilMs > 0 && nowMs > bufferedAttackUntilMs) {
-      bufferedAttackUntilMs = 0;
+    if (predictedAction.phase === "Active") {
+      predictedAction.phase = "Recovery";
+      predictedAction.phaseStartedAt = nowMs;
+      predictedAction.phaseEndsAt = nowMs + predictedAction.definition.recoveryMs;
+      predictedAction.state = predictedAction.definition.comboIndex ? "AttackRecovery" : "SkillCast";
+      return;
     }
 
     if (
-      predictedBlockActive &&
-      blockStartedAtMs > 0 &&
-      nowMs - blockStartedAtMs >= config.blockMaxHoldMs
+      queuedAttackRequested &&
+      predictedAction.definition.comboIndex &&
+      predictedAction.definition.comboIndex < 3
     ) {
-      predictedBlockActive = false;
-      blockStartedAtMs = 0;
+      queuedAttackRequested = false;
+      comboChainIndex = ((predictedAction.definition.comboIndex % 3) + 1) as 1 | 2 | 3;
+      lastAttackAtMs = nowMs;
+      setPredictedAction(resolveBasicAttackDefinition(heroId, comboChainIndex), nowMs, comboChainIndex);
+      return;
     }
 
-    const serverAttackComboIndex = serverState.isAttacking
-      ? resolveSafeAttackComboIndex(serverState.attackComboIndex)
-      : 0;
-    const resolvedActiveAttackComboIndex = activeAttackComboIndex > 0
-      ? activeAttackComboIndex
-      : serverAttackComboIndex;
-    const resolvedBlocking =
-      !stunned &&
-      (predictedBlockActive || serverState.isBlocking) &&
-      resolvedActiveAttackComboIndex === 0;
-
-    let state: CombatRuntimeState = "Idle";
-    if (stunned) {
-      state = "Stunned";
-    } else if (resolvedActiveAttackComboIndex > 0) {
-      state = "Active";
-    } else if (resolvedBlocking) {
-      state = "Block";
-    } else if (comboChainIndex > 0 && nowMs - lastAttackAtMs < config.attackIntervalMs) {
-      state = "Cooldown";
-    }
-
-    return {
-      state,
-      comboChainIndex,
-      activeAttackComboIndex: resolvedActiveAttackComboIndex,
-      bufferedAttackUntilMs,
-      lastAttackAtMs,
-      isBlocking: resolvedBlocking,
-      blockStartedAtMs
-    };
+    predictedAction = null;
   };
 
   return {
     reset,
     requestAttack: (nowMs, serverState) => {
-      const snapshot = syncInternalState(nowMs, serverState);
-      if (snapshot.state === "Stunned") {
-        return {
-          accepted: false,
-          buffered: false,
-          comboIndex: 0
-        };
+      if (isCombatStunned(nowMs, serverState) || !serverState.isAlive) {
+        return { accepted: false, comboIndex: 0 };
       }
 
-      const elapsedSinceLastAttack = nowMs - lastAttackAtMs;
-      if (elapsedSinceLastAttack < config.attackIntervalMs) {
-        const remainingCooldown = config.attackIntervalMs - elapsedSinceLastAttack;
-        if (remainingCooldown <= config.attackInputBufferMs) {
-          bufferedAttackUntilMs = nowMs + config.attackInputBufferMs;
+      advancePredictedAction(nowMs, serverState.heroId);
+      if (predictedAction) {
+        const canQueue =
+          predictedAction.definition.kind === "basicAttack" &&
+          predictedAction.definition.comboIndex !== undefined &&
+          predictedAction.definition.comboIndex < 3 &&
+          nowMs >= predictedAction.phaseEndsAt - predictedAction.definition.comboQueueWindowMs;
+        if (canQueue) {
+          const nextComboIndex = ((predictedAction.definition.comboIndex ?? 1) % 3) + 1;
+          queuedAttackRequested = true;
           return {
-            accepted: false,
-            buffered: true,
-            comboIndex: 0
+            accepted: true,
+            comboIndex: nextComboIndex as 1 | 2 | 3
           };
         }
 
-        return {
-          accepted: false,
-          buffered: false,
-          comboIndex: 0
-        };
+        return { accepted: false, comboIndex: 0 };
       }
 
-      return commitAttack(nowMs);
+      if (isServerActionLocked(serverState)) {
+        return { accepted: false, comboIndex: 0 };
+      }
+
+      const comboResetMs = resolveComboResetMs(serverState, config.comboResetMs);
+      const shouldResetCombo = comboChainIndex <= 0 || nowMs - lastAttackAtMs > comboResetMs;
+      comboChainIndex = shouldResetCombo ? 1 : (((comboChainIndex % 3) + 1) as 1 | 2 | 3);
+      lastAttackAtMs = nowMs;
+      setPredictedAction(resolveBasicAttackDefinition(serverState.heroId, comboChainIndex), nowMs, comboChainIndex);
+
+      return {
+        accepted: true,
+        comboIndex: comboChainIndex
+      };
+    },
+    requestSkill: (slot, nowMs, serverState) => {
+      if (isCombatStunned(nowMs, serverState) || !serverState.isAlive) {
+        return { accepted: false, skillId: "", slot };
+      }
+
+      advancePredictedAction(nowMs, serverState.heroId);
+      if (predictedAction || isServerActionLocked(serverState)) {
+        return { accepted: false, skillId: "", slot };
+      }
+
+      const definition = resolveSkillDefinition(serverState.heroId, slot);
+      const cooldownEndsAt = serverState.skillCooldowns[definition.skillId ?? definition.id] ?? 0;
+      if (cooldownEndsAt > nowMs) {
+        return { accepted: false, skillId: "", slot };
+      }
+
+      setPredictedAction(definition, nowMs, 0);
+      return {
+        accepted: true,
+        skillId: definition.skillId ?? definition.id,
+        slot
+      };
     },
     requestBlockStart: (nowMs, serverState) => {
-      const snapshot = syncInternalState(nowMs, serverState);
-      if (snapshot.state === "Stunned" || snapshot.activeAttackComboIndex > 0 || snapshot.isBlocking) {
+      if (isCombatStunned(nowMs, serverState) || !!predictedAction || isServerActionLocked(serverState)) {
         return false;
       }
 
-      predictedBlockActive = true;
-      blockStartedAtMs = nowMs;
-      return true;
+      predictedBlockActive = nowMs < serverState.stunUntil ? false : true;
+      return predictedBlockActive;
     },
     requestBlockEnd: () => {
       predictedBlockActive = false;
-      blockStartedAtMs = 0;
     },
     step: (nowMs, serverState) => {
-      return syncInternalState(nowMs, serverState);
+      const comboResetMs = resolveComboResetMs(serverState, config.comboResetMs);
+      if (comboChainIndex > 0 && nowMs - lastAttackAtMs > comboResetMs) {
+        comboChainIndex = 0;
+      }
+
+      if (isCombatStunned(nowMs, serverState)) {
+        predictedAction = null;
+        queuedAttackRequested = false;
+        predictedBlockActive = false;
+      }
+
+      advancePredictedAction(nowMs, serverState.heroId);
+      return buildSnapshot(serverState, predictedAction, comboChainIndex, predictedBlockActive);
     },
     getSnapshot: (nowMs, serverState) => {
-      return syncInternalState(nowMs, serverState);
+      const comboResetMs = resolveComboResetMs(serverState, config.comboResetMs);
+      if (comboChainIndex > 0 && nowMs - lastAttackAtMs > comboResetMs) {
+        comboChainIndex = 0;
+      }
+
+      return buildSnapshot(serverState, predictedAction, comboChainIndex, predictedBlockActive);
     }
   };
 }

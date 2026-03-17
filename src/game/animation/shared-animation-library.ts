@@ -8,7 +8,7 @@ import {
 import { LEDGE_ANIMATION_ASSET_BY_COMMAND } from "./ledge-animation-config";
 import type { AnimationAssetCommandMap, AnimationCommandGroupMap } from "./animation-types";
 
-export const SHARED_ANIMATION_BASE_URL = "public/local/animations/shared";
+export const SHARED_ANIMATION_BASE_URL = "public/models3D/animations";
 
 export const DEFAULT_SHARED_EMBEDDED_GROUP_NAMES: Readonly<Record<AnimationCommand, string>> = {
   idle: "idle",
@@ -26,6 +26,10 @@ export const DEFAULT_SHARED_EMBEDDED_GROUP_NAMES: Readonly<Record<AnimationComma
   attack1: "attack_1",
   attack2: "attack_2",
   attack3: "attack_3",
+  fireball: "fireball",
+  kickSkill: "kick_skill",
+  repeatKick: "repeat_kick",
+  spell: "spell",
   block: "block",
   hit: "hit"
 };
@@ -42,7 +46,27 @@ export const SHARED_ANIMATION_ASSET_BY_COMMAND: Readonly<AnimationAssetCommandMa
     fileName: "quick-roll.glb",
     stripPositionTracks: true
   },
-  doubleJump: "jump.glb"
+  doubleJump: "jump.glb",
+  attack1: {
+    fileName: "punchs.glb",
+    groupName: "punch-one"
+  },
+  attack2: {
+    fileName: "punchs.glb",
+    groupName: "punch-two"
+  },
+  attack3: {
+    fileName: "punchs.glb",
+    groupName: "punch-three"
+  },
+  block: {
+    fileName: "block.glb",
+    groupName: "mixamo.com"
+  },
+  hit: {
+    fileName: "getting-hit.glb",
+    groupName: "getting-hit"
+  }
 };
 
 export type LoadSharedAnimationLibraryOptions = {

@@ -53,6 +53,20 @@ const NON_RESTARTABLE_SAME_COMMANDS: readonly AnimationCommand[] = [
 ] as const;
 const DIRECT_SOURCE_PRIORITY: readonly AnimationSource[] = ["override", "shared"] as const;
 const JUMP_START_TRIM_RATIO = 0.35;
+const PROTECTED_NON_LOOPING_COMMANDS: readonly AnimationCommand[] = [
+  "rolling",
+  "ledgeClimb",
+  "fireball",
+  "kickSkill",
+  "repeatKick",
+  "spell",
+  "ultimate",
+  "attack1",
+  "attack2",
+  "attack3",
+  "hit",
+  "death"
+] as const;
 
 function resolvePlaybackSpeedRatio(command: AnimationCommand): number {
   switch (command) {
@@ -60,6 +74,12 @@ function resolvePlaybackSpeedRatio(command: AnimationCommand): number {
     case "attack2":
     case "attack3":
       return 2.0;
+    case "fireball":
+    case "kickSkill":
+    case "repeatKick":
+    case "spell":
+    case "ultimate":
+      return 1.2;
     default:
       return 1;
   }
@@ -94,6 +114,11 @@ function resolveCommandPriority(command: AnimationCommand): number {
       return 8;
     case "ultimate":
       return 7;
+    case "fireball":
+    case "kickSkill":
+    case "repeatKick":
+    case "spell":
+      return 6.5;
     case "attack1":
     case "attack2":
     case "attack3":
@@ -416,18 +441,8 @@ export function createAnimationController(options: CreateAnimationControllerOpti
       const currentIsLooping = shouldLoopCommand(currentPlaybackCommand, options.animationConfig);
 
       if (!currentIsLooping && currentGroup.isPlaying) {
-        const protectedCommands: readonly AnimationCommand[] = [
-          "rolling",
-          "ledgeClimb",
-          "ultimate",
-          "attack1",
-          "attack2",
-          "attack3",
-          "hit",
-          "death"
-        ] as const;
         const canOverrideByPriority =
-          !protectedCommands.includes(currentPlaybackCommand) ||
+          !PROTECTED_NON_LOOPING_COMMANDS.includes(currentPlaybackCommand) ||
           resolveCommandPriority(requestedCommand) > resolveCommandPriority(currentPlaybackCommand);
 
         if (!canOverrideByPriority) {

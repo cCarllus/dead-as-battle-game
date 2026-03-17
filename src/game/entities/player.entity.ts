@@ -660,6 +660,7 @@ export function createMatchPlayerEntity(options: CreateMatchPlayerEntityOptions)
         isUltimateActive: nextState.isUltimateActive,
         isBlocking: nextState.isBlocking,
         attackComboIndex: nextState.attackComboIndex,
+        activeSkillId: nextState.activeSkillId,
         isHitReacting: nextState.isHitReacting,
         locomotionState: nextState.locomotionState,
         restartCommand: nextState.restartCommand ?? null

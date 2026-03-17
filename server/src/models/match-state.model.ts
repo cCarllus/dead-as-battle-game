@@ -15,6 +15,8 @@ export type MatchPlayerStructuredState = {
   combat: {
     health: number;
     maxHealth: number;
+    combatState: MatchPlayerState["combatState"];
+    attackPhase: MatchPlayerState["attackPhase"];
     guard: number;
     maxGuard: number;
     isBlocking: boolean;
@@ -59,6 +61,8 @@ export function toStructuredPlayerState(player: MatchPlayerState): MatchPlayerSt
     combat: {
       health: player.currentHealth,
       maxHealth: player.maxHealth,
+      combatState: player.combatState,
+      attackPhase: player.attackPhase,
       guard: player.currentGuard,
       maxGuard: player.maxGuard,
       isBlocking: player.isBlocking,
@@ -125,6 +129,17 @@ export function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     isAttacking: player.isAttacking,
     attackComboIndex: player.attackComboIndex,
     lastAttackAt: player.lastAttackAt,
+    combatState: player.combatState,
+    combatStateStartedAt: player.combatStateStartedAt,
+    combatStateEndsAt: player.combatStateEndsAt,
+    attackPhase: player.attackPhase,
+    activeActionId: player.activeActionId,
+    activeSkillId: player.activeSkillId,
+    queuedAttack: player.queuedAttack,
+    lastDamagedAt: player.lastDamagedAt,
+    deadAt: player.deadAt,
+    respawnAvailableAt: player.respawnAvailableAt,
+    skillCooldowns: { ...player.skillCooldowns },
     isBlocking: player.isBlocking,
     blockStartedAt: player.blockStartedAt,
     maxGuard: player.maxGuard,

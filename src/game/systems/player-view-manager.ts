@@ -75,6 +75,17 @@ function clonePlayerState(player: MatchPlayerState): MatchPlayerState {
     isAttacking: player.isAttacking,
     attackComboIndex: player.attackComboIndex,
     lastAttackAt: player.lastAttackAt,
+    combatState: player.combatState,
+    combatStateStartedAt: player.combatStateStartedAt,
+    combatStateEndsAt: player.combatStateEndsAt,
+    attackPhase: player.attackPhase,
+    activeActionId: player.activeActionId,
+    activeSkillId: player.activeSkillId,
+    queuedAttack: player.queuedAttack,
+    lastDamagedAt: player.lastDamagedAt,
+    deadAt: player.deadAt,
+    respawnAvailableAt: player.respawnAvailableAt,
+    skillCooldowns: { ...player.skillCooldowns },
     isBlocking: player.isBlocking,
     blockStartedAt: player.blockStartedAt,
     maxGuard: player.maxGuard,
@@ -106,6 +117,16 @@ function didPlayerStateChange(previous: MatchPlayerState | undefined, next: Matc
     previous.isAttacking !== next.isAttacking ||
     previous.attackComboIndex !== next.attackComboIndex ||
     previous.lastAttackAt !== next.lastAttackAt ||
+    previous.combatState !== next.combatState ||
+    previous.combatStateStartedAt !== next.combatStateStartedAt ||
+    previous.combatStateEndsAt !== next.combatStateEndsAt ||
+    previous.attackPhase !== next.attackPhase ||
+    previous.activeActionId !== next.activeActionId ||
+    previous.activeSkillId !== next.activeSkillId ||
+    previous.queuedAttack !== next.queuedAttack ||
+    previous.lastDamagedAt !== next.lastDamagedAt ||
+    previous.deadAt !== next.deadAt ||
+    previous.respawnAvailableAt !== next.respawnAvailableAt ||
     previous.isBlocking !== next.isBlocking ||
     previous.blockStartedAt !== next.blockStartedAt ||
     previous.maxGuard !== next.maxGuard ||
@@ -113,6 +134,7 @@ function didPlayerStateChange(previous: MatchPlayerState | undefined, next: Matc
     previous.isGuardBroken !== next.isGuardBroken ||
     previous.stunUntil !== next.stunUntil ||
     previous.lastGuardDamagedAt !== next.lastGuardDamagedAt ||
+    JSON.stringify(previous.skillCooldowns) !== JSON.stringify(next.skillCooldowns) ||
     previous.isUsingUltimate !== next.isUsingUltimate ||
     previous.ultimateStartedAt !== next.ultimateStartedAt ||
     previous.ultimateEndsAt !== next.ultimateEndsAt ||

@@ -6,7 +6,9 @@ export type AnimationStateSystemInput = {
   isAlive: boolean;
   isUltimateActive: boolean;
   isBlocking: boolean;
+  combatState: "CombatIdle" | "AttackWindup" | "AttackActive" | "AttackRecovery" | "HitReact" | "SkillCast" | "Dead" | "Block";
   attackComboIndex: 0 | 1 | 2 | 3;
+  activeSkillId: string;
   isStunned: boolean;
   locomotionState: LocomotionAnimationState;
   movementDirection: MovementDirection;
@@ -40,6 +42,7 @@ export function createAnimationStateSystem(): AnimationStateSystem {
           isUltimateActive: false,
           isBlocking: false,
           attackComboIndex: 0,
+          activeSkillId: "",
           isHitReacting: false,
           locomotionState: "idle",
           restartCommand: null
@@ -61,6 +64,7 @@ export function createAnimationStateSystem(): AnimationStateSystem {
         isUltimateActive: input.isUltimateActive,
         isBlocking,
         attackComboIndex: input.attackComboIndex,
+        activeSkillId: input.activeSkillId,
         isHitReacting,
         locomotionState: input.locomotionState,
         restartCommand: null

@@ -10,10 +10,7 @@ export const GLOBAL_MATCH_RUNTIME_CONFIG = {
     intervalMs: 50
   },
   combatPrediction: {
-    attackIntervalMs: 300,
-    comboResetMs: 1000,
-    attackAnimationWindowMs: 260,
-    attackInputBufferMs: 120,
+    comboResetMs: 900,
     blockMaxHoldMs: 2500
   },
   localVisualCulling: {

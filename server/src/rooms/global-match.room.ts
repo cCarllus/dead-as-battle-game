@@ -1,9 +1,10 @@
 // Room enxuta: conecta jogadores, registra handlers, executa loop fixo e replica estado autoritativo.
 import { Client, Room } from "@colyseus/core";
 import { resolveHeroCombatServerConfig, VALID_HERO_IDS } from "../config/hero-combat.config.js";
+import { resolveCombatKitDefinition } from "../combat/combat-definition.js";
+import { buildCombatStatePayloadForPlayer } from "../combat/combat-controller.js";
 import { cloneMatchState, clonePlayerState } from "../models/match-state.model.js";
 import type {
-  CombatStateEventPayload,
   GlobalMatchState,
   MatchJoinOptions,
   MatchPlayerState,
@@ -21,7 +22,6 @@ import { respawnPlayer } from "../services/respawn.service.js";
 import { SpawnService } from "../services/spawn.service.js";
 import { initializeStamina, type SprintInputState } from "../services/stamina.service.js";
 import { resetUltimate } from "../services/ultimate.service.js";
-import { createAbilitySystem, type AbilitySystem } from "../systems/ability.system.js";
 import { createCombatSystem, type CombatSystem } from "../systems/combat.system.js";
 import { createMovementSystem, type MovementSystem } from "../systems/movement.system.js";
 import { createRegenerationSystem, type RegenerationSystem } from "../systems/regeneration.system.js";
@@ -76,7 +76,6 @@ export class GlobalMatchRoom extends Room {
 
   private movementSystem: MovementSystem | null = null;
   private combatSystem: CombatSystem | null = null;
-  private abilitySystem: AbilitySystem | null = null;
   private regenerationSystem: RegenerationSystem | null = null;
 
   private stateDirty = false;
@@ -90,22 +89,7 @@ export class GlobalMatchRoom extends Room {
   }
 
   private broadcastCombatState(player: MatchPlayerState): void {
-    this.broadcast(MATCH_EVENTS.combatState, {
-      sessionId: player.sessionId,
-      isAttacking: player.isAttacking,
-      attackComboIndex: player.attackComboIndex,
-      lastAttackAt: player.lastAttackAt,
-      isBlocking: player.isBlocking,
-      blockStartedAt: player.blockStartedAt,
-      maxGuard: player.maxGuard,
-      currentGuard: player.currentGuard,
-      isGuardBroken: player.isGuardBroken,
-      stunUntil: player.stunUntil,
-      lastGuardDamagedAt: player.lastGuardDamagedAt,
-      x: player.x,
-      y: player.y,
-      z: player.z
-    } satisfies CombatStateEventPayload);
+    this.broadcast(MATCH_EVENTS.combatState, buildCombatStatePayloadForPlayer(player));
   }
 
   private async syncLobbyMetadata(): Promise<void> {
@@ -160,9 +144,8 @@ export class GlobalMatchRoom extends Room {
   private runSimulationTick(deltaMilliseconds: number): void {
     const movementSystem = this.movementSystem;
     const combatSystem = this.combatSystem;
-    const abilitySystem = this.abilitySystem;
     const regenerationSystem = this.regenerationSystem;
-    if (!movementSystem || !combatSystem || !abilitySystem || !regenerationSystem) {
+    if (!movementSystem || !combatSystem || !regenerationSystem) {
       return;
     }
 
@@ -199,9 +182,19 @@ export class GlobalMatchRoom extends Room {
     combatResult.killEvents.forEach((eventPayload) => {
       this.broadcast(MATCH_EVENTS.combatKill, eventPayload);
     });
-
-    const abilityResult = abilitySystem.update(now);
-    abilityResult.ultimateEvents.forEach((eventPayload) => {
+    combatResult.skillCastStartedEvents.forEach((eventPayload) => {
+      this.broadcast(MATCH_EVENTS.combatSkillCastStarted, eventPayload);
+    });
+    combatResult.skillCastFinishedEvents.forEach((eventPayload) => {
+      this.broadcast(MATCH_EVENTS.combatSkillCastFinished, eventPayload);
+    });
+    combatResult.deathEvents.forEach((eventPayload) => {
+      this.broadcast(MATCH_EVENTS.combatPlayerDied, eventPayload);
+    });
+    combatResult.ragdollEvents.forEach((eventPayload) => {
+      this.broadcast(MATCH_EVENTS.combatRagdollEnabled, eventPayload);
+    });
+    combatResult.ultimateEvents.forEach((eventPayload) => {
       this.broadcast(MATCH_EVENTS.combatUltimate, eventPayload);
     });
 
@@ -210,9 +203,6 @@ export class GlobalMatchRoom extends Room {
 
     const combatStatePlayersBySessionId = new Map<string, MatchPlayerState>();
     combatResult.combatStateChangedPlayers.forEach((player) => {
-      combatStatePlayersBySessionId.set(player.sessionId, player);
-    });
-    abilityResult.combatStateChangedPlayers.forEach((player) => {
       combatStatePlayersBySessionId.set(player.sessionId, player);
     });
     respawnedPlayers.forEach((player) => {
@@ -242,7 +232,6 @@ export class GlobalMatchRoom extends Room {
     if (
       movementResult.didChangeState ||
       combatResult.didChangeState ||
-      abilityResult.didChangeState ||
       regenerationResult.didChangeState ||
       respawnedPlayers.length > 0
     ) {
@@ -265,9 +254,6 @@ export class GlobalMatchRoom extends Room {
     this.combatSystem = createCombatSystem({
       players: () => this.matchState.players
     });
-    this.abilitySystem = createAbilitySystem({
-      players: () => this.matchState.players
-    });
     this.regenerationSystem = createRegenerationSystem({
       players: () => this.matchState.players
     });
@@ -282,11 +268,12 @@ export class GlobalMatchRoom extends Room {
     }).bind(this);
     createCombatHandler({
       queueAttackStart: (sessionId) => this.combatSystem?.queueAttackStart(sessionId),
+      queueSkillCast: (sessionId, slot) => this.combatSystem?.queueSkillCast(sessionId, slot),
       queueBlockStart: (sessionId) => this.combatSystem?.queueBlockStart(sessionId),
       queueBlockEnd: (sessionId) => this.combatSystem?.queueBlockEnd(sessionId)
     }).bind(this);
     createAbilityHandler({
-      queueUltimateActivate: (sessionId) => this.abilitySystem?.queueUltimateActivate(sessionId)
+      queueSkillCast: (sessionId, slot) => this.combatSystem?.queueSkillCast(sessionId, slot)
     }).bind(this);
 
     this.setSimulationInterval((deltaMilliseconds) => {
@@ -314,6 +301,7 @@ export class GlobalMatchRoom extends Room {
     const heroId = normalizeHeroId(options?.heroId);
     const heroLevel = normalizeHeroLevel(options?.heroLevel);
     const heroCombatConfig = resolveHeroCombatServerConfig(heroId);
+    const combatKit = resolveCombatKitDefinition(heroId);
     const spawn = this.spawnService.getNextSpawnPoint();
     const resolvedSpawn = resolveHorizontalPlayerCollision({
       sessionId: client.sessionId,
@@ -359,6 +347,17 @@ export class GlobalMatchRoom extends Room {
       isAttacking: false,
       attackComboIndex: 0,
       lastAttackAt: 0,
+      combatState: "CombatIdle",
+      combatStateStartedAt: now,
+      combatStateEndsAt: 0,
+      attackPhase: "None",
+      activeActionId: "",
+      activeSkillId: "",
+      queuedAttack: false,
+      lastDamagedAt: 0,
+      deadAt: 0,
+      respawnAvailableAt: now + combatKit.respawnDelayMs,
+      skillCooldowns: {},
       isBlocking: false,
       blockStartedAt: 0,
       maxGuard: 0,
@@ -433,7 +432,6 @@ export class GlobalMatchRoom extends Room {
     this.movementStateBySessionId.delete(client.sessionId);
     this.queuedRespawnRequests.delete(client.sessionId);
     this.combatSystem?.clearPlayer(client.sessionId);
-    this.abilitySystem?.clearPlayer(client.sessionId);
     this.movementSystem?.clearPlayer(client.sessionId);
 
     this.markStateDirty();

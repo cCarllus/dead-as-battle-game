@@ -12,6 +12,7 @@ import {
 } from "@babylonjs/core";
 import type {
   MatchCombatUltimatePayload,
+  MatchCombatStateName,
   MatchPlayerLocomotionState,
   MatchPlayerMovedPayload,
   MatchPlayerState,
@@ -22,6 +23,7 @@ import {
   createCombatStateMachine,
   type CombatStateMachineServerState
 } from "../combat/combat-state-machine";
+import { createRagdollSystem } from "../combat/ragdoll-system";
 import {
   createLocalCharacterGameplayRuntime,
   type LocalCharacterGameplayRuntime
@@ -66,6 +68,7 @@ export type GlobalMatchSceneOptions = {
   }) => void;
   onLocalSprintIntentChanged?: (intent: { isShiftPressed: boolean; isForwardPressed: boolean }) => void;
   onLocalAttackRequested?: () => void;
+  onLocalSkillRequested?: (slot: 1 | 2 | 3 | 4 | 5) => void;
   onLocalBlockStartRequested?: () => void;
   onLocalBlockEndRequested?: () => void;
 };
@@ -85,6 +88,7 @@ export type GlobalMatchSceneHandle = {
   isPointerLocked: () => boolean;
   onPointerLockChanged: (listener: (locked: boolean) => void) => () => void;
   triggerPlayerUltimateEffect: (payload: Pick<MatchCombatUltimatePayload, "sessionId" | "characterId" | "durationMs">) => void;
+  enablePlayerRagdoll: (sessionId: string) => void;
   getPlayerScreenPosition: (sessionId: string) => { x: number; y: number } | null;
   getPlayerNameplateScreenPosition: (sessionId: string) => { x: number; y: number } | null;
   getPlayerWorldPosition: (sessionId: string) => { x: number; y: number; z: number } | null;
@@ -122,6 +126,7 @@ type GlobalMatchRuntimeServices = {
   windParticles: ReturnType<typeof createWindParticlesSystem>;
   motionLines: ReturnType<typeof createMotionLinesEffect>;
   localGameplayRuntime: LocalCharacterGameplayRuntime | null;
+  ragdollSystem: ReturnType<typeof createRagdollSystem>;
 };
 
 type GlobalMatchRuntimeEvents = {
@@ -155,6 +160,11 @@ type GlobalMatchRuntimeEvents = {
   localAttackRequested: {
     comboIndex: 0 | 1 | 2 | 3;
     requestedAt: number;
+  };
+  localSkillRequested: {
+    slot: 1 | 2 | 3 | 4 | 5;
+    requestedAt: number;
+    skillId: string;
   };
   localBlockStarted: {
     requestedAt: number;
@@ -368,6 +378,11 @@ export async function createGlobalMatchScene(
       return playerViewManager.getPlayerEffectAnchor(sessionId);
     }
   });
+  const ragdollSystem = createRagdollSystem({
+    resolveVisualRoot: (sessionId) => {
+      return playerViewManager.getPlayerEffectAnchor(sessionId)?.visualRoot ?? null;
+    }
+  });
 
   const movementInput = createMovementInputSystem();
   let inputEnabled = true;
@@ -384,6 +399,7 @@ export async function createGlobalMatchScene(
   context.services.register("pointerLockSystem", pointerLockSystem);
   context.services.register("playerViewManager", playerViewManager);
   context.services.register("effectManager", effectManager);
+  context.services.register("ragdollSystem", ragdollSystem);
   context.services.register("lightingSystem", lightingSystem);
   context.services.register("physicsWorld", physicsWorld);
   context.services.register("physicsDebug", physicsDebug);
@@ -525,6 +541,11 @@ export async function createGlobalMatchScene(
   const setPlayers = (players: MatchPlayerState[]): void => {
     emitSnapshotPresenceEvents(players);
     playerViewManager.syncPlayers(players);
+    players.forEach((player) => {
+      if (player.isAlive) {
+        ragdollSystem.disable(player.sessionId);
+      }
+    });
     ensureLocalGameplayRuntime();
   };
 
@@ -536,6 +557,9 @@ export async function createGlobalMatchScene(
       isLocal: player.sessionId === options.localSessionId
     });
     playerViewManager.addPlayer(player);
+    if (player.isAlive) {
+      ragdollSystem.disable(player.sessionId);
+    }
     ensureLocalGameplayRuntime();
   };
 
@@ -547,6 +571,9 @@ export async function createGlobalMatchScene(
       isLocal: player.sessionId === options.localSessionId
     });
     playerViewManager.updatePlayer(player);
+    if (player.isAlive) {
+      ragdollSystem.disable(player.sessionId);
+    }
     ensureLocalGameplayRuntime();
   };
 
@@ -560,6 +587,7 @@ export async function createGlobalMatchScene(
       });
     }
     effectManager.stopEffectsForPlayer(sessionId);
+    ragdollSystem.disable(sessionId);
     playerViewManager.removePlayer(sessionId);
 
     if (sessionId === options.localSessionId) {
@@ -604,12 +632,18 @@ export async function createGlobalMatchScene(
 
   const resolveCombatServerState = (player: MatchPlayerState | null): CombatStateMachineServerState => {
     return {
+      heroId: player?.heroId ?? "default_champion",
       isAlive: player?.isAlive ?? true,
+      combatState: (player?.combatState ?? "CombatIdle") as MatchCombatStateName,
+      attackPhase: player?.attackPhase ?? "None",
       isAttacking: !!player?.isAttacking,
       attackComboIndex: player?.attackComboIndex ?? 0,
+      activeActionId: player?.activeActionId ?? "",
+      activeSkillId: player?.activeSkillId ?? "",
       isBlocking: !!player?.isBlocking,
       isGuardBroken: !!player?.isGuardBroken,
-      stunUntil: player?.stunUntil ?? 0
+      stunUntil: player?.stunUntil ?? 0,
+      skillCooldowns: player?.skillCooldowns ?? {}
     };
   };
 
@@ -630,7 +664,7 @@ export async function createGlobalMatchScene(
       return false;
     }
 
-    if (combatStateMachine.getSnapshot(now, resolveCombatServerState(localPlayerState)).state === "Stunned") {
+    if (now < localPlayerState.stunUntil || localPlayerState.isGuardBroken) {
       return false;
     }
 
@@ -654,6 +688,26 @@ export async function createGlobalMatchScene(
       requestedAt: now
     });
     options.onLocalAttackRequested?.();
+  };
+
+  const handleLocalSkillIntent = (slot: 1 | 2 | 3 | 4 | 5): void => {
+    const now = Date.now();
+    const localPlayerState = playerViewManager.getLocalPlayerState();
+    if (!localPlayerState || !localPlayerState.isAlive) {
+      return;
+    }
+
+    const skillResult = combatStateMachine.requestSkill(slot, now, resolveCombatServerState(localPlayerState));
+    if (!skillResult.accepted) {
+      return;
+    }
+
+    context.events.emit("localSkillRequested", {
+      slot,
+      requestedAt: now,
+      skillId: skillResult.skillId
+    });
+    options.onLocalSkillRequested?.(slot);
   };
 
   const handleLocalBlockStartIntent = (): void => {
@@ -684,6 +738,7 @@ export async function createGlobalMatchScene(
   const combatInput = createCombatInputSystem({
     canProcessInput: canUseCombatInput,
     onAttackStart: handleLocalAttackIntent,
+    onSkillCast: handleLocalSkillIntent,
     onBlockStart: handleLocalBlockStartIntent,
     onBlockEnd: handleLocalBlockEndIntent
   });
@@ -814,7 +869,7 @@ export async function createGlobalMatchScene(
       nowMs,
       resolveCombatServerState(localPlayerState)
     );
-    const isLocallyStunned = combatSnapshot.state === "Stunned";
+    const isLocallyStunned = nowMs < (localPlayerState?.stunUntil ?? 0) || !!localPlayerState?.isGuardBroken;
     const activeAttackComboIndex = combatSnapshot.activeAttackComboIndex;
     const effectiveBlocking = combatSnapshot.isBlocking;
     const hasSprintResource =
@@ -847,7 +902,10 @@ export async function createGlobalMatchScene(
         isAlive: localPlayerState?.isAlive ?? true,
         isUltimateActive: !!localPlayerState?.isUsingUltimate,
         isBlocking: effectiveBlocking,
+        combatState: combatSnapshot.state,
+        attackPhase: combatSnapshot.attackPhase,
         attackComboIndex: activeAttackComboIndex,
+        activeSkillId: combatSnapshot.activeSkillId,
         isStunned: isLocallyStunned
       }
     });
@@ -951,6 +1009,7 @@ export async function createGlobalMatchScene(
     cameraController.syncLook(pointerLocked, inputEnabled);
     applyLocalMovement(deltaSeconds);
     playerViewManager.tick(Date.now());
+    ragdollSystem.tick(deltaSeconds);
     lightingSystem.syncPlayerShadowCasters(playerViewManager.getPlayerVisualRoots());
 
     const localView = playerViewManager.getLocalPlayerView();
@@ -1005,6 +1064,9 @@ export async function createGlobalMatchScene(
         characterId: payload.characterId,
         durationMs: payload.durationMs
       });
+    },
+    enablePlayerRagdoll: (sessionId) => {
+      ragdollSystem.enable(sessionId);
     },
     getPlayerScreenPosition: (sessionId) => {
       const target = playerViewManager.getPlayerCameraTarget(sessionId);
@@ -1102,6 +1164,7 @@ export async function createGlobalMatchScene(
       movementInput.dispose();
 
       effectManager.dispose();
+      ragdollSystem.dispose();
       playerViewManager.dispose();
       disposeLocalGameplayRuntime();
       characterLean.reset(null);

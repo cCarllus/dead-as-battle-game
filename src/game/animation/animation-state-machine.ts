@@ -32,6 +32,7 @@ export function resolveAnimationGameplayState(params: {
     isUltimateActive: params.combat.isUltimateActive,
     isBlocking: !isLedgeState && params.combat.isBlocking && params.combat.attackComboIndex === 0,
     attackComboIndex: isLedgeState ? 0 : params.combat.attackComboIndex,
+    activeSkillId: isLedgeState ? "" : params.combat.activeSkillId,
     isHitReacting: params.snapshot.state === "Hit" || params.snapshot.state === "Stunned",
     locomotionState: params.snapshot.state,
     restartCommand: params.snapshot.didGroundJump

@@ -1,5 +1,6 @@
 // Serviço de respawn autoritativo para manter regra de vida/morte fora da Room.
 import { resolveHeroCombatServerConfig } from "../config/hero-combat.config.js";
+import { resolveCombatKitDefinition } from "../combat/combat-definition.js";
 import type { MatchPlayerState } from "../models/match-player.model.js";
 import { initializeGuardState } from "./block-guard.service.js";
 import { resetHealth } from "./health.service.js";
@@ -30,7 +31,15 @@ export function respawnPlayer(options: {
     };
   }
 
+  if (options.now < player.respawnAvailableAt) {
+    return {
+      didRespawn: false,
+      player
+    };
+  }
+
   const heroCombatConfig = resolveHeroCombatServerConfig(player.heroId);
+  const combatKit = resolveCombatKitDefinition(player.heroId);
   const spawn = options.spawnService.getNextSpawnPoint();
   const resolvedSpawn = resolveHorizontalPlayerCollision({
     sessionId: player.sessionId,
@@ -49,6 +58,17 @@ export function respawnPlayer(options: {
   player.isAttacking = false;
   player.attackComboIndex = 0;
   player.lastAttackAt = 0;
+  player.combatState = "CombatIdle";
+  player.combatStateStartedAt = options.now;
+  player.combatStateEndsAt = 0;
+  player.attackPhase = "None";
+  player.activeActionId = "";
+  player.activeSkillId = "";
+  player.queuedAttack = false;
+  player.lastDamagedAt = 0;
+  player.deadAt = 0;
+  player.respawnAvailableAt = options.now + combatKit.respawnDelayMs;
+  player.skillCooldowns = {};
   player.isBlocking = false;
   player.blockStartedAt = 0;
   player.isSprinting = false;

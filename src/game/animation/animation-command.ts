@@ -15,6 +15,10 @@ export const ANIMATION_COMMANDS = [
   "attack1",
   "attack2",
   "attack3",
+  "fireball",
+  "kickSkill",
+  "repeatKick",
+  "spell",
   "block",
   "hit"
 ] as const;
