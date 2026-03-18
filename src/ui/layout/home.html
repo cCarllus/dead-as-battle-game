@@ -163,6 +163,17 @@
         <section class="dab-settings-section">
           <h3 data-i18n="settings.section.account"></h3>
 
+          <div class="dab-settings-export">
+            <button
+              type="button"
+              class="dab-settings-secondary"
+              data-settings-action="export-progress"
+              data-i18n="settings.account.export"
+            ></button>
+            <small data-i18n="settings.account.export.helper"></small>
+            <p class="dab-settings-export__feedback" data-slot="settings-export-feedback"></p>
+          </div>
+
           <div class="dab-settings-danger">
             <button type="button" class="dab-settings-danger__button" data-settings-action="logout" data-i18n="settings.account.logout"></button>
             <small data-i18n="settings.account.logout.helper"></small>

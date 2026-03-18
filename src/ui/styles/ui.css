@@ -1215,6 +1215,57 @@ textarea {
   color: #fda4af;
 }
 
+.nickname-screen__import {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nickname-screen__import-trigger,
+.nickname-screen__import-confirm {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  background: rgba(15, 23, 42, 0.72);
+  color: #dbeafe;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nickname-screen__import-feedback,
+.nickname-screen__import-warning {
+  min-height: 18px;
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(191, 219, 254, 0.82);
+}
+
+.nickname-screen__import-preview {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nickname-screen__import-title {
+  color: #f8fafc;
+  font-size: 0.88rem;
+}
+
+.nickname-screen__import-preview p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 0.82rem;
+}
+
 .nickname-screen__helper {
   margin: 14px 0 0;
   text-align: center;
@@ -3318,6 +3369,20 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.dab-settings-export {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.dab-settings-export small,
+.dab-settings-export__feedback {
+  margin: 0;
+  color: rgba(191, 219, 254, 0.8);
+  font-size: 0.82rem;
 }
 
 .dab-settings-danger__button {

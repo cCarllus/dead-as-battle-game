@@ -10,12 +10,12 @@ import type { MenuAudioManager } from "../services/menu-audio-manager";
 import { renderLoadingScreen } from "../ui/screens/loading.screen";
 import { renderHomeScreen } from "../ui/screens/home.screen";
 import { renderNicknameScreen } from "../ui/screens/nickname.screen";
-import { renderSettingsScreen } from "../ui/screens/settings.screen";
 import { renderChampionsScreen } from "../ui/screens/champions.screen";
 import { renderNotesScreen } from "../ui/screens/notes.screen";
 import { renderMatchScreen } from "../ui/screens/match.screen";
 import type { UserService } from "../services/user.service";
 import type { SettingsService } from "../services/settings.service";
+import type { PlayerProgressService } from "../services/player-progress.service";
 import type { ChatService } from "../services/chat.service";
 import type { TeamService } from "../services/team.service";
 import type { NotificationService } from "../services/notification.service";
@@ -29,6 +29,7 @@ export type AppControllerDependencies = {
   uiRoot: HTMLDivElement;
   state: AppStateStore;
   userService: UserService;
+  playerProgressService: PlayerProgressService;
   sessionService: SessionService;
   menuAudioManager: MenuAudioManager;
   settingsService: SettingsService;
@@ -80,6 +81,7 @@ function bindGlobalTeamInviteNotifications(params: {
 
 function createScreenRegistry(
   userService: UserService,
+  playerProgressService: PlayerProgressService,
   sessionService: SessionService,
   menuAudioManager: MenuAudioManager,
   settingsService: SettingsService,
@@ -106,6 +108,20 @@ function createScreenRegistry(
           sessionService.start(user.id, user.nickname);
           state.patch({ activeMenuTab: "home" });
           goTo("home");
+        },
+        onImportFileSelected: async (file) => {
+          return playerProgressService.prepareImport(file);
+        },
+        onConfirmImport: async () => {
+          const importResult = playerProgressService.commitImport();
+          if (!importResult.ok) {
+            return importResult;
+          }
+
+          sessionService.start(importResult.value.id, importResult.value.nickname);
+          state.patch({ activeMenuTab: "home" });
+          goTo("home");
+          return importResult;
         }
       });
     },
@@ -186,6 +202,7 @@ function createScreenRegistry(
           goTo("home");
           return true;
         },
+        playerProgressService,
         settingsService,
         userService,
         chatService,
@@ -334,6 +351,7 @@ function createScreenRegistry(
           goTo("match");
           return true;
         },
+        playerProgressService,
         onClearSession: () => {
           matchService.disconnect();
           chatService.disconnect();
@@ -348,15 +366,6 @@ function createScreenRegistry(
         },
         onLeaveMatch: () => {
           state.patch({ activeMenuTab: "home" });
-          goTo("home");
-        }
-      });
-    },
-    settings: ({ uiRoot, state, goTo }) => {
-      menuAudioManager.playPageMusic("settings", { fadeMs: 0 });
-      return renderSettingsScreen(uiRoot, {
-        locale: state.get().locale,
-        onBack: () => {
           goTo("home");
         }
       });
@@ -394,6 +403,7 @@ export function createAppController({
   uiRoot,
   state,
   userService,
+  playerProgressService,
   sessionService,
   menuAudioManager,
   settingsService,
@@ -415,6 +425,7 @@ export function createAppController({
     },
     createScreenRegistry(
       userService,
+      playerProgressService,
       sessionService,
       menuAudioManager,
       settingsService,

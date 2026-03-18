@@ -4,6 +4,7 @@ import { resolveLocale, t } from "../../i18n";
 import { applyFullscreenPreference, isFullscreenSupported } from "../../game/systems/fullscreen.system";
 import type { GameSettings, SettingsService } from "../../services/settings.service";
 import { DEFAULT_GAME_SETTINGS } from "../../services/settings.service";
+import type { PlayerProgressService } from "../../services/player-progress.service";
 import { bind, qs } from "./dom";
 
 const STORAGE_CLEAR_PREFIXES = ["dab:", "dab."] as const;
@@ -19,6 +20,7 @@ export type MountSettingsModalOptions = {
   locale?: Locale;
   menu: HTMLElement;
   settingsService: SettingsService;
+  playerProgressService: PlayerProgressService;
   onApplyAudioSettings: (settings: GameSettings) => void;
   onApplySettings?: (settings: GameSettings) => void;
   onApplyLocale: (locale: Locale) => boolean;
@@ -73,6 +75,7 @@ export function mountSettingsModal({
   locale,
   menu,
   settingsService,
+  playerProgressService,
   onApplyAudioSettings,
   onApplySettings,
   onApplyLocale,
@@ -84,6 +87,7 @@ export function mountSettingsModal({
   const panel = qs<HTMLElement>(menu, '[data-slot="settings-panel"]');
   const toast = qs<HTMLElement>(menu, '[data-slot="settings-toast"]');
   const unsupportedHint = qs<HTMLElement>(menu, '[data-slot="settings-fullscreen-unsupported"]');
+  const exportFeedback = qs<HTMLElement>(menu, '[data-slot="settings-export-feedback"]');
 
   const fullscreenField = qs<HTMLElement>(menu, '[data-setting-field="fullscreen"]');
   const cameraFovField = qs<HTMLElement>(menu, '[data-setting-field="cameraFovPercent"]');
@@ -108,6 +112,7 @@ export function mountSettingsModal({
   const cancelButton = qs<HTMLButtonElement>(menu, 'button[data-settings-action="cancel"]');
   const saveButton = qs<HTMLButtonElement>(menu, 'button[data-settings-action="save"]');
   const restoreButton = qs<HTMLButtonElement>(menu, 'button[data-settings-action="restore"]');
+  const exportButton = qs<HTMLButtonElement>(menu, 'button[data-settings-action="export-progress"]');
   const logoutButton = qs<HTMLButtonElement>(menu, 'button[data-settings-action="logout"]');
   const overlayButton = qs<HTMLButtonElement>(menu, 'button[data-settings-action="overlay-close"]');
 
@@ -181,6 +186,22 @@ export function mountSettingsModal({
     }, SAVE_TOAST_TIMEOUT_MS);
   };
 
+  const setExportFeedback = (message: string): void => {
+    exportFeedback.textContent = message;
+  };
+
+  const downloadExportedProgress = (fileName: string, content: string): void => {
+    const blob = new Blob([content], {
+      type: "application/json;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   const onWindowKeyDown = (event: KeyboardEvent): void => {
     if (!isOpen || event.key !== "Escape") {
       return;
@@ -205,6 +226,7 @@ export function mountSettingsModal({
       draftSettings.fullscreen = false;
     }
 
+    setExportFeedback("");
     renderDraft();
 
     isOpen = true;
@@ -276,6 +298,16 @@ export function mountSettingsModal({
       }
       renderDraft();
     }),
+    bind(exportButton, "click", () => {
+      const exportResult = playerProgressService.exportProgress();
+      if (!exportResult.ok) {
+        setExportFeedback(exportResult.error);
+        return;
+      }
+
+      downloadExportedProgress(exportResult.value.fileName, exportResult.value.content);
+      setExportFeedback(t(resolvedLocale, "settings.account.export.success"));
+    }),
     bind(logoutButton, "click", () => {
       const confirmed = window.confirm(t(resolvedLocale, "settings.account.logout.confirm"));
       if (!confirmed) {
@@ -324,6 +356,7 @@ export function mountSettingsModal({
   ];
 
   renderDraft();
+  setExportFeedback("");
 
   return {
     open: openModal,

@@ -5,6 +5,7 @@ import type { ChatMessage } from "../../models/chat-message.model";
 import { CHAT_MAX_MESSAGE_LENGTH, type ChatService } from "../../services/chat.service";
 import type { MatchService } from "../../services/match.service";
 import type { GameSettings, SettingsService } from "../../services/settings.service";
+import type { PlayerProgressService } from "../../services/player-progress.service";
 import type { TeamService } from "../../services/team.service";
 import type { UserService } from "../../services/user.service";
 import type { ChampionId } from "../../models/champion.model";
@@ -28,6 +29,7 @@ export type MatchScreenActions = {
   locale?: Locale;
   userService: UserService;
   settingsService: SettingsService;
+  playerProgressService: PlayerProgressService;
   chatService: ChatService;
   matchService: MatchService;
   teamService: TeamService;
@@ -458,6 +460,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     locale,
     menu: screen,
     settingsService: actions.settingsService,
+    playerProgressService: actions.playerProgressService,
     onApplyAudioSettings: actions.onApplyAudioSettings,
     onApplySettings: (settings) => {
       sceneHandle?.applyViewSettings({

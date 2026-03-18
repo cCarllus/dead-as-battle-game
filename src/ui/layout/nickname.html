@@ -23,6 +23,25 @@
       <p class="nickname-screen__error" data-slot="error"></p>
     </div>
 
+    <section class="nickname-screen__import">
+      <button type="button" class="nickname-screen__import-trigger" data-action="choose-import" data-i18n="nick.import.trigger"></button>
+      <input
+        class="nickname-screen__file-input"
+        type="file"
+        accept="application/json,.json"
+        data-slot="import-file-input"
+        hidden
+      />
+      <p class="nickname-screen__import-feedback" data-slot="import-feedback"></p>
+      <div class="nickname-screen__import-preview" data-slot="import-preview" hidden>
+        <strong class="nickname-screen__import-title" data-i18n="nick.import.preview.title"></strong>
+        <p data-slot="import-preview-name"></p>
+        <p data-slot="import-preview-meta"></p>
+        <p class="nickname-screen__import-warning" data-slot="import-preview-warning"></p>
+        <button type="button" class="nickname-screen__import-confirm" data-action="confirm-import" data-i18n="nick.import.confirm"></button>
+      </div>
+    </section>
+
     <p class="nickname-screen__helper">Seu nickname fica salvo neste dispositivo.</p>
   </div>
 </section>

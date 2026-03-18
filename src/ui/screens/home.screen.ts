@@ -19,6 +19,7 @@ import { qs } from "../components/dom";
 import type { NotificationService } from "../../services/notification.service";
 import type { RewardService } from "../../services/reward.service";
 import type { UserService } from "../../services/user.service";
+import type { PlayerProgressService } from "../../services/player-progress.service";
 import { mountHomeHud } from "../components/home-hud";
 import type { MatchPresenceService } from "../../services/match-presence.service";
 import type { ChampionPreviewAnimation } from "../../models/champion.model";
@@ -31,6 +32,7 @@ export type HomeActions = {
   onApplyAudioSettings: (settings: GameSettings) => void;
   onApplyLocale: (locale: Locale) => boolean;
   settingsService: SettingsService;
+  playerProgressService: PlayerProgressService;
   userService: UserService;
   chatService: ChatService;
   teamService: TeamService;
@@ -103,6 +105,7 @@ export function renderHomeScreen(root: HTMLElement, actions: HomeActions): () =>
     locale,
     menu: homeView.menu,
     settingsService: actions.settingsService,
+    playerProgressService: actions.playerProgressService,
     onApplyAudioSettings: actions.onApplyAudioSettings,
     onApplyLocale: actions.onApplyLocale,
     onClearSession: actions.onClearSession

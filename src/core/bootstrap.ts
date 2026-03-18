@@ -1,15 +1,17 @@
 // Responsável por compor dependências da aplicação e inicializar o ciclo de vida principal.
 import "../ui/styles/ui.css";
 import { createAppController } from "../controllers/app.controller";
+import { createJsonProgressStorage } from "../persistence/storage/json-progress.storage";
+import { createPlayerProgressRepository } from "../persistence/repositories/player-progress.repository";
 import { getChampionCatalogForUser } from "../data/champions.catalog";
 import type { ChampionId } from "../models/champion.model";
 import { warmUpAssetCache } from "./cache";
 import { createAppState } from "./state";
 import { createSessionService } from "./storage";
-import { createUserRepository } from "../repositories/user.repository";
 import { createUserService } from "../services/user.service";
 import { createMenuAudioManager } from "../services/menu-audio-manager";
 import { createSettingsService } from "../services/settings.service";
+import { createPlayerProgressService } from "../services/player-progress.service";
 import { createChatService } from "../services/chat.service";
 import { createTeamService } from "../services/team.service";
 import { getSelectedChampionForUser } from "../services/champion.service";
@@ -26,7 +28,18 @@ export function bootstrap(): void {
     throw new Error("Elemento principal de UI não encontrado.");
   }
 
-  const userService = createUserService({ repository: createUserRepository() });
+  const progressStorage = createJsonProgressStorage();
+  const progressRepository = createPlayerProgressRepository({
+    storage: progressStorage,
+    legacyStorage: localStorage
+  });
+
+  const userService = createUserService({ repository: progressRepository });
+  const settingsService = createSettingsService({ repository: progressRepository });
+  const playerProgressService = createPlayerProgressService({
+    repository: progressRepository,
+    storage: progressStorage
+  });
   const notificationService = createNotificationService({ userService });
   const rewardService = createRewardService({ userService, notificationService });
   const heroPurchaseService = createHeroPurchaseService({
@@ -35,7 +48,6 @@ export function bootstrap(): void {
   });
   const heroSelectionService = createHeroSelectionService({ userService });
   const sessionService = createSessionService();
-  const settingsService = createSettingsService();
   const initialSettings = settingsService.load();
   document.documentElement.lang = initialSettings.locale;
   const appState = createAppState({ locale: initialSettings.locale });
@@ -121,6 +133,7 @@ export function bootstrap(): void {
     uiRoot,
     state: appState,
     userService,
+    playerProgressService,
     sessionService,
     menuAudioManager,
     settingsService,
