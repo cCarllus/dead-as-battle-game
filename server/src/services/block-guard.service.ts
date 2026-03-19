@@ -1,5 +1,6 @@
 // Responsável por validar bloqueio frontal, durabilidade de guarda, guard break e regeneração autoritativa.
 import type { MatchPlayerState } from "../models/match-player.model.js";
+import { clamp } from "../utils/math.js";
 
 export const BLOCK_GUARD_CONFIG = {
   maxGuard: 100,
@@ -20,10 +21,6 @@ export type GuardDamageResult = {
   didGuardBreak: boolean;
   currentGuard: number;
 };
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 function resolveForwardVector(rotationY: number): { x: number; z: number } {
   return {

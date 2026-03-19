@@ -1,5 +1,6 @@
 // Responsável por aplicar lean lateral suave no personagem local para reforçar leitura de mudança de direção.
 import type { TransformNode } from "@babylonjs/core";
+import { clamp } from "../utils/math";
 
 export type CharacterLeanInput = {
   deltaSeconds: number;
@@ -17,10 +18,6 @@ export type CharacterLeanSystem = {
 const MAX_LEAN_RADIANS = 0.12;
 const LEAN_IN_SPEED = 9;
 const LEAN_OUT_SPEED = 7;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 export function createCharacterLeanSystem(): CharacterLeanSystem {
   let currentLean = 0;

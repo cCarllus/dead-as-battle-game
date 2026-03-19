@@ -14,6 +14,7 @@ import {
   type MatchPlayerEntity,
   type PlayerVisualStyle
 } from "./player.entity";
+import { lerp, normalizeAngleRadians } from "../utils/math";
 
 const MOVEMENT_START_EPSILON_SQUARED = 0.0004;
 const MOVEMENT_STOP_EPSILON_SQUARED = 0.0001;
@@ -56,10 +57,6 @@ export type RemotePlayerView = {
   dispose: () => void;
 };
 
-function lerp(from: number, to: number, factor: number): number {
-  return from + (to - from) * factor;
-}
-
 function resolveExponentialLerpFactor(deltaMs: number, smoothTimeMs: number): number {
   if (deltaMs <= 0) {
     return 0;
@@ -70,18 +67,6 @@ function resolveExponentialLerpFactor(deltaMs: number, smoothTimeMs: number): nu
   }
 
   return 1 - Math.exp(-deltaMs / smoothTimeMs);
-}
-
-function normalizeAngleRadians(angle: number): number {
-  const tau = Math.PI * 2;
-  let normalized = angle % tau;
-  if (normalized > Math.PI) {
-    normalized -= tau;
-  }
-  if (normalized < -Math.PI) {
-    normalized += tau;
-  }
-  return normalized;
 }
 
 function toTransform(player: MatchPlayerState): { x: number; y: number; z: number; rotationY: number } {

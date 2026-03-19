@@ -1,5 +1,6 @@
 // Responsável por validar deslocamento horizontal por tick com velocidade autoritativa do servidor.
 import type { MatchPlayerState } from "../models/match-player.model.js";
+import { clamp } from "../utils/math.js";
 
 export const MOVEMENT_STATE_CONFIG = {
   walkSpeed: 5.4,
@@ -24,10 +25,6 @@ type AuthoritativeMoveValidationOptions = {
   movementState: PlayerMovementState;
   now: number;
 };
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 function resolveRunSpeed(): number {
   return MOVEMENT_STATE_CONFIG.walkSpeed * MOVEMENT_STATE_CONFIG.runSpeedMultiplier;

@@ -1,4 +1,5 @@
 // Responsável por gerar inclinação lateral sutil da câmera ao virar/correr para reforçar sensação cinemática.
+import { clamp } from "../utils/math";
 export type CameraTiltInput = {
   deltaSeconds: number;
   turnInput: number;
@@ -20,10 +21,6 @@ export type CreateCameraTiltSystemOptions = {
 const DEFAULT_MAX_TILT = (2 * Math.PI) / 180;
 const DEFAULT_IN_SPEED = 8;
 const DEFAULT_OUT_SPEED = 6.4;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 export function createCameraTiltSystem(options: CreateCameraTiltSystemOptions = {}): CameraTiltSystem {
   const maxTilt = options.maxTiltRadians ?? DEFAULT_MAX_TILT;

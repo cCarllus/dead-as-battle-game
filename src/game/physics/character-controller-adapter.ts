@@ -11,6 +11,7 @@ import {
   type CharacterColliderProfileName
 } from "../character/character-collider-config";
 import type { ShapeQueryService } from "./shape-query-service";
+import { clamp, moveTowards, toRadians } from "../utils/math";
 
 const UP_VECTOR = new Vector3(0, 1, 0);
 const DOWN_VECTOR = new Vector3(0, -1, 0);
@@ -71,22 +72,6 @@ export type CreateCharacterControllerAdapterOptions = {
   runtimeConfig: CharacterRuntimeConfig;
   shapeQueryService?: ShapeQueryService;
 };
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function moveTowards(current: number, target: number, maxDelta: number): number {
-  if (current < target) {
-    return Math.min(current + maxDelta, target);
-  }
-
-  return Math.max(current - maxDelta, target);
-}
-
-function toRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
-}
 
 function resolveSafeDeltaSeconds(scene: Scene): number {
   const rawDeltaSeconds = scene.getEngine().getDeltaTime() / 1000;

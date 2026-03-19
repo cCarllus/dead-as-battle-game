@@ -1,4 +1,5 @@
 // Responsible for centralizing shoulder-camera tuning so combat framing and reactions stay easy to tune.
+import { lerp } from "../utils/math";
 export type ThirdPersonCameraConfig = {
   cameraDistance: number;
   minDistance: number;
@@ -171,10 +172,6 @@ export function clampCameraSettingsPercent(
   }
 
   return normalized;
-}
-
-function lerp(start: number, end: number, alpha: number): number {
-  return start + (end - start) * alpha;
 }
 
 export function resolveFovAdjustmentRadiansFromPercent(

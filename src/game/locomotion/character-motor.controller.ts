@@ -1,7 +1,8 @@
 // Responsável por aplicar aceleração/desaceleração e rotação suave ao movimento horizontal do jogador.
 import { Vector3 } from "@babylonjs/core";
 import type { PlayerPhysicsConfig } from "../physics/player-physics";
-import { resolveAirControlMultiplier } from "../movement/air-control";
+import { resolveAirControlMultiplier } from "../locomotion/air-control";
+import { clamp, moveTowards, normalizeAngleRadians } from "../utils/math";
 
 export type CharacterMotorFrameInput = {
   deltaSeconds: number;
@@ -25,30 +26,6 @@ export type CharacterMotorController = {
   step: (input: CharacterMotorFrameInput) => CharacterMotorFrameOutput;
   reset: () => void;
 };
-
-function moveTowards(current: number, target: number, maxDelta: number): number {
-  if (current < target) {
-    return Math.min(current + maxDelta, target);
-  }
-
-  return Math.max(current - maxDelta, target);
-}
-
-function normalizeAngleRadians(angle: number): number {
-  const tau = Math.PI * 2;
-  let normalized = angle % tau;
-  if (normalized > Math.PI) {
-    normalized -= tau;
-  }
-  if (normalized < -Math.PI) {
-    normalized += tau;
-  }
-  return normalized;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 export function createCharacterMotorController(config: PlayerPhysicsConfig): CharacterMotorController {
   const planarVelocity = Vector3.Zero();

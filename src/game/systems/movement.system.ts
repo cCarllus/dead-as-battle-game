@@ -2,10 +2,10 @@
 import { Vector3 } from "@babylonjs/core";
 import type { AnimationGameplayState, MovementDirection } from "../animation/animation-state";
 import { createMovementAnimationStateMachine } from "../animation/movement-animation-state-machine";
-import { createCharacterMotorController } from "../controllers/character-motor.controller";
+import { createCharacterMotorController } from "../locomotion/character-motor.controller";
 import { resolveLandingImpactFromAirTime } from "../effects/landing-impact";
-import { createJumpController } from "../controllers/jump.controller";
-import { createSprintSystem } from "../movement/sprint-system";
+import { createJumpController } from "../locomotion/jump.controller";
+import { createSprintSystem } from "../locomotion/sprint-system";
 import type { PlayerPhysicsConfig } from "../physics/player-physics";
 import type { AnimationStateSystem } from "./animation-state.system";
 import type { CollisionSystem } from "./collision.system";

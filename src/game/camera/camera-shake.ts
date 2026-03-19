@@ -1,4 +1,5 @@
 // Responsável por fornecer um sistema reutilizável de camera shake com intensidades controladas.
+import { clamp } from "../utils/math";
 export type CameraShakePreset = "light" | "medium" | "heavy";
 
 export type CameraShakeImpulse = {
@@ -44,10 +45,6 @@ const PRESET_TO_IMPULSE: Record<CameraShakePreset, CameraShakeImpulse> = {
     frequencyHz: 23
   }
 };
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 export function createCameraShakeSystem(): CameraShakeSystem {
   const impulses: ActiveImpulse[] = [];

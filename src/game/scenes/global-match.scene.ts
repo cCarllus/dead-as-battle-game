@@ -36,9 +36,9 @@ import { GLOBAL_MATCH_RUNTIME_CONFIG } from "../config/match-runtime.config";
 import { createMotionLinesEffect } from "../effects/motion-lines";
 import { createWindParticlesSystem } from "../effects/wind-particles";
 import { createEffectManager } from "../effects/effect-manager";
-import { createCameraController } from "../controllers/camera.controller";
+import { createCameraController } from "../camera/camera.controller";
 import { isClimbableSurfaceMesh } from "../environment/climbable-surface-utils";
-import { createCharacterLeanSystem } from "../movement/character-lean";
+import { createCharacterLeanSystem } from "../locomotion/character-lean";
 import { bootstrapHavokPhysics } from "../physics/havok-bootstrap";
 import { MAX_FRAME_DELTA_SECONDS } from "../physics/player-physics";
 import { createPhysicsWorld } from "../physics/physics-world";
@@ -49,6 +49,7 @@ import { GLOBAL_MATCH_MAP_URL, loadGlobalMatchMap } from "../systems/map-loader.
 import { createMovementInputSystem } from "../systems/movement-input.system";
 import { createPlayerViewManager } from "../systems/player-view-manager";
 import { createPointerLockSystem } from "../systems/pointer-lock.system";
+import { clamp, lerp, squaredDistance3D } from "../utils/math";
 
 export type GlobalMatchSceneOptions = {
   canvas: HTMLCanvasElement;
@@ -185,35 +186,12 @@ export type GlobalMatchSceneContext = GameContext<
   GameFlowState
 >;
 
-function positionDistanceSquared(
-  left: { x: number; y: number; z: number },
-  right: { x: number; y: number; z: number }
-): number {
-  const dx = left.x - right.x;
-  const dy = left.y - right.y;
-  const dz = left.z - right.z;
-  return dx * dx + dy * dy + dz * dz;
-}
-
 function clampPercent(value: number, fallback = 50): number {
   if (!Number.isFinite(value)) {
     return fallback;
   }
 
-  const normalized = Math.round(value);
-  if (normalized < 1) {
-    return 1;
-  }
-
-  if (normalized > 100) {
-    return 100;
-  }
-
-  return normalized;
-}
-
-function lerp(start: number, end: number, alpha: number): number {
-  return start + (end - start) * alpha;
+  return clamp(Math.round(value), 1, 100);
 }
 
 function shouldHideLocalVisualForCamera(
@@ -787,7 +765,7 @@ export async function createGlobalMatchScene(
 
     const didTransformChange =
       !lastSyncedLocalMovement ||
-      positionDistanceSquared(movement, lastSyncedLocalMovement) >=
+      squaredDistance3D(movement, lastSyncedLocalMovement) >=
         GLOBAL_MATCH_RUNTIME_CONFIG.movementSync.thresholdMeters *
           GLOBAL_MATCH_RUNTIME_CONFIG.movementSync.thresholdMeters ||
       Math.abs(movement.rotationY - lastSyncedLocalMovement.rotationY) >=

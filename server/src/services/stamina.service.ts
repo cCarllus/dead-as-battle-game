@@ -1,5 +1,6 @@
 // Responsável por concentrar regras de stamina/sprint autoritativas por jogador.
 import type { MatchPlayerState } from "../models/match-player.model.js";
+import { clamp } from "../utils/math.js";
 
 export type SprintInputState = {
   isShiftPressed: boolean;
@@ -13,10 +14,6 @@ export const STAMINA_CONFIG = {
   staminaRegenDelayMs: 1500,
   sprintRecoveryThreshold: 20
 } as const;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 function normalizeDeltaTime(deltaTime: number): number {
   if (!Number.isFinite(deltaTime) || deltaTime <= 0) {
