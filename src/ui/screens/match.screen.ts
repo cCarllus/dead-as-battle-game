@@ -1,4 +1,4 @@
-// Responsável por orquestrar entrada na partida global com HUD completo, pointer lock e menu ESC de pausa.
+// Responsavel por orquestrar entrada na partida global com HUD completo, pointer lock e menu ESC de pausa.
 import { t, type Locale } from "../../i18n";
 import type { MatchPlayerState } from "../../models/match-player.model";
 import type { ChatMessage } from "../../models/chat-message.model";
@@ -24,6 +24,11 @@ import { setMenuIconContent } from "../components/menu-icon";
 import { mountSettingsModal } from "../components/settings-modal";
 import template from "../layout/match.html?raw";
 import { renderScreenTemplate, resolveScreenLocale } from "./screen-template";
+import { createMatchRadar } from "./match-radar";
+import { createMatchKillFeed } from "./match-kill-feed";
+import { createMatchChatHud } from "./match-chat-hud";
+import { createMatchOverheadBars } from "./match-overhead-bars";
+import { createMatchDeathModal } from "./match-death-modal";
 
 export type MatchScreenActions = {
   locale?: Locale;
@@ -43,64 +48,7 @@ const FULLSCREEN_NOTICE_TIMEOUT_MS = MATCH_UI_CONFIG.fullscreenNoticeTimeoutMs;
 const MIN_EMPTY_BAR_VISUAL_PERCENT = MATCH_UI_CONFIG.bars.minEmptyBarVisualPercent;
 const STAMINA_PULSE_DURATION_MS = MATCH_UI_CONFIG.bars.staminaPulseDurationMs;
 const HEALTH_BAR_MAX_HUE = MATCH_UI_CONFIG.bars.healthBarMaxHue;
-const MATCH_HUD_FEED_MAX_ITEMS = MATCH_UI_CONFIG.hudFeed.maxItems;
-const MATCH_HUD_FEED_TTL_MS = MATCH_UI_CONFIG.hudFeed.ttlMs;
-const MATCH_HUD_FEED_FADE_WINDOW_MS = MATCH_UI_CONFIG.hudFeed.fadeWindowMs;
 const MATCH_HUD_FEED_HISTORY_SEED_LIMIT = MATCH_UI_CONFIG.hudFeed.historySeedLimit;
-const MATCH_KILL_FEED_MAX_ITEMS = MATCH_UI_CONFIG.killFeed.maxItems;
-const MATCH_KILL_FEED_TTL_MS = MATCH_UI_CONFIG.killFeed.ttlMs;
-const MATCH_KILL_FEED_FADE_WINDOW_MS = MATCH_UI_CONFIG.killFeed.fadeWindowMs;
-const MATCH_KILL_FEED_ENTER_MS = MATCH_UI_CONFIG.killFeed.enterMs;
-const MATCH_CHAT_BUBBLE_TTL_MS = MATCH_UI_CONFIG.chatBubble.ttlMs;
-const MATCH_CHAT_BUBBLE_FADE_WINDOW_MS = MATCH_UI_CONFIG.chatBubble.fadeWindowMs;
-const MATCH_CHAT_BUBBLE_MAX_CHARS = MATCH_UI_CONFIG.chatBubble.maxChars;
-const DEATH_SCREEN_DELAY_MS = 1800;
-const MATCH_RADAR_RANGE_METERS = MATCH_UI_CONFIG.radar.rangeMeters;
-const MATCH_RADAR_MAX_MARKERS = MATCH_UI_CONFIG.radar.maxMarkers;
-const MATCH_RADAR_MARKER_EDGE_PADDING_PX = MATCH_UI_CONFIG.radar.markerEdgePaddingPx;
-const MATCH_RADAR_COMPASS_RADIUS_RATIO = MATCH_UI_CONFIG.radar.compassRadiusRatio;
-const MATCH_OVERHEAD_BAR_RANGE_METERS = MATCH_UI_CONFIG.overheadBars.rangeMeters;
-
-type MatchHudFeedEntry = {
-  id: string;
-  kind: "server" | "chat";
-  nickname: string | null;
-  text: string;
-  createdAt: number;
-  expiresAt: number;
-};
-
-type MatchSpeechBubbleEntry = {
-  sessionId: string;
-  text: string;
-  createdAt: number;
-  expiresAt: number;
-  element: HTMLDivElement;
-  textNode: HTMLSpanElement;
-};
-
-type MatchKillFeedEntry = {
-  id: string;
-  killerSessionId: string;
-  victimSessionId: string;
-  killerName: string;
-  victimName: string;
-  timestamp: number;
-  createdAt: number;
-  expiresAt: number;
-};
-
-type MatchRadarMarkerKind = "ally" | "enemy";
-
-type MatchOverheadBarKind = "ally" | "enemy";
-
-type MatchOverheadBarEntry = {
-  sessionId: string;
-  element: HTMLDivElement;
-  levelNode: HTMLSpanElement;
-  nameNode: HTMLSpanElement;
-  healthFillNode: HTMLSpanElement;
-};
 
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -280,50 +228,6 @@ function formatMatchElapsedTime(elapsedSeconds: number): string {
   return `${minutes}:${seconds}`;
 }
 
-function normalizeForward(forward: { x: number; z: number } | null): { x: number; z: number } {
-  if (!forward) {
-    return { x: 0, z: 1 };
-  }
-
-  const length = Math.hypot(forward.x, forward.z);
-  if (length <= 0.0001) {
-    return { x: 0, z: 1 };
-  }
-
-  return {
-    x: forward.x / length,
-    z: forward.z / length
-  };
-}
-
-function projectToRadarPlane(options: {
-  deltaX: number;
-  deltaZ: number;
-  forwardX: number;
-  forwardZ: number;
-  maxRadiusPx: number;
-  radarRangeMeters: number;
-}): { x: number; y: number } {
-  const rightX = options.forwardZ;
-  const rightZ = -options.forwardX;
-  let projectedX = ((options.deltaX * rightX + options.deltaZ * rightZ) / options.radarRangeMeters) * options.maxRadiusPx;
-  let projectedY =
-    (-(options.deltaX * options.forwardX + options.deltaZ * options.forwardZ) / options.radarRangeMeters) *
-    options.maxRadiusPx;
-
-  const projectedLength = Math.hypot(projectedX, projectedY);
-  if (projectedLength > options.maxRadiusPx && projectedLength > 0.0001) {
-    const clampFactor = options.maxRadiusPx / projectedLength;
-    projectedX *= clampFactor;
-    projectedY *= clampFactor;
-  }
-
-  return {
-    x: projectedX,
-    y: projectedY
-  };
-}
-
 export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions): () => void {
   const locale = resolveScreenLocale(actions.locale);
   const screen = renderScreenTemplate(root, template, '[data-screen="match"]', locale);
@@ -439,13 +343,6 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   controlCopyShoulder.textContent = t(locale, "match.controls.swapShoulder");
   controlKeySprint.textContent = t(locale, "match.controls.key.shift");
   controlKeyJump.textContent = t(locale, "match.controls.key.space");
-  deathModalTitle.textContent = locale === "pt-BR" ? "Você morreu" : "You Died";
-  deathModalMessage.textContent =
-    locale === "pt-BR"
-      ? "Escolha voltar ao lobby ou renascer para continuar a batalha."
-      : "Choose to return to the lobby or respawn and continue fighting.";
-  deathModalBackLobbyButton.textContent = locale === "pt-BR" ? "Voltar ao lobby" : "Back to lobby";
-  deathModalRespawnButton.textContent = locale === "pt-BR" ? "Renascer" : "Respawn";
 
   setMenuIconContent(hudSkillPrimaryIcon, "hudAbilityPrimary", { className: "dab-match__hud-svg-icon" });
   setMenuIconContent(hudSkillSecondaryIcon, "hudAbilitySecondary", { className: "dab-match__hud-svg-icon" });
@@ -507,25 +404,10 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   let previousLocalStaminaPercent = 100;
   let previousSprintBlocked = false;
   let staminaPulseTimeoutId: number | null = null;
-  let deathModalOpen = false;
-  let deathModalRevealAtMs = 0;
-  let respawnRequestPending = false;
   let hudFeedIntervalId: number | null = null;
   let didSeedChatHistory = false;
-  let hudFeedEntries: MatchHudFeedEntry[] = [];
-  let killFeedEntries: MatchKillFeedEntry[] = [];
-  let chatComposerOpen = false;
-  let shouldResumePointerLockAfterChat = false;
-  let speechBubbleFrameId: number | null = null;
-  let overheadBarsFrameId: number | null = null;
-  let radarFrameId: number | null = null;
-  const speechBubblesBySessionId = new Map<string, MatchSpeechBubbleEntry>();
-  const overheadBarsBySessionId = new Map<string, MatchOverheadBarEntry>();
-  const radarMarkersBySessionId = new Map<string, HTMLSpanElement>();
   let crosshairController: ReturnType<typeof createCrosshairController> | null = null;
 
-  chatInput.maxLength = CHAT_MAX_MESSAGE_LENGTH;
-  chatInput.placeholder = locale === "pt-BR" ? "Digite e pressione Enter" : "Type and press Enter";
   hudLevelBadge.textContent = t(locale, "match.hud.levelBadge", { level: 1 });
 
   const resolveLocalChampionLevel = (player: MatchPlayerState | null): number => {
@@ -538,38 +420,9 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     return user.champions[championId]?.level ?? 1;
   };
 
-  const truncateChatBubbleText = (text: string): string => {
-    const normalized = text.replace(/\s+/g, " ").trim();
-    if (normalized.length <= MATCH_CHAT_BUBBLE_MAX_CHARS) {
-      return normalized;
-    }
-
-    return `${normalized.slice(0, MATCH_CHAT_BUBBLE_MAX_CHARS - 1).trimEnd()}…`;
-  };
-
   const resolveSessionIdForUserId = (userId: string): string | null => {
     const player = actions.matchService.getPlayers().find((candidate) => candidate.userId === userId) ?? null;
     return player?.sessionId ?? null;
-  };
-
-  const removeSpeechBubble = (sessionId: string): void => {
-    const bubble = speechBubblesBySessionId.get(sessionId);
-    if (!bubble) {
-      return;
-    }
-
-    bubble.element.remove();
-    speechBubblesBySessionId.delete(sessionId);
-  };
-
-  const removeOverheadBar = (sessionId: string): void => {
-    const entry = overheadBarsBySessionId.get(sessionId);
-    if (!entry) {
-      return;
-    }
-
-    entry.element.remove();
-    overheadBarsBySessionId.delete(sessionId);
   };
 
   const isChatFocused = (): boolean => {
@@ -580,544 +433,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     inputModeSystem.setChatFocused(focused);
   };
 
-  const renderSpeechBubbles = (): void => {
-    const now = Date.now();
-
-    speechBubblesBySessionId.forEach((bubble, sessionId) => {
-      if (bubble.expiresAt <= now) {
-        removeSpeechBubble(sessionId);
-        return;
-      }
-
-      const playerScreenPosition = sceneHandle?.getPlayerScreenPosition(sessionId) ?? null;
-      if (!playerScreenPosition) {
-        bubble.element.hidden = true;
-        return;
-      }
-
-      const fadeProgress =
-        bubble.expiresAt - now > MATCH_CHAT_BUBBLE_FADE_WINDOW_MS
-          ? 1
-          : Math.max(0, (bubble.expiresAt - now) / MATCH_CHAT_BUBBLE_FADE_WINDOW_MS);
-
-      bubble.element.hidden = false;
-      bubble.element.style.setProperty("--dab-speech-x", `${playerScreenPosition.x}px`);
-      bubble.element.style.setProperty("--dab-speech-y", `${playerScreenPosition.y - 74}px`);
-      bubble.element.style.setProperty("--dab-speech-opacity", fadeProgress.toFixed(3));
-    });
-
-    speechBubbleFrameId = window.requestAnimationFrame(renderSpeechBubbles);
-  };
-
-  const clearOverheadBars = (): void => {
-    overheadBarsBySessionId.forEach((entry) => {
-      entry.element.remove();
-    });
-    overheadBarsBySessionId.clear();
-  };
-
-  const ensureOverheadBar = (player: MatchPlayerState, kind: MatchOverheadBarKind): MatchOverheadBarEntry => {
-    const existing = overheadBarsBySessionId.get(player.sessionId);
-    if (existing) {
-      existing.element.className = `dab-match__overhead-bar is-${kind}`;
-      existing.levelNode.textContent = `LVL ${player.heroLevel}`;
-      existing.nameNode.textContent = player.nickname;
-      return existing;
-    }
-
-    const element = document.createElement("div");
-    element.className = `dab-match__overhead-bar is-${kind}`;
-
-    const titleRow = document.createElement("div");
-    titleRow.className = "dab-match__overhead-title";
-
-    const levelNode = document.createElement("span");
-    levelNode.className = "dab-match__overhead-level";
-    levelNode.textContent = `LVL ${player.heroLevel}`;
-
-    const nameNode = document.createElement("span");
-    nameNode.className = "dab-match__overhead-name";
-    nameNode.textContent = player.nickname;
-
-    const healthTrack = document.createElement("div");
-    healthTrack.className = "dab-match__overhead-health-track";
-
-    const healthPulse = document.createElement("span");
-    healthPulse.className = "dab-match__overhead-health-pulse";
-
-    const healthFillNode = document.createElement("span");
-    healthFillNode.className = "dab-match__overhead-health-fill";
-
-    healthTrack.append(healthPulse, healthFillNode);
-    titleRow.append(levelNode, nameNode);
-    element.append(titleRow, healthTrack);
-    hudOverheadBarsLayer.appendChild(element);
-
-    const entry: MatchOverheadBarEntry = {
-      sessionId: player.sessionId,
-      element,
-      levelNode,
-      nameNode,
-      healthFillNode
-    };
-    overheadBarsBySessionId.set(player.sessionId, entry);
-    return entry;
-  };
-
-  const renderOverheadBars = (): void => {
-    const players = actions.matchService.getPlayers();
-    const handle = sceneHandle;
-    if (!localSessionId || !handle) {
-      overheadBarsBySessionId.forEach((entry) => {
-        entry.element.classList.remove("is-visible");
-      });
-      overheadBarsFrameId = window.requestAnimationFrame(renderOverheadBars);
-      return;
-    }
-
-    const localPlayer = players.find((player) => player.sessionId === localSessionId) ?? null;
-    const localPosition =
-      localPlayer ? handle.getPlayerWorldPosition(localPlayer.sessionId) ?? { x: localPlayer.x, y: localPlayer.y, z: localPlayer.z } : null;
-
-    if (!localPosition) {
-      clearOverheadBars();
-      overheadBarsFrameId = window.requestAnimationFrame(renderOverheadBars);
-      return;
-    }
-
-    const activeSessionIds = new Set<string>();
-
-    players.forEach((player) => {
-      if (player.sessionId === localSessionId || !player.isAlive) {
-        return;
-      }
-
-      const worldPosition = handle.getPlayerWorldPosition(player.sessionId) ?? {
-        x: player.x,
-        y: player.y,
-        z: player.z
-      };
-      const deltaX = worldPosition.x - localPosition.x;
-      const deltaY = worldPosition.y - localPosition.y;
-      const deltaZ = worldPosition.z - localPosition.z;
-      const distanceSquared = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
-      const distanceMeters = Math.sqrt(distanceSquared);
-      const distanceRatio = Math.min(1, distanceMeters / MATCH_OVERHEAD_BAR_RANGE_METERS);
-      const scale = Math.max(0.58, 1 - distanceRatio * 0.42);
-      const screenPosition = handle.getPlayerNameplateScreenPosition(player.sessionId);
-      const isVisible = !!screenPosition && distanceSquared <= MATCH_OVERHEAD_BAR_RANGE_METERS * MATCH_OVERHEAD_BAR_RANGE_METERS;
-      const kind: MatchOverheadBarKind = teamMemberUserIds.has(player.userId) ? "ally" : "enemy";
-      const entry = ensureOverheadBar(player, kind);
-      const safeHealthPercent =
-        player.maxHealth > 0 ? Math.max(0, Math.min(100, (player.currentHealth / player.maxHealth) * 100)) : 0;
-
-      entry.levelNode.textContent = `LVL ${player.heroLevel}`;
-      entry.nameNode.textContent = player.nickname;
-      entry.healthFillNode.style.width = `${safeHealthPercent.toFixed(2)}%`;
-      entry.element.className = `dab-match__overhead-bar is-${kind}${isVisible ? " is-visible" : ""}`;
-
-      if (isVisible && screenPosition) {
-        entry.element.style.setProperty("--dab-overhead-x", `${screenPosition.x}px`);
-        entry.element.style.setProperty("--dab-overhead-y", `${screenPosition.y - 6}px`);
-        entry.element.style.setProperty("--dab-overhead-scale", scale.toFixed(3));
-      }
-
-      activeSessionIds.add(player.sessionId);
-    });
-
-    overheadBarsBySessionId.forEach((entry, sessionId) => {
-      if (activeSessionIds.has(sessionId)) {
-        return;
-      }
-
-      removeOverheadBar(sessionId);
-    });
-
-    overheadBarsFrameId = window.requestAnimationFrame(renderOverheadBars);
-  };
-
-  const clearRadarMarkers = (): void => {
-    radarMarkersBySessionId.forEach((marker) => {
-      marker.remove();
-    });
-    radarMarkersBySessionId.clear();
-  };
-
-  const positionRadarDirection = (
-    element: HTMLElement,
-    vector: { x: number; z: number },
-    forward: { x: number; z: number },
-    compassRadiusPx: number
-  ): void => {
-    const projection = projectToRadarPlane({
-      deltaX: vector.x,
-      deltaZ: vector.z,
-      forwardX: forward.x,
-      forwardZ: forward.z,
-      maxRadiusPx: compassRadiusPx,
-      radarRangeMeters: 1
-    });
-
-    element.style.transform = `translate3d(calc(-50% + ${projection.x.toFixed(2)}px), calc(-50% + ${projection.y.toFixed(
-      2
-    )}px), 0)`;
-  };
-
-  const resolveFallbackRadarForward = (): { x: number; z: number } => {
-    const localPlayer = localSessionId
-      ? actions.matchService.getPlayers().find((player) => player.sessionId === localSessionId) ?? null
-      : null;
-    if (!localPlayer) {
-      return { x: 0, z: 1 };
-    }
-
-    return {
-      x: Math.sin(localPlayer.rotationY),
-      z: Math.cos(localPlayer.rotationY)
-    };
-  };
-
-  const resolveRadarPlayerPosition = (player: MatchPlayerState): { x: number; y: number; z: number } => {
-    return sceneHandle?.getPlayerWorldPosition(player.sessionId) ?? {
-      x: player.x,
-      y: player.y,
-      z: player.z
-    };
-  };
-
-  const ensureRadarMarker = (
-    sessionId: string,
-    nickname: string,
-    kind: MatchRadarMarkerKind
-  ): HTMLSpanElement => {
-    const existing = radarMarkersBySessionId.get(sessionId);
-    if (existing) {
-      existing.className = `dab-match__radar-marker is-dynamic is-${kind}`;
-      existing.setAttribute("aria-label", nickname);
-      existing.title = nickname;
-      return existing;
-    }
-
-    const marker = document.createElement("span");
-    marker.className = `dab-match__radar-marker is-dynamic is-${kind}`;
-    marker.setAttribute("aria-label", nickname);
-    marker.title = nickname;
-    hudRadarMarkers.appendChild(marker);
-    radarMarkersBySessionId.set(sessionId, marker);
-    return marker;
-  };
-
-  const renderRadar = (): void => {
-    const discRadiusPx = hudRadarDisc.clientWidth * 0.5;
-    const markerRadiusPx = Math.max(0, discRadiusPx - MATCH_RADAR_MARKER_EDGE_PADDING_PX);
-    const compassRadiusPx = Math.max(18, discRadiusPx * MATCH_RADAR_COMPASS_RADIUS_RATIO);
-    const forward = normalizeForward(sceneHandle?.getCameraGroundForward() ?? resolveFallbackRadarForward());
-
-    positionRadarDirection(hudRadarNorth, { x: 0, z: 1 }, forward, compassRadiusPx);
-    positionRadarDirection(hudRadarEast, { x: 1, z: 0 }, forward, compassRadiusPx);
-    positionRadarDirection(hudRadarSouth, { x: 0, z: -1 }, forward, compassRadiusPx);
-    positionRadarDirection(hudRadarWest, { x: -1, z: 0 }, forward, compassRadiusPx);
-
-    if (!localSessionId || markerRadiusPx <= 0) {
-      clearRadarMarkers();
-      radarFrameId = window.requestAnimationFrame(renderRadar);
-      return;
-    }
-
-    const players = actions.matchService.getPlayers();
-    const localPlayer = players.find((player) => player.sessionId === localSessionId) ?? null;
-    const localPosition = localPlayer ? resolveRadarPlayerPosition(localPlayer) : null;
-    if (!localPosition) {
-      clearRadarMarkers();
-      radarFrameId = window.requestAnimationFrame(renderRadar);
-      return;
-    }
-
-    const visibleIds = new Set<string>();
-    const visiblePlayers = players
-      .filter((player) => player.sessionId !== localSessionId && player.isAlive)
-      .map((player) => {
-        const position = resolveRadarPlayerPosition(player);
-        const deltaX = position.x - localPosition.x;
-        const deltaZ = position.z - localPosition.z;
-        const distanceSquared = deltaX * deltaX + deltaZ * deltaZ;
-        return {
-          player,
-          deltaX,
-          deltaZ,
-          distanceSquared
-        };
-      })
-      .filter((entry) => entry.distanceSquared <= MATCH_RADAR_RANGE_METERS * MATCH_RADAR_RANGE_METERS)
-      .sort((left, right) => left.distanceSquared - right.distanceSquared)
-      .slice(0, MATCH_RADAR_MAX_MARKERS);
-
-    visiblePlayers.forEach((entry) => {
-      const kind: MatchRadarMarkerKind = teamMemberUserIds.has(entry.player.userId) ? "ally" : "enemy";
-      const marker = ensureRadarMarker(entry.player.sessionId, entry.player.nickname, kind);
-      const projection = projectToRadarPlane({
-        deltaX: entry.deltaX,
-        deltaZ: entry.deltaZ,
-        forwardX: forward.x,
-        forwardZ: forward.z,
-        maxRadiusPx: markerRadiusPx,
-        radarRangeMeters: MATCH_RADAR_RANGE_METERS
-      });
-
-      marker.style.transform = `translate3d(calc(-50% + ${projection.x.toFixed(2)}px), calc(-50% + ${projection.y.toFixed(
-        2
-      )}px), 0)`;
-      visibleIds.add(entry.player.sessionId);
-    });
-
-    radarMarkersBySessionId.forEach((marker, sessionId) => {
-      if (visibleIds.has(sessionId)) {
-        return;
-      }
-
-      marker.remove();
-      radarMarkersBySessionId.delete(sessionId);
-    });
-
-    radarFrameId = window.requestAnimationFrame(renderRadar);
-  };
-
-  const upsertSpeechBubble = (sessionId: string, text: string): void => {
-    const now = Date.now();
-    const normalizedText = truncateChatBubbleText(text);
-    let bubble = speechBubblesBySessionId.get(sessionId);
-    if (!bubble) {
-      const element = document.createElement("div");
-      element.className = "dab-match__speech-bubble";
-
-      const textNode = document.createElement("span");
-      textNode.className = "dab-match__speech-text";
-
-      const tail = document.createElement("span");
-      tail.className = "dab-match__speech-tail";
-
-      element.append(textNode, tail);
-      hudSpeechLayer.appendChild(element);
-
-      bubble = {
-        sessionId,
-        text: normalizedText,
-        createdAt: now,
-        expiresAt: now + MATCH_CHAT_BUBBLE_TTL_MS,
-        element,
-        textNode
-      };
-      speechBubblesBySessionId.set(sessionId, bubble);
-    }
-
-    bubble.text = normalizedText;
-    bubble.createdAt = now;
-    bubble.expiresAt = now + MATCH_CHAT_BUBBLE_TTL_MS;
-    bubble.textNode.textContent = normalizedText;
-  };
-
-  const closeChatComposer = (resumePointerLock: boolean): void => {
-    if (!chatComposerOpen) {
-      return;
-    }
-
-    chatComposerOpen = false;
-    screen.classList.remove("is-chat-open");
-    setChatFocused(false);
-    chatInput.blur();
-
-    if (resumePointerLock && shouldResumePointerLockAfterChat && hasGameplayInputPermission()) {
-      sceneHandle?.requestPointerLock();
-    }
-
-    shouldResumePointerLockAfterChat = false;
-    applyInputState();
-  };
-
-  const openChatComposer = (): void => {
-    if (chatComposerOpen || !isMatchReady || hasFatalError || deathModalOpen || isSettingsModalOpen()) {
-      return;
-    }
-
-    shouldResumePointerLockAfterChat = sceneHandle?.isPointerLocked() ?? false;
-    chatComposerOpen = true;
-    screen.classList.add("is-chat-open");
-    setChatFocused(true);
-    sceneHandle?.exitPointerLock();
-    applyInputState();
-
-    window.setTimeout(() => {
-      chatInput.focus();
-      chatInput.select();
-    }, 0);
-  };
-
-  const pruneHudFeedEntries = (now = Date.now()): void => {
-    hudFeedEntries = hudFeedEntries.filter((entry) => entry.expiresAt > now);
-    if (hudFeedEntries.length > MATCH_HUD_FEED_MAX_ITEMS) {
-      hudFeedEntries = hudFeedEntries.slice(-MATCH_HUD_FEED_MAX_ITEMS);
-    }
-  };
-
-  const pruneKillFeedEntries = (now = Date.now()): void => {
-    killFeedEntries = killFeedEntries.filter((entry) => entry.expiresAt > now).slice(0, MATCH_KILL_FEED_MAX_ITEMS);
-  };
-
-  const renderHudFeed = (): void => {
-    const now = Date.now();
-    pruneHudFeedEntries(now);
-    hudChatFeed.replaceChildren();
-
-    hudFeedEntries.forEach((entry) => {
-      const ageMs = Math.max(0, now - entry.createdAt);
-      const timeRemainingMs = Math.max(0, entry.expiresAt - now);
-      const fadeProgress =
-        timeRemainingMs >= MATCH_HUD_FEED_FADE_WINDOW_MS
-          ? 1
-          : Math.max(0, timeRemainingMs / MATCH_HUD_FEED_FADE_WINDOW_MS);
-      const stackProgress = 1 - Math.min(0.34, (hudFeedEntries.length - 1 - hudFeedEntries.indexOf(entry)) * 0.06);
-      const opacity = Math.max(0, Math.min(1, fadeProgress * stackProgress));
-      const offsetY = Math.min(10, ageMs / 1400);
-
-      const line = document.createElement("div");
-      line.className = `dab-match__chat-line ${entry.kind === "server" ? "is-server" : "is-chat"}`;
-      line.style.setProperty("--dab-chat-feed-opacity", opacity.toFixed(3));
-      line.style.setProperty("--dab-chat-feed-offset", `${offsetY}px`);
-
-      if (entry.kind === "server") {
-        line.textContent = entry.text;
-      } else {
-        const nickname = document.createElement("span");
-        nickname.className = "dab-match__chat-nickname";
-        nickname.textContent = `[${entry.nickname ?? "Player"}]:`;
-
-        const message = document.createElement("span");
-        message.className = "dab-match__chat-message";
-        message.textContent = entry.text;
-
-        line.append(nickname, " ", message);
-      }
-
-      hudChatFeed.appendChild(line);
-    });
-  };
-
-  const pushHudFeedEntry = (entry: Omit<MatchHudFeedEntry, "createdAt" | "expiresAt">): void => {
-    const now = Date.now();
-    hudFeedEntries = [
-      ...hudFeedEntries,
-      {
-        ...entry,
-        createdAt: now,
-        expiresAt: now + MATCH_HUD_FEED_TTL_MS
-      }
-    ];
-    pruneHudFeedEntries(now);
-    renderHudFeed();
-  };
-
-  const appendHudChatMessage = (message: Pick<ChatMessage, "id" | "nickname" | "text">): void => {
-    const normalizedText = message.text.trim();
-    if (!normalizedText) {
-      return;
-    }
-
-    pushHudFeedEntry({
-      id: `chat:${message.id}`,
-      kind: "chat",
-      nickname: message.nickname.trim() || "Player",
-      text: normalizedText
-    });
-  };
-
-  const renderKillFeed = (): void => {
-    const now = Date.now();
-    pruneKillFeedEntries(now);
-    hudKillLog.replaceChildren();
-
-    killFeedEntries.forEach((entry) => {
-      const enterProgress = Math.max(0, Math.min(1, (now - entry.createdAt) / MATCH_KILL_FEED_ENTER_MS));
-      const timeRemainingMs = Math.max(0, entry.expiresAt - now);
-      const fadeProgress =
-        timeRemainingMs >= MATCH_KILL_FEED_FADE_WINDOW_MS
-          ? 1
-          : Math.max(0, timeRemainingMs / MATCH_KILL_FEED_FADE_WINDOW_MS);
-      const opacity = Math.max(0, Math.min(1, fadeProgress * enterProgress));
-      const offsetY = (1 - enterProgress) * -10;
-
-      const item = document.createElement("div");
-      item.className = "dab-match__kill-feed-item";
-      item.style.setProperty("--dab-kill-feed-opacity", opacity.toFixed(3));
-      item.style.setProperty("--dab-kill-feed-offset", `${offsetY.toFixed(2)}px`);
-
-      const killer = document.createElement("span");
-      killer.className = `dab-match__kill-feed-player ${
-        entry.killerSessionId === localSessionId ? "is-local" : "is-enemy"
-      }`;
-      killer.textContent = entry.killerName;
-
-      const icon = document.createElement("span");
-      icon.className = "dab-match__kill-feed-icon";
-      icon.textContent = "⊗";
-
-      const victim = document.createElement("span");
-      victim.className = `dab-match__kill-feed-player ${
-        entry.victimSessionId === localSessionId ? "is-local" : "is-enemy"
-      }`;
-      victim.textContent = entry.victimName;
-
-      item.append(killer, icon, victim);
-      hudKillLog.appendChild(item);
-    });
-  };
-
-  const pushKillFeedEntry = (payload: {
-    killerSessionId: string;
-    victimSessionId: string;
-    killerName: string;
-    victimName: string;
-    timestamp: number;
-  }): void => {
-    const now = Date.now();
-    killFeedEntries = [
-      {
-        id: `${payload.timestamp}:${payload.killerSessionId}:${payload.victimSessionId}`,
-        killerSessionId: payload.killerSessionId,
-        victimSessionId: payload.victimSessionId,
-        killerName: payload.killerName,
-        victimName: payload.victimName,
-        timestamp: payload.timestamp,
-        createdAt: now,
-        expiresAt: now + MATCH_KILL_FEED_TTL_MS
-      },
-      ...killFeedEntries
-    ].slice(0, MATCH_KILL_FEED_MAX_ITEMS);
-
-    renderKillFeed();
-  };
-
   const isSettingsModalOpen = (): boolean => {
     return screen.classList.contains("is-settings-open");
-  };
-
-  const setDeathModalOpen = (open: boolean): void => {
-    if (deathModalOpen === open) {
-      return;
-    }
-
-    deathModalOpen = open;
-    deathModal.hidden = !open;
-    deathModal.classList.toggle("is-open", open);
-    deathModal.setAttribute("aria-hidden", String(!open));
-
-    if (open) {
-      closeChatComposer(false);
-      sceneHandle?.exitPointerLock();
-      closePauseMenu(false);
-      setScoreboardRequested(false);
-    }
-
-    applyInputState();
   };
 
   const hideFullscreenNotice = (): void => {
@@ -1144,8 +461,179 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
   const hasGameplayInputPermission = (): boolean => {
     const inputState = inputModeSystem.getState();
-    return inputState.gameplayEnabled && isMatchReady && !hasFatalError && !deathModalOpen && !chatComposerOpen;
+    return inputState.gameplayEnabled && isMatchReady && !hasFatalError && !deathModalSubsystem.isVisible() && !chatHudSubsystem.isComposerOpen();
   };
+
+  const renderScoreboardVisibility = (): void => {
+    const isVisible =
+      isScoreboardRequested &&
+      hasGameplayInputPermission() &&
+      !isSettingsModalOpen() &&
+      !(pauseMenuSystem?.isOpen() ?? false);
+    screen.classList.toggle("is-scoreboard-visible", isVisible);
+    scoreboardCard.setAttribute("aria-hidden", String(!isVisible));
+  };
+
+  const setScoreboardRequested = (nextRequested: boolean): void => {
+    isScoreboardRequested = nextRequested;
+    renderScoreboardVisibility();
+  };
+
+  const renderPointerLockHint = (): void => {
+    const canReceiveInput = hasGameplayInputPermission();
+    const isPointerLocked = sceneHandle?.isPointerLocked() ?? false;
+    pointerLockHint.hidden = isPointerLocked || !canReceiveInput;
+  };
+
+  const applyInputState = (): void => {
+    const canReceiveInput = hasGameplayInputPermission();
+    sceneHandle?.setInputEnabled(canReceiveInput);
+
+    if (!canReceiveInput) {
+      sceneHandle?.exitPointerLock();
+    }
+
+    renderPointerLockHint();
+    renderScoreboardVisibility();
+  };
+
+  const closePauseMenu = (resumePointerLock: boolean): void => {
+    if (!pauseMenuSystem?.isOpen()) {
+      return;
+    }
+
+    pauseMenuSystem.close();
+    inputModeSystem.setPauseMenuOpen(false);
+
+    if (resumePointerLock && hasGameplayInputPermission()) {
+      sceneHandle?.requestPointerLock();
+    }
+
+    renderScoreboardVisibility();
+  };
+
+  const openPauseMenu = (): void => {
+    if (
+      (!isMatchReady && !hasFatalError) ||
+      deathModalSubsystem.isVisible() ||
+      isSettingsModalOpen() ||
+      pauseMenuSystem?.isOpen()
+    ) {
+      return;
+    }
+
+    chatHudSubsystem.closeComposer(false);
+    pauseMenuSystem?.open();
+    inputModeSystem.setPauseMenuOpen(true);
+    renderScoreboardVisibility();
+  };
+
+  // --- Subsystem instantiation ---
+
+  const deathModalSubsystem = createMatchDeathModal({
+    locale,
+    deathModal,
+    deathModalTitle,
+    deathModalMessage,
+    deathModalBackLobbyButton,
+    deathModalRespawnButton,
+    onLeaveMatch: () => {
+      actions.onLeaveMatch();
+    },
+    onRespawnRequest: () => {
+      if (!localSessionId) {
+        return;
+      }
+
+      const localPlayer = actions.matchService.getPlayers().find((player) => player.sessionId === localSessionId) ?? null;
+      if (!localPlayer || localPlayer.isAlive) {
+        return;
+      }
+
+      actions.matchService.sendRespawnRequest();
+    },
+    onOpen: () => {
+      chatHudSubsystem.closeComposer(false);
+      sceneHandle?.exitPointerLock();
+      closePauseMenu(false);
+      setScoreboardRequested(false);
+      applyInputState();
+    },
+    onClose: () => {
+      applyInputState();
+    }
+  });
+
+  const chatHudSubsystem = createMatchChatHud({
+    locale,
+    screen,
+    hudChatFeed,
+    hudSpeechLayer,
+    chatComposer,
+    chatInput,
+    getPlayerScreenPosition: (sessionId) => {
+      return sceneHandle?.getPlayerScreenPosition(sessionId) ?? null;
+    },
+    isComposerAllowed: () => {
+      return isMatchReady && !hasFatalError && !deathModalSubsystem.isVisible() && !isSettingsModalOpen();
+    },
+    onComposerOpen: () => {
+      sceneHandle?.exitPointerLock();
+    },
+    onComposerClose: (resumePointerLock) => {
+      if (resumePointerLock && hasGameplayInputPermission()) {
+        sceneHandle?.requestPointerLock();
+      }
+    },
+    onSendMessage: (text) => {
+      actions.chatService.sendMessage(text);
+    },
+    setChatFocused,
+    applyInputState
+  });
+
+  const killFeedSubsystem = createMatchKillFeed({
+    hudKillLog,
+    getLocalSessionId: () => localSessionId
+  });
+
+  const radarSubsystem = createMatchRadar({
+    hudRadarDisc,
+    hudRadarMarkers,
+    hudRadarNorth,
+    hudRadarEast,
+    hudRadarSouth,
+    hudRadarWest,
+    getLocalSessionId: () => localSessionId,
+    getPlayers: () => actions.matchService.getPlayers(),
+    getCameraGroundForward: () => sceneHandle?.getCameraGroundForward() ?? null,
+    getPlayerWorldPosition: (sessionId) => sceneHandle?.getPlayerWorldPosition(sessionId) ?? null,
+    isTeamMember: (userId) => teamMemberUserIds.has(userId),
+    getFallbackForward: () => {
+      const localPlayer = localSessionId
+        ? actions.matchService.getPlayers().find((player) => player.sessionId === localSessionId) ?? null
+        : null;
+      if (!localPlayer) {
+        return { x: 0, z: 1 };
+      }
+
+      return {
+        x: Math.sin(localPlayer.rotationY),
+        z: Math.cos(localPlayer.rotationY)
+      };
+    }
+  });
+
+  const overheadBarsSubsystem = createMatchOverheadBars({
+    hudOverheadBarsLayer,
+    getLocalSessionId: () => localSessionId,
+    getPlayers: () => actions.matchService.getPlayers(),
+    getPlayerWorldPosition: (sessionId) => sceneHandle?.getPlayerWorldPosition(sessionId) ?? null,
+    getPlayerNameplateScreenPosition: (sessionId) => sceneHandle?.getPlayerNameplateScreenPosition(sessionId) ?? null,
+    isTeamMember: (userId) => teamMemberUserIds.has(userId)
+  });
+
+  // --- End subsystem instantiation ---
 
   crosshairController = createCrosshairController({
     element: hudCrosshair,
@@ -1155,8 +643,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
         !!crosshairState &&
         isMatchReady &&
         !hasFatalError &&
-        !deathModalOpen &&
-        !chatComposerOpen &&
+        !deathModalSubsystem.isVisible() &&
+        !chatHudSubsystem.isComposerOpen() &&
         !isSettingsModalOpen() &&
         !(pauseMenuSystem?.isOpen() ?? false);
 
@@ -1179,27 +667,6 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       };
     }
   });
-
-  const renderScoreboardVisibility = (): void => {
-    const isVisible =
-      isScoreboardRequested &&
-      hasGameplayInputPermission() &&
-      !isSettingsModalOpen() &&
-      !(pauseMenuSystem?.isOpen() ?? false);
-    screen.classList.toggle("is-scoreboard-visible", isVisible);
-    scoreboardCard.setAttribute("aria-hidden", String(!isVisible));
-  };
-
-  const setScoreboardRequested = (nextRequested: boolean): void => {
-    isScoreboardRequested = nextRequested;
-    renderScoreboardVisibility();
-  };
-
-  const renderPointerLockHint = (): void => {
-    const canReceiveInput = hasGameplayInputPermission();
-    const isPointerLocked = sceneHandle?.isPointerLocked() ?? false;
-    pointerLockHint.hidden = isPointerLocked || !canReceiveInput;
-  };
 
   const setPlayerCount = (playerCount: number): void => {
     playerCountLabel.textContent = t(locale, "match.hud.players", {
@@ -1378,11 +845,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       hudKills.textContent = "0";
       hudDeaths.textContent = "0";
       setLocalCombatHud(null);
-      respawnRequestPending = false;
-      deathModalRevealAtMs = 0;
-      deathModalRespawnButton.disabled = false;
-      deathModalRespawnButton.textContent = locale === "pt-BR" ? "Renascer" : "Respawn";
-      setDeathModalOpen(false);
+      deathModalSubsystem.hide();
       return;
     }
 
@@ -1398,20 +861,13 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
     const isDead = !!localPlayer && !localPlayer.isAlive;
     if (isDead) {
-      if (deathModalRevealAtMs <= 0) {
-        deathModalRevealAtMs = (localPlayer?.deadAt ?? Date.now()) + DEATH_SCREEN_DELAY_MS;
-      }
-      setDeathModalOpen(Date.now() >= deathModalRevealAtMs);
+      deathModalSubsystem.show({ deadAt: localPlayer?.deadAt ?? null });
+      deathModalSubsystem.tick(Date.now());
       return;
     }
 
-    if (respawnRequestPending) {
-      respawnRequestPending = false;
-      deathModalRespawnButton.disabled = false;
-      deathModalRespawnButton.textContent = locale === "pt-BR" ? "Renascer" : "Respawn";
-    }
-    deathModalRevealAtMs = 0;
-    setDeathModalOpen(false);
+    deathModalSubsystem.setRespawnComplete();
+    deathModalSubsystem.hide();
   };
 
   const setFlyUiState = (enabled: boolean): void => {
@@ -1424,7 +880,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       !sceneHandle ||
       !isMatchReady ||
       hasFatalError ||
-      deathModalOpen ||
+      deathModalSubsystem.isVisible() ||
       isSettingsModalOpen() ||
       (pauseMenuSystem?.isOpen() ?? false)
     ) {
@@ -1433,49 +889,6 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
 
     const nextEnabled = sceneHandle.toggleFlyMode();
     setFlyUiState(nextEnabled);
-  };
-
-  const applyInputState = (): void => {
-    const canReceiveInput = hasGameplayInputPermission();
-    sceneHandle?.setInputEnabled(canReceiveInput);
-
-    if (!canReceiveInput) {
-      sceneHandle?.exitPointerLock();
-    }
-
-    renderPointerLockHint();
-    renderScoreboardVisibility();
-  };
-
-  const closePauseMenu = (resumePointerLock: boolean): void => {
-    if (!pauseMenuSystem?.isOpen()) {
-      return;
-    }
-
-    pauseMenuSystem.close();
-    inputModeSystem.setPauseMenuOpen(false);
-
-    if (resumePointerLock && hasGameplayInputPermission()) {
-      sceneHandle?.requestPointerLock();
-    }
-
-    renderScoreboardVisibility();
-  };
-
-  const openPauseMenu = (): void => {
-    if (
-      (!isMatchReady && !hasFatalError) ||
-      deathModalOpen ||
-      isSettingsModalOpen() ||
-      pauseMenuSystem?.isOpen()
-    ) {
-      return;
-    }
-
-    closeChatComposer(false);
-    pauseMenuSystem?.open();
-    inputModeSystem.setPauseMenuOpen(true);
-    renderScoreboardVisibility();
   };
 
   const showLoading = (message: string): void => {
@@ -1510,12 +923,26 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     }
   };
 
+  const appendHudChatMessage = (message: Pick<ChatMessage, "id" | "nickname" | "text">): void => {
+    const normalizedText = message.text.trim();
+    if (!normalizedText) {
+      return;
+    }
+
+    chatHudSubsystem.addMessage({
+      id: `chat:${message.id}`,
+      kind: "chat",
+      nickname: message.nickname.trim() || "Player",
+      text: normalizedText
+    });
+  };
+
   const disposePlayersChanged = actions.matchService.onPlayersChanged((players) => {
     renderMatchPresence(players);
   });
 
   const disposePlayerAdded = actions.matchService.onPlayerAdded((player) => {
-    pushHudFeedEntry({
+    chatHudSubsystem.addMessage({
       id: `join:${player.sessionId}:${player.joinedAt}`,
       kind: "server",
       nickname: null,
@@ -1529,7 +956,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   });
 
   const disposePlayerRemoved = actions.matchService.onPlayerRemoved((sessionId) => {
-    removeSpeechBubble(sessionId);
+    chatHudSubsystem.removeSpeechBubble(sessionId);
     sceneHandle?.removePlayer(sessionId);
   });
 
@@ -1544,7 +971,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   });
   const disposeCombatKill = actions.matchService.onCombatKill((payload) => {
     if (!localSessionId) {
-      pushKillFeedEntry({
+      killFeedSubsystem.addKill({
         killerSessionId: payload.killerSessionId,
         victimSessionId: payload.victimSessionId,
         killerName: payload.killerName,
@@ -1558,7 +985,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     const killsDelta = payload.killerSessionId === localSessionId ? 1 : 0;
     const deathsDelta = payload.victimSessionId === localSessionId ? 1 : 0;
     applyLocalChampionKdaDelta(killsDelta, deathsDelta);
-    pushKillFeedEntry({
+    killFeedSubsystem.addKill({
       killerSessionId: payload.killerSessionId,
       victimSessionId: payload.victimSessionId,
       killerName: payload.killerName,
@@ -1591,78 +1018,12 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     appendHudChatMessage(message);
     const sessionId = resolveSessionIdForUserId(message.userId);
     if (sessionId) {
-      upsertSpeechBubble(sessionId, message.text);
+      chatHudSubsystem.addSpeechBubble({ sessionId, text: message.text });
     }
   });
 
   const disposeFlyToggleClick = bind(flyToggleButton, "click", () => {
     toggleFlyMode();
-  });
-  const disposeChatComposerSubmit = bind(chatComposer, "submit", (event) => {
-    event.preventDefault();
-    const text = chatInput.value.trim();
-    if (!text) {
-      closeChatComposer(true);
-      return;
-    }
-
-    actions.chatService.sendMessage(text);
-    chatInput.value = "";
-    closeChatComposer(true);
-  });
-  const disposeChatInputFocus = bind(chatInput, "focus", () => {
-    setChatFocused(true);
-    applyInputState();
-  });
-  const disposeChatInputBlur = bind(chatInput, "blur", (event) => {
-    const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && chatComposer.contains(nextTarget)) {
-      setChatFocused(true);
-      return;
-    }
-
-    if (chatComposerOpen) {
-      closeChatComposer(false);
-      return;
-    }
-
-    setChatFocused(false);
-    applyInputState();
-  });
-  const disposeChatInputKeyDown = bind(chatInput, "keydown", (event) => {
-    event.stopPropagation();
-
-    if (event.key !== "Escape") {
-      return;
-    }
-
-    event.preventDefault();
-    closeChatComposer(true);
-  });
-  const disposeChatInputKeyUp = bind(chatInput, "keyup", (event) => {
-    event.stopPropagation();
-  });
-  const disposeDeathBackLobbyClick = bind(deathModalBackLobbyButton, "click", () => {
-    actions.onLeaveMatch();
-  });
-  const disposeDeathRespawnClick = bind(deathModalRespawnButton, "click", () => {
-    if (respawnRequestPending) {
-      return;
-    }
-
-    if (!localSessionId) {
-      return;
-    }
-
-    const localPlayer = actions.matchService.getPlayers().find((player) => player.sessionId === localSessionId) ?? null;
-    if (!localPlayer || localPlayer.isAlive) {
-      return;
-    }
-
-    respawnRequestPending = true;
-    deathModalRespawnButton.disabled = true;
-    deathModalRespawnButton.textContent = locale === "pt-BR" ? "Renascendo..." : "Respawning...";
-    actions.matchService.sendRespawnRequest();
   });
 
   pauseMenuSystem = createPauseMenuSystem({
@@ -1689,8 +1050,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       wasPointerLocked &&
       !isPointerLocked &&
       (isMatchReady || hasFatalError) &&
-      !deathModalOpen &&
-      !chatComposerOpen &&
+      !deathModalSubsystem.isVisible() &&
+      !chatHudSubsystem.isComposerOpen() &&
       !isChatFocused() &&
       !isSettingsModalOpen() &&
       !(pauseMenuSystem?.isOpen() ?? false)
@@ -1731,14 +1092,14 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       }
 
       event.preventDefault();
-      openChatComposer();
+      chatHudSubsystem.openComposer();
       return;
     }
 
     if (event.code === "Tab") {
       if (
         isTypingOnInputField() ||
-        deathModalOpen ||
+        deathModalSubsystem.isVisible() ||
         isSettingsModalOpen() ||
         (pauseMenuSystem?.isOpen() ?? false)
       ) {
@@ -1807,9 +1168,9 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       return;
     }
 
-    if (chatComposerOpen) {
+    if (chatHudSubsystem.isComposerOpen()) {
       event.preventDefault();
-      closeChatComposer(true);
+      chatHudSubsystem.closeComposer(true);
       return;
     }
 
@@ -1891,13 +1252,11 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
   applyInputState();
   setFlyUiState(false);
   setScoreboardRequested(false);
-  setDeathModalOpen(false);
   hideFullscreenNotice();
-  renderHudFeed();
-  renderKillFeed();
-  renderSpeechBubbles();
-  renderOverheadBars();
-  renderRadar();
+
+  // Start subsystem animation loops
+  radarSubsystem.update();
+  overheadBarsSubsystem.update();
 
   void (async () => {
     showLoading(t(locale, "match.loading.connecting"));
@@ -1968,8 +1327,8 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       }, 2000);
 
       hudFeedIntervalId = window.setInterval(() => {
-        renderHudFeed();
-        renderKillFeed();
+        chatHudSubsystem.tick(Date.now());
+        killFeedSubsystem.tick(Date.now());
       }, 250);
     } catch (error) {
       const message = error instanceof Error ? error.message : t(locale, "match.error.startFailed");
@@ -1989,13 +1348,6 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     disposeScenePointerLockChanged = null;
 
     disposeFlyToggleClick();
-    disposeChatComposerSubmit();
-    disposeChatInputFocus();
-    disposeChatInputBlur();
-    disposeChatInputKeyDown();
-    disposeChatInputKeyUp();
-    disposeDeathBackLobbyClick();
-    disposeDeathRespawnClick();
     disposePlayersChanged();
     disposePlayerAdded();
     disposePlayerUpdated();
@@ -2020,7 +1372,7 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
     sceneHandle?.dispose();
     sceneHandle = null;
     setFlyUiState(false);
-    closeChatComposer(false);
+    chatHudSubsystem.closeComposer(false);
 
     if (matchTimerIntervalId !== null) {
       window.clearInterval(matchTimerIntervalId);
@@ -2042,27 +1394,12 @@ export function renderMatchScreen(root: HTMLElement, actions: MatchScreenActions
       staminaPulseTimeoutId = null;
     }
 
-    if (speechBubbleFrameId !== null) {
-      window.cancelAnimationFrame(speechBubbleFrameId);
-      speechBubbleFrameId = null;
-    }
-
-    if (overheadBarsFrameId !== null) {
-      window.cancelAnimationFrame(overheadBarsFrameId);
-      overheadBarsFrameId = null;
-    }
-
-    if (radarFrameId !== null) {
-      window.cancelAnimationFrame(radarFrameId);
-      radarFrameId = null;
-    }
-
-    speechBubblesBySessionId.forEach((bubble) => {
-      bubble.element.remove();
-    });
-    speechBubblesBySessionId.clear();
-    clearOverheadBars();
-    clearRadarMarkers();
+    // Dispose subsystems
+    chatHudSubsystem.dispose();
+    killFeedSubsystem.dispose();
+    radarSubsystem.dispose();
+    overheadBarsSubsystem.dispose();
+    deathModalSubsystem.dispose();
 
     combatFeedbackSystem.dispose();
     damageNumberEffect.dispose();

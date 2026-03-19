@@ -20,6 +20,7 @@ import {
   loadBoundAnimationCommandFromAsset
 } from "../../game/animation/animation-binding";
 import { SHARED_ANIMATION_BASE_URL } from "../../game/animation/shared-animation-library";
+import { clamp } from "../../game/utils/math";
 
 export type ChampionPreviewOptions = {
   modelUrl?: string | null;
@@ -58,10 +59,6 @@ const PREVIEW_PROFILE = {
   minRadius: 3.3,
   maxRadius: 6.4
 } as const;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 function splitModelPath(modelUrl: string): { rootUrl: string; fileName: string } {
   const lastSlash = modelUrl.lastIndexOf("/");

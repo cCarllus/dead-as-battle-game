@@ -6,12 +6,9 @@ import {
 } from "../data/champions.catalog";
 import { resolveHeroCombatClientConfig, type HeroSkillSlotConfig } from "../game/config/hero-combat.config";
 import type { MatchPlayerState } from "../models/match-player.model";
+import { clamp } from "../game/utils/math";
 
 const DEFAULT_HERO_LABEL = "HERO";
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 function normalizeHeroLabel(heroId: string | null): string {
   if (!heroId) {

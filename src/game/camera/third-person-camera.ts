@@ -19,6 +19,7 @@ import {
   RIGHT_SHOULDER_SIDE
 } from "./crosshair-config";
 import { createCameraShakeSystem, type CameraShakePreset } from "./camera-shake";
+import { clamp } from "../utils/math";
 import { createCameraStateController } from "./camera-state-controller";
 import { createCameraTiltSystem } from "./camera-tilt";
 import { createHeadBobSystem } from "./head-bob";
@@ -53,10 +54,6 @@ export type CreateThirdPersonCameraOptions = {
   scene: Scene;
   config?: Partial<ThirdPersonCameraConfig>;
 };
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 function resolveDampFactor(deltaSeconds: number, speed: number): number {
   if (deltaSeconds <= 0) {

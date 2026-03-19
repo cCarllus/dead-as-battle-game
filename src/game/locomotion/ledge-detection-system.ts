@@ -3,6 +3,7 @@ import { Ray, Vector3, type AbstractMesh, type Scene } from "@babylonjs/core";
 import type { CharacterRuntimeConfig } from "../character/character-config";
 import type { ShapeQueryService } from "../physics/shape-query-service";
 import type { GroundedSystem } from "./grounded-system";
+import { clamp } from "../utils/math";
 
 export type LedgeCandidateKind = "hang" | "mantle";
 
@@ -101,10 +102,6 @@ const TOP_PROBE_INSET_MIN = 0.18;
 const HANG_HEAD_CLEARANCE_MARGIN = 0.08;
 const SHAPE_QUERY_RADIUS_SCALE = 0.2;
 const SHAPE_QUERY_RADIUS_MIN = 0.06;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 function toDegrees(radians: number): number {
   return (radians * 180) / Math.PI;

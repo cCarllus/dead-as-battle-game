@@ -1,5 +1,6 @@
 // Responsável por aplicar aceleração planar, controle aéreo, rolling e rotação suave em um único motor.
 import { Vector3 } from "@babylonjs/core";
+import { clamp, moveTowards, normalizeAngleRadians } from "../utils/math";
 
 export type CharacterMotorOutput = {
   displacement: Vector3;
@@ -28,30 +29,6 @@ export type CharacterMotor = {
   getPlanarVelocity: () => Vector3;
   reset: () => void;
 };
-
-function moveTowards(current: number, target: number, maxDelta: number): number {
-  if (current < target) {
-    return Math.min(current + maxDelta, target);
-  }
-
-  return Math.max(current - maxDelta, target);
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function normalizeAngleRadians(angle: number): number {
-  const tau = Math.PI * 2;
-  let normalized = angle % tau;
-  if (normalized > Math.PI) {
-    normalized -= tau;
-  }
-  if (normalized < -Math.PI) {
-    normalized += tau;
-  }
-  return normalized;
-}
 
 export function createCharacterMotor(): CharacterMotor {
   const planarVelocity = Vector3.Zero();
