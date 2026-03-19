@@ -14,6 +14,9 @@ export const GLOBAL_MATCH_RUNTIME_CONFIG = {
     blockMaxHoldMs: 2500
   },
   localVisualCulling: {
-    cameraHideRadiusMultiplier: 1.05
+    cameraHideRadiusMultiplier: 1.05,
+    cameraShowRadiusMultiplier: 1.18,
+    cameraHideVerticalHalfHeightMultiplier: 0.72,
+    cameraShowVerticalHalfHeightMultiplier: 0.9
   }
 } as const;

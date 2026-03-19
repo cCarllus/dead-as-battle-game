@@ -83,6 +83,32 @@ function dampVector(
   current.z += (target.z - current.z) * factor;
 }
 
+function clampCameraToMinimumDistance(
+  currentPosition: Vector3,
+  focusPoint: Vector3,
+  fallbackDirection: Vector3,
+  minDistance: number
+): void {
+  if (minDistance <= 0) {
+    return;
+  }
+
+  const offset = currentPosition.subtract(focusPoint);
+  const distance = offset.length();
+  if (distance >= minDistance) {
+    return;
+  }
+
+  const safeDirection =
+    distance > 0.0001
+      ? offset.scale(1 / distance)
+      : fallbackDirection.lengthSquared() > 0.0001
+        ? fallbackDirection.normalizeToNew()
+        : new Vector3(0, 0, -1);
+
+  currentPosition.copyFrom(focusPoint.add(safeDirection.scale(minDistance)));
+}
+
 function resolveGroundForward(yaw: number): Vector3 {
   const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
   if (forward.lengthSquared() <= 0.0001) {
@@ -340,6 +366,12 @@ export function createThirdPersonCamera(
         collisionResult.position,
         collisionResult.hasHit ? config.collisionLerpSpeed : config.collisionRecoveryLerpSpeed,
         safeDelta
+      );
+      clampCameraToMinimumDistance(
+        currentCameraPosition,
+        currentFocusPoint,
+        desiredCameraPosition.subtract(currentFocusPoint),
+        config.minDistance
       );
 
       camera.position.copyFrom(currentCameraPosition);

@@ -63,7 +63,7 @@ export const DEFAULT_CAMERA_SETTINGS_PERCENT = 50;
 
 export const DEFAULT_THIRD_PERSON_CAMERA_CONFIG: Readonly<ThirdPersonCameraConfig> = {
   cameraDistance: 3.22,
-  minDistance: 1.4,
+  minDistance: 1.75,
   cameraHeightOffset: 0.42,
   shoulderOffsetX: 1.02,
   shoulderOffsetY: 0.22,

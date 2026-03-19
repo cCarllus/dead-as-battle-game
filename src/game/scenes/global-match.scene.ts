@@ -195,24 +195,40 @@ function clampPercent(value: number, fallback = 50): number {
 }
 
 function shouldHideLocalVisualForCamera(
-  visualRoot: TransformNode,
-  cameraPosition: Vector3
+  collisionBody: AbstractMesh,
+  cameraPosition: Vector3,
+  isCurrentlyHidden: boolean
 ): boolean {
-  const meshes = visualRoot.getChildMeshes(false);
-  if (meshes.length === 0) {
-    return false;
-  }
+  collisionBody.computeWorldMatrix(true);
+  const boundingBox = collisionBody.getBoundingInfo().boundingBox;
+  const center = boundingBox.centerWorld;
+  const horizontalRadius = Math.max(boundingBox.extendSizeWorld.x, boundingBox.extendSizeWorld.z, 0.001);
+  const halfHeight = Math.max(boundingBox.extendSizeWorld.y, 0.001);
+  const horizontalThreshold =
+    horizontalRadius *
+    Math.max(
+      isCurrentlyHidden
+        ? GLOBAL_MATCH_RUNTIME_CONFIG.localVisualCulling.cameraShowRadiusMultiplier
+        : GLOBAL_MATCH_RUNTIME_CONFIG.localVisualCulling.cameraHideRadiusMultiplier,
+      0.001
+    );
+  const verticalThreshold =
+    halfHeight *
+    Math.max(
+      isCurrentlyHidden
+        ? GLOBAL_MATCH_RUNTIME_CONFIG.localVisualCulling.cameraShowVerticalHalfHeightMultiplier
+        : GLOBAL_MATCH_RUNTIME_CONFIG.localVisualCulling.cameraHideVerticalHalfHeightMultiplier,
+      0.001
+    );
+  const deltaX = center.x - cameraPosition.x;
+  const deltaZ = center.z - cameraPosition.z;
+  const horizontalDistanceSquared = deltaX * deltaX + deltaZ * deltaZ;
+  const verticalDistance = Math.abs(center.y - cameraPosition.y);
 
-  const bounds = visualRoot.getHierarchyBoundingVectors(true);
-  const size = bounds.max.subtract(bounds.min);
-  const radius = Math.max(size.length() * 0.5, 0.001);
-  const center = bounds.min.add(bounds.max).scale(0.5);
-  const dx = center.x - cameraPosition.x;
-  const dy = center.y - cameraPosition.y;
-  const dz = center.z - cameraPosition.z;
-  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-  return distance <= radius * GLOBAL_MATCH_RUNTIME_CONFIG.localVisualCulling.cameraHideRadiusMultiplier;
+  return (
+    horizontalDistanceSquared <= horizontalThreshold * horizontalThreshold &&
+    verticalDistance <= verticalThreshold
+  );
 }
 
 function resolveProjectedPoint(
@@ -992,7 +1008,11 @@ export async function createGlobalMatchScene(
 
     const localView = playerViewManager.getLocalPlayerView();
     if (localView) {
-      const shouldHideVisual = shouldHideLocalVisualForCamera(localView.visualRoot, camera.globalPosition);
+      const shouldHideVisual = shouldHideLocalVisualForCamera(
+        localView.collisionBody,
+        camera.globalPosition,
+        isLocalVisualHiddenForCamera
+      );
       if (shouldHideVisual !== isLocalVisualHiddenForCamera) {
         localView.visualRoot.getChildMeshes(false).forEach((mesh) => {
           mesh.isVisible = !shouldHideVisual;
