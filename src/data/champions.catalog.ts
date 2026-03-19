@@ -12,7 +12,7 @@ export const DEFAULT_CHAMPION_TEMPLATE: ChampionCatalogItem = {
   displayName: "Default Champion",
   priceCoins: 0,
   isDefault: true,
-  universeName: "Dead as Battle",
+  universeName: "Dead as Battleground",
   modelUrl: "public/models3D/heroes/default-champion/default.glb",
   animationOverrideBaseUrl: "public/models3D/heroes/default-champion/animations",
   previewAnimation: null,

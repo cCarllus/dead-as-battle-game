@@ -6,7 +6,7 @@ services:
       args:
         NODE_VERSION: "24.11.0"
         NPM_VERSION: "11.6.1"
-    container_name: dead-as-battle-dev
+    container_name: dead-as-battleground-dev
     working_dir: /app
     environment:
       NODE_ENV: development

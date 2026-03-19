@@ -1,4 +1,4 @@
-# Dead as Battle
+# Dead as Battleground
 
 Projeto web game com frontend em Vite + TypeScript + Babylon.js e backend realtime com Colyseus (WebSocket).
 
@@ -167,7 +167,7 @@ HOST=0.0.0.0 PORT=2567 npm run start:server
 ### Docker (execucao pontual)
 
 ```bash
-docker compose run -d --name dead-as-battle-server --service-ports dev \
+docker compose run -d --name dead-as-battleground-server --service-ports dev \
   sh -c 'npm ci && HOST=0.0.0.0 PORT=2567 npm run start:server'
 ```
 
