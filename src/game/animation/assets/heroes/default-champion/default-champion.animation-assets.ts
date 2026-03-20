@@ -8,7 +8,7 @@ export const DEFAULT_CHAMPION_ANIMATION_ASSETS: AnimationAssetCommandMap = {
   },
   kickSkill: {
     fileName: "kick-skill.glb",
-    groupName: "kick-one"
+    groupName: "kick-two"
   },
   repeatKick: {
     fileName: "reapet-kick.glb",
