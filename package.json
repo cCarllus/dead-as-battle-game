@@ -11,26 +11,34 @@
     "dev:all": "npm run game:server:dev",
     "start:server": "tsx server/src/index.ts",
     "build:server": "tsc --project server/tsconfig.json",
-    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@types/node": "^25.3.3",
+    "@babylonjs/inspector": "^8.56.1",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.5.0",
     "concurrently": "^9.2.1",
+    "eslint": "^10.1.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
     "tsx": "^4.21.0",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.1"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1",
+    "vite": "^8.0.1"
   },
   "dependencies": {
-    "@babylonjs/core": "^8.53.1",
-    "@babylonjs/havok": "^1.3.11",
-    "@babylonjs/loaders": "^8.53.1",
+    "@babylonjs/core": "^8.56.1",
+    "@babylonjs/gui": "^8.56.1",
+    "@babylonjs/loaders": "^8.56.1",
+    "@babylonjs/materials": "^8.56.1",
     "@colyseus/core": "^0.17.39",
     "@colyseus/sdk": "^0.17.34",
     "@colyseus/ws-transport": "^0.17.9",
-    "bootstrap-icons": "^1.13.1",
-    "express": "^5.2.1",
-    "recast-detour": "^1.6.4",
     "zod": "^4.3.6"
   }
 }
