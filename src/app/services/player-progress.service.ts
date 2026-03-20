@@ -1,21 +1,21 @@
 // Responsável por exportar/importar progresso do jogador sem expor JSON bruto à UI.
-import { APP_VERSION_LABEL } from "../config/version";
-import type { GameSettings } from "../config/game-settings";
+import { APP_VERSION_LABEL } from "@/config/version";
+import type { GameSettings } from "@/config/game-settings";
 import type { ChampionId } from "@/shared/champions/champion.model";
-import type { UserProfile } from "../models/user.model";
-import type { PlayerProgressRepository } from "../persistence/repositories/player-progress.repository";
-import { createPlayerProgressRepository } from "../persistence/repositories/player-progress.repository";
-import { attachProgressSignature } from "../persistence/security/progress-signature";
-import { validatePlayerProgressDocument } from "../persistence/security/progress-validator";
-import type { JsonProgressStorage } from "../persistence/storage/json-progress.storage";
-import { createJsonProgressStorage } from "../persistence/storage/json-progress.storage";
+import type { UserProfile } from "@/shared/user/user.model";
+import type { PlayerProgressRepository } from "@/persistence/repositories/player-progress.repository";
+import { createPlayerProgressRepository } from "@/persistence/repositories/player-progress.repository";
+import { attachProgressSignature } from "@/persistence/security/progress-signature";
+import { validatePlayerProgressDocument } from "@/persistence/security/progress-validator";
+import type { JsonProgressStorage } from "@/persistence/storage/json-progress.storage";
+import { createJsonProgressStorage } from "@/persistence/storage/json-progress.storage";
 import {
   PLAYER_PROGRESS_SAVE_VERSION,
   championProgressToPersisted,
   type PlayerProgressDocument,
   type PlayerProgressImportPreview,
   type PlayerProgressPayload
-} from "../persistence/types/player-progress.types";
+} from "@/persistence/types/player-progress.types";
 
 type PendingImport = {
   user: UserProfile;

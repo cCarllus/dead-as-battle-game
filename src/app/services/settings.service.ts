@@ -4,9 +4,9 @@ import {
   cloneGameSettings,
   normalizeGameSettings,
   type GameSettings
-} from "../config/game-settings";
-import type { PlayerProgressRepository } from "../persistence/repositories/player-progress.repository";
-import { createPlayerProgressRepository } from "../persistence/repositories/player-progress.repository";
+} from "@/config/game-settings";
+import type { PlayerProgressRepository } from "@/persistence/repositories/player-progress.repository";
+import { createPlayerProgressRepository } from "@/persistence/repositories/player-progress.repository";
 
 export type SettingsService = {
   load: () => GameSettings;
@@ -34,4 +34,4 @@ export function createSettingsService({
   };
 }
 
-export { DEFAULT_GAME_SETTINGS, normalizeGameSettings, type GameSettings } from "../config/game-settings";
+export { DEFAULT_GAME_SETTINGS, normalizeGameSettings, type GameSettings } from "@/config/game-settings";

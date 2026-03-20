@@ -1,6 +1,6 @@
 // Responsável por armazenar e atualizar estado global simples da aplicação.
 import { resolveLocale, type Locale } from "../i18n";
-import { DEFAULT_ACTIVE_TAB, type MenuTabId } from "../ui/navigation/menu.model";
+import { DEFAULT_ACTIVE_TAB, type MenuTabId } from "../navigation/menu.model";
 
 export type ScreenId = "loading" | "nickname" | "home" | "champions" | "notes" | "match";
 

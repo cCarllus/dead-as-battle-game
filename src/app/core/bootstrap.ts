@@ -1,8 +1,8 @@
 // Responsável por compor dependências da aplicação e inicializar o ciclo de vida principal.
-import "../ui/styles/ui.css";
+import "../styles/ui.css";
 import { createAppController } from "../controllers/app.controller";
-import { createJsonProgressStorage } from "../persistence/storage/json-progress.storage";
-import { createPlayerProgressRepository } from "../persistence/repositories/player-progress.repository";
+import { createJsonProgressStorage } from "@/persistence/storage/json-progress.storage";
+import { createPlayerProgressRepository } from "@/persistence/repositories/player-progress.repository";
 import { getChampionCatalogForUser } from "@/shared/champions/champions.catalog";
 import type { ChampionId } from "@/shared/champions/champion.model";
 import { warmUpAssetCache } from "./cache";
@@ -12,15 +12,15 @@ import { createUserService } from "../services/user.service";
 import { createMenuAudioManager } from "../services/menu-audio-manager";
 import { createSettingsService } from "../services/settings.service";
 import { createPlayerProgressService } from "../services/player-progress.service";
-import { createChatService } from "../services/chat.service";
-import { createTeamService } from "../services/team.service";
+import { createChatService } from "@/services/chat.service";
+import { createTeamService } from "@/services/team.service";
 import { getSelectedChampionForUser } from "../services/champion.service";
 import { createNotificationService } from "../services/notification.service";
 import { createRewardService } from "../services/reward.service";
 import { createHeroPurchaseService } from "../services/hero-purchase.service";
 import { createHeroSelectionService } from "../services/hero-selection.service";
-import { createMatchService } from "../services/match.service";
-import { createMatchPresenceService } from "../services/match-presence.service";
+import { createMatchService } from "@/services/match.service";
+import { createMatchPresenceService } from "@/services/match-presence.service";
 
 export type AppBootstrapHandle = {
   dispose: () => void;

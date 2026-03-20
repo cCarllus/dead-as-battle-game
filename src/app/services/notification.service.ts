@@ -1,5 +1,5 @@
 // Responsável por gerenciar notificações persistidas no perfil do usuário.
-import { createNotification, type NotificationInput, type NotificationItem } from "../models/notification.model";
+import { createNotification, type NotificationInput, type NotificationItem } from "@/shared/notifications/notification.model";
 import type { UserService } from "./user.service";
 
 function cloneNotification(notification: NotificationItem): NotificationItem {

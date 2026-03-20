@@ -4,8 +4,8 @@ import {
   COIN_REWARD_AMOUNT,
   MAX_PENDING_COIN_REWARDS,
   type RewardComputationResult
-} from "../models/reward.model";
-import type { UserProfile } from "../models/user.model";
+} from "@/shared/rewards/reward.model";
+import type { UserProfile } from "@/shared/user/user.model";
 import type { NotificationService } from "./notification.service";
 import type { UserService } from "./user.service";
 

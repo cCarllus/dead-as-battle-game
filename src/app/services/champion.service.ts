@@ -7,7 +7,7 @@ import {
   DEFAULT_CHAMPION_ID
 } from "@/shared/champions/champions.catalog";
 import type { ChampionCatalogItem, ChampionId } from "@/shared/champions/champion.model";
-import type { UserProfile } from "../models/user.model";
+import type { UserProfile } from "@/shared/user/user.model";
 
 export type ChampionWithProgress = ChampionCatalogItem & {
   level: number;

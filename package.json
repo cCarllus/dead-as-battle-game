@@ -12,7 +12,7 @@
     "start:server": "tsx server/src/index.ts",
     "build:server": "tsc --project server/tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/main.ts src/app/core/bootstrap.ts src/config/env.ts src/shared src/utils/dom.ts vite.config.ts",
+    "lint": "eslint src/main.ts src/app/core/bootstrap.ts src/shared src/utils/dom.ts vite.config.ts",
     "lint:full": "eslint .",
     "format": "prettier --write .",
     "build": "npm run typecheck && vite build",

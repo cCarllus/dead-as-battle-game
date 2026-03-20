@@ -5,7 +5,7 @@ import {
   isDefaultChampionId
 } from "@/shared/champions/champions.catalog";
 import type { ChampionId } from "@/shared/champions/champion.model";
-import type { UserProfile } from "../models/user.model";
+import type { UserProfile } from "@/shared/user/user.model";
 import type { UserService } from "./user.service";
 
 export type HeroSelectionStatus = "selected" | "locked" | "invalid_hero" | "no_user";

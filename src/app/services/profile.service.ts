@@ -1,12 +1,12 @@
 // Responsável por regras de negócio do perfil persistido do jogador.
 import { DEFAULT_CHAMPION_ID, isChampionId, isDefaultChampionId } from "@/shared/champions/champions.catalog";
 import type { ChampionId } from "@/shared/champions/champion.model";
-import { normalizeNickname, sanitizeChampionProgress, type UserProfile } from "../models/user.model";
-import type { PlayerProgressRepository } from "../persistence/repositories/player-progress.repository";
+import { normalizeNickname, sanitizeChampionProgress, type UserProfile } from "@/shared/user/user.model";
+import type { PlayerProgressRepository } from "@/persistence/repositories/player-progress.repository";
 import {
   createDefaultProfile,
   createPlayerProgressRepository
-} from "../persistence/repositories/player-progress.repository";
+} from "@/persistence/repositories/player-progress.repository";
 
 function isChampionUnlocked(user: Pick<UserProfile, "champions">, championId: ChampionId): boolean {
   if (isDefaultChampionId(championId)) {

@@ -6,7 +6,7 @@ import {
   isDefaultChampionId
 } from "@/shared/champions/champions.catalog";
 import type { ChampionId } from "@/shared/champions/champion.model";
-import { sanitizeChampionProgress, type UserProfile } from "../models/user.model";
+import { sanitizeChampionProgress, type UserProfile } from "@/shared/user/user.model";
 import type { NotificationService } from "./notification.service";
 import type { UserService } from "./user.service";
 
