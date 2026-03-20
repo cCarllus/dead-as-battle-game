@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_SERVER_URL?: string;
+  readonly VITE_COLYSEUS_ENDPOINT?: string;
   readonly VITE_DEBUG?: string;
   readonly VITE_SHOW_FPS?: string;
   readonly VITE_INSPECTOR?: string;

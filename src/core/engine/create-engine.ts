@@ -1,3 +1,4 @@
+import "@/core/engine/register-babylon-runtime";
 import { Engine } from "@babylonjs/core/Engines/engine";
 
 import type { AppEnvironment } from "@/config/env";

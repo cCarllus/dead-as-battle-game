@@ -4,7 +4,8 @@ import { fileURLToPath, URL } from "node:url";
 export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url))
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "@assets": fileURLToPath(new URL("./assets", import.meta.url))
     }
   },
   assetsInclude: [

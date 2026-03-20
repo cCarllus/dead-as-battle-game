@@ -1,27 +1,50 @@
-import "@/styles/global.css";
-import { GameApp } from "@/app/game-app";
-import { renderFatalError, resetAppShell } from "@/utils/dom";
+import { bootstrap as bootstrapApp } from "@/app/core/bootstrap";
+import { renderFatalError } from "@/utils/dom";
 
-let app: GameApp | null = null;
+let appHandle: { dispose: () => void } | null = null;
 
-async function bootstrap(): Promise<void> {
-  const { canvas } = resetAppShell();
+function ensureAppRoot(): HTMLDivElement {
+  const existingRoot = document.getElementById("app");
 
-  app = GameApp.create({
-    canvas
-  });
+  if (existingRoot instanceof HTMLDivElement) {
+    return existingRoot;
+  }
 
-  await app.start();
+  const root = document.createElement("div");
+  root.id = "app";
+  document.body.append(root);
+
+  return root;
 }
 
-void bootstrap().catch((error: unknown) => {
+function prepareApplicationShell(): HTMLDivElement {
+  const root = ensureAppRoot();
+  root.replaceChildren();
+
+  const uiRoot = document.createElement("div");
+  uiRoot.id = "ui-root";
+  root.append(uiRoot);
+
+  return uiRoot;
+}
+
+function bootstrap(): void {
+  prepareApplicationShell();
+  appHandle = bootstrapApp();
+}
+
+try {
+  bootstrap();
+} catch (error: unknown) {
   console.error("Failed to bootstrap Dead As Battleground.", error);
   renderFatalError(error);
-});
+}
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
-    app?.dispose();
-    app = null;
+    appHandle?.dispose();
+    appHandle = null;
+    const root = document.getElementById("app");
+    root?.replaceChildren();
   });
 }

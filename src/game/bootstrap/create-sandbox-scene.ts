@@ -12,7 +12,7 @@ import type { GameSceneDefinition } from "@/core/scene/scene-contract";
 import type { GameRuntime } from "@/core/runtime/game-runtime";
 import { GAME_STATE } from "@/game/states/game-state";
 import { createSceneHud } from "@/ui/create-hud";
-import { createTestEnvironment } from "@/world/create-test-environment";
+import { createTestEnvironment } from "@/environment/create-test-environment";
 
 function createSandboxScene(runtime: GameRuntime): Scene {
   const scene = new Scene(runtime.engine);

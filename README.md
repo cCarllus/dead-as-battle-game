@@ -4,6 +4,8 @@ Code-first Babylon.js 8 game foundation using Vite and TypeScript.
 
 The active browser client now boots entirely from code. No Babylon Editor files, scene graphs, or editor-generated structures are part of the runtime path.
 
+The previous frontend source was migrated into the active tree instead of staying archived. The repo is now split between an application-shell layer in `src/app/*` and reusable gameplay/runtime modules in `src/*`.
+
 ## Stack
 
 - Babylon.js `8.56.1`
@@ -38,26 +40,40 @@ Key URLs:
 src/
   main.ts
   app/
-  camera/
-  character/
-  locomotion/
-  combat/
+    client.entry.ts
+    config/
+    controllers/
+    core/
+    data/
+    i18n/
+    models/
+    persistence/
+    services/
+    ui/
+    game-app.ts
   animation/
   audio/
-  multiplayer/
-  persistence/
+  camera/
+  character/
+  combat/
+  config/
+  core/
   debug/
+  effects/
+  entities/
+  environment/
+  experimental/
+  heroes/
+  locomotion/
+  multiplayer/
+  physics/
+  scenes/
+  shared/
+  systems/
   ui/
-  world/
   game/
     bootstrap/
     states/
-  core/
-    engine/
-    runtime/
-    scene/
-  config/
-  shared/
   utils/
   styles/
 assets/
@@ -65,17 +81,16 @@ assets/
   animations/
   textures/
   audio/
-public/
 server/
-legacy/
 ```
 
 ## Bootstrap Flow
 
-- [`src/main.ts`](/Applications/Develop/Projetos/dead-as-battle-game/src/main.ts) mounts the canvas shell and starts the app.
+- [`src/main.ts`](/Applications/Develop/Projetos/dead-as-battle-game/src/main.ts) mounts the canvas shell and starts the active Babylon app.
 - [`src/app/game-app.ts`](/Applications/Develop/Projetos/dead-as-battle-game/src/app/game-app.ts) creates the Babylon engine, runtime, and initial scene.
 - [`src/core/runtime/game-runtime.ts`](/Applications/Develop/Projetos/dead-as-battle-game/src/core/runtime/game-runtime.ts) owns the render loop, active scene, and resize lifecycle.
 - [`src/game/bootstrap/create-sandbox-scene.ts`](/Applications/Develop/Projetos/dead-as-battle-game/src/game/bootstrap/create-sandbox-scene.ts) builds the first code-driven scene.
+- [`src/app/core/bootstrap.ts`](/Applications/Develop/Projetos/dead-as-battle-game/src/app/core/bootstrap.ts) preserves the migrated app-shell bootstrap for the older menu/service flow.
 
 ## First Scene
 
@@ -94,6 +109,7 @@ The initial sandbox scene includes:
 Defined in [`.env.example`](/Applications/Develop/Projetos/dead-as-battle-game/.env.example):
 
 - `VITE_SERVER_URL`: future multiplayer endpoint
+- `VITE_COLYSEUS_ENDPOINT`: compatibility endpoint for the migrated multiplayer client
 - `VITE_DEBUG`: enables debug hooks
 - `VITE_SHOW_FPS`: shows FPS in the HUD
 - `VITE_INSPECTOR`: enables Babylon Inspector support
@@ -103,10 +119,7 @@ Defined in [`.env.example`](/Applications/Develop/Projetos/dead-as-battle-game/.
 
 - `npm run typecheck`
 - `npm run lint`
+- `npm run lint:full`
 - `npm run format`
 - `npm run build`
 - `npm run build:server`
-
-## Legacy Archive
-
-The previous browser client source and public assets were moved to [`legacy/`](/Applications/Develop/Projetos/dead-as-battle-game/legacy/README.md) during the refactor so the new `src/` tree could start clean without deleting prior work.
