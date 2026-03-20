@@ -1,6 +1,6 @@
 // Responsável por montar a estrutura visual e conteúdo estático da tela Home.
 import { t, type Locale } from "../../i18n";
-import type { ChampionPreviewAnimation } from "../../models/champion.model";
+import type { ChampionPreviewAnimation } from "@/shared/champions/champion.model";
 import { createMenuIcon } from "../components/menu-icon";
 import { qs } from "../components/dom";
 import { mountChampionPreview } from "../components/champion-preview";

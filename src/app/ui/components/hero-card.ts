@@ -1,6 +1,6 @@
 // Responsável por renderizar o card visual de herói com estados de bloqueio, seleção e compra.
 import { t, type Locale } from "../../i18n";
-import type { ChampionId } from "../../models/champion.model";
+import type { ChampionId } from "@/shared/champions/champion.model";
 import { createMenuIcon } from "./menu-icon";
 
 function formatCoins(locale: Locale, value: number): string {

@@ -1,5 +1,5 @@
 // Responsável por tipar e normalizar o perfil local do usuário com progresso por campeão.
-import type { ChampionId } from "./champion.model";
+import type { ChampionId } from "@/shared/champions/champion.model";
 import type { NotificationItem } from "./notification.model";
 
 export const MIN_NICKNAME_LENGTH = 3;

@@ -22,7 +22,7 @@ import type { UserService } from "../../services/user.service";
 import type { PlayerProgressService } from "../../services/player-progress.service";
 import { mountHomeHud } from "../components/home-hud";
 import type { MatchPresenceService } from "../../services/match-presence.service";
-import type { ChampionPreviewAnimation } from "../../models/champion.model";
+import type { ChampionPreviewAnimation } from "@/shared/champions/champion.model";
 
 export type HomeActions = {
   onOpenMultiplayer: () => void;

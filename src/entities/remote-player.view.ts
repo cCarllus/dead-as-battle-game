@@ -1,7 +1,7 @@
 // Responsável por tipar a view de player desacoplada com gameplayRoot autoritativo e camada visual independente.
 import type { AbstractMesh, TransformNode } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
-import type { MatchPlayerState } from "@/app/models/match-player.model";
+import type { MatchPlayerState } from "@/shared/match/match-player.model";
 import type { AnimationCommand } from "../animation/animation-command";
 import type { CharacterRuntimeConfig } from "../character/character-config";
 import {

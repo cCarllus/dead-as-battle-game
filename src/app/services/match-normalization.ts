@@ -26,7 +26,7 @@ import type {
   MatchSkillCastFinishedEventPayload,
   MatchSkillCastStartedEventPayload,
   MatchSnapshotPayload
-} from "../models/match-player.model";
+} from "@/shared/match/match-player.model";
 import type { MatchIdentity } from "./match.service";
 
 export const DEFAULT_MAX_HEALTH = 1000;

@@ -1,13 +1,13 @@
 // Responsável por manter PlayerViews em Map<sessionId, PlayerView> e aplicar sync de rede apenas no gameplayRoot.
 import type { AbstractMesh, Scene, TransformNode } from "@babylonjs/core";
-import type { MatchPlayerState } from "@/app/models/match-player.model";
+import type { MatchPlayerState } from "@/shared/match/match-player.model";
 import type { AnimationGameplayState } from "../animation/animation-state";
 import type { AnimationCommand } from "../animation/animation-command";
 import type { LocalPlayerView } from "../entities/local-player.view";
 import type { PlayerViewRole, RemotePlayerView } from "../entities/remote-player.view";
 import { createPlayerFactory } from "./player-factory";
 import { normalizeAngleRadians, squaredDistance3D } from "../utils/math";
-import { cloneMatchPlayerState, hasMatchPlayerStateChanged } from "@/app/models/match-player.utils";
+import { cloneMatchPlayerState, hasMatchPlayerStateChanged } from "@/shared/match/match-player.utils";
 
 const LOCAL_SERVER_RECONCILE_DISTANCE_SQUARED = 0.0025;
 const LOCAL_SERVER_RECONCILE_ROTATION_DELTA = 0.08;

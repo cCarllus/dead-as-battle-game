@@ -5,8 +5,8 @@ import {
   isChampionId,
   isDefaultChampionId,
   DEFAULT_CHAMPION_ID
-} from "../data/champions.catalog";
-import type { ChampionCatalogItem, ChampionId } from "../models/champion.model";
+} from "@/shared/champions/champions.catalog";
+import type { ChampionCatalogItem, ChampionId } from "@/shared/champions/champion.model";
 import type { UserProfile } from "../models/user.model";
 
 export type ChampionWithProgress = ChampionCatalogItem & {

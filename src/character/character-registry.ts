@@ -1,5 +1,5 @@
 // Responsável por resolver definições data-driven de runtime, animação e áudio por personagem.
-import { DEFAULT_CHAMPION_ID } from "@/app/data/champions.catalog";
+import { DEFAULT_CHAMPION_ID } from "@/shared/champions/champions.catalog";
 import {
   DEFAULT_CHARACTER_RUNTIME_CONFIG,
   cloneCharacterRuntimeConfig,

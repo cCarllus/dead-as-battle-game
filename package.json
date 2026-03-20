@@ -12,7 +12,7 @@
     "start:server": "tsx server/src/index.ts",
     "build:server": "tsc --project server/tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/main.ts src/app/game-app.ts src/config/env.ts src/config/game.config.ts src/core/engine src/core/runtime src/core/scene src/debug/debug-tools.ts src/environment/create-test-environment.ts src/game/bootstrap src/game/states src/ui/create-hud.ts src/utils/dom.ts vite.config.ts",
+    "lint": "eslint src/main.ts src/app/core/bootstrap.ts src/config/env.ts src/shared src/utils/dom.ts vite.config.ts",
     "lint:full": "eslint .",
     "format": "prettier --write .",
     "build": "npm run typecheck && vite build",

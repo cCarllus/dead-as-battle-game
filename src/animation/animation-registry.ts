@@ -1,5 +1,5 @@
 // Responsável por resolver configuração de animações por herói com fallback seguro.
-import { DEFAULT_CHAMPION_ID } from "@/app/data/champions.catalog";
+import { DEFAULT_CHAMPION_ID } from "@/shared/champions/champions.catalog";
 import { DEFAULT_CHAMPION_ANIMATION_PROFILE } from "./profiles/heroes/default-champion/default-champion.animation-profile";
 import { normalizeHeroAnimationConfig } from "./animation-overrides";
 import type { HeroAnimationConfig } from "./animation-types";

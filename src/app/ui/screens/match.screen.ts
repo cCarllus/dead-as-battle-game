@@ -1,6 +1,6 @@
 // Responsavel por orquestrar entrada na partida global com HUD completo, pointer lock e menu ESC de pausa.
 import { t, type Locale } from "../../i18n";
-import type { MatchPlayerState } from "../../models/match-player.model";
+import type { MatchPlayerState } from "@/shared/match/match-player.model";
 import type { ChatMessage } from "../../models/chat-message.model";
 import { CHAT_MAX_MESSAGE_LENGTH, type ChatService } from "../../services/chat.service";
 import type { MatchService } from "../../services/match.service";
@@ -8,8 +8,8 @@ import type { GameSettings, SettingsService } from "../../services/settings.serv
 import type { PlayerProgressService } from "../../services/player-progress.service";
 import type { TeamService } from "../../services/team.service";
 import type { UserService } from "../../services/user.service";
-import type { ChampionId } from "../../models/champion.model";
-import { isChampionId } from "../../data/champions.catalog";
+import type { ChampionId } from "@/shared/champions/champion.model";
+import { isChampionId } from "@/shared/champions/champions.catalog";
 import { resolveCombatHudState } from "../../services/hud.service";
 import { MATCH_UI_CONFIG } from "@/config/ui.config";
 import { createFullscreenSystem } from "@/systems/fullscreen.system";

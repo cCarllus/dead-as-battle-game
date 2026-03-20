@@ -1,5 +1,5 @@
 // Responsável por centralizar catálogo base de campeões e utilitários de resolução.
-import type { ChampionCatalogItem, ChampionId } from "../models/champion.model";
+import type { ChampionCatalogItem, ChampionId } from "./champion.model";
 import { HERO_MODEL_ASSET_URLS } from "@/shared/assets/game-assets";
 
 export const CHAMPION_IDS: readonly ChampionId[] = ["default_champion"];

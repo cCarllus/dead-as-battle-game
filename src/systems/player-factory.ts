@@ -1,6 +1,6 @@
 // Responsável por criar players com hierarquia fixa gameplayRoot/collisionBody/visualRoot/nameplate.
 import type { Scene } from "@babylonjs/core";
-import type { MatchPlayerState } from "@/app/models/match-player.model";
+import type { MatchPlayerState } from "@/shared/match/match-player.model";
 import type { PlayerVisualStyle } from "../entities/player.entity";
 import type { LocalPlayerView } from "../entities/local-player.view";
 import {

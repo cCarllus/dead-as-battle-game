@@ -1,6 +1,6 @@
 // Responsible for floating health bars above other players, including creation, positioning, and cleanup.
 import { MATCH_UI_CONFIG } from "@/config/ui.config";
-import type { MatchPlayerState } from "../../models/match-player.model";
+import type { MatchPlayerState } from "@/shared/match/match-player.model";
 
 const MATCH_OVERHEAD_BAR_RANGE_METERS = MATCH_UI_CONFIG.overheadBars.rangeMeters;
 

@@ -10,7 +10,7 @@ import {
   DEFAULT_CHAMPION_ID,
   isChampionId,
   isDefaultChampionId
-} from "../../data/champions.catalog";
+} from "@/shared/champions/champions.catalog";
 import { sanitizeNotifications } from "../../models/notification.model";
 import {
   DEFAULT_NICKNAME,

@@ -4,8 +4,8 @@ import {
   getChampionPriceCoins,
   isChampionId,
   isDefaultChampionId
-} from "../data/champions.catalog";
-import type { ChampionId } from "../models/champion.model";
+} from "@/shared/champions/champions.catalog";
+import type { ChampionId } from "@/shared/champions/champion.model";
 import { sanitizeChampionProgress, type UserProfile } from "../models/user.model";
 import type { NotificationService } from "./notification.service";
 import type { UserService } from "./user.service";

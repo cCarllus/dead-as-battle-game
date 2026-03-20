@@ -17,7 +17,7 @@ import type {
   MatchPlayerMovedPayload,
   MatchPlayerState,
   MatchPlayerWallRunSide
-} from "@/app/models/match-player.model";
+} from "@/shared/match/match-player.model";
 import type { GameSettings } from "@/app/services/settings.service";
 import {
   createCombatStateMachine,

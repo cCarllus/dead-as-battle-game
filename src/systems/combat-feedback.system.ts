@@ -3,7 +3,7 @@ import type {
   MatchCombatBlockPayload,
   MatchCombatHitPayload,
   MatchCombatGuardBreakPayload
-} from "@/app/models/match-player.model";
+} from "@/shared/match/match-player.model";
 import type { MatchService } from "@/app/services/match.service";
 import type { DamageNumberEffect } from "@/app/ui/effects/damage-number.effect";
 

@@ -1,6 +1,6 @@
 // Responsável por centralizar atributos de combate e kit de habilidades por herói no cliente.
-import { DEFAULT_CHAMPION_ID, getBaseChampionById, isChampionId } from "@/app/data/champions.catalog";
-import type { ChampionId } from "@/app/models/champion.model";
+import { DEFAULT_CHAMPION_ID, getBaseChampionById, isChampionId } from "@/shared/champions/champions.catalog";
+import type { ChampionId } from "@/shared/champions/champion.model";
 
 export type HeroSkillSlotConfig = {
   key: string;

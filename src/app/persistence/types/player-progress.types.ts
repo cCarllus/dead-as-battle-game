@@ -1,5 +1,5 @@
 import type { GameSettings } from "../../config/game-settings";
-import type { ChampionId } from "../../models/champion.model";
+import type { ChampionId } from "@/shared/champions/champion.model";
 import type { NotificationItem } from "../../models/notification.model";
 import type { ChampionProgress, UserProfile } from "../../models/user.model";
 

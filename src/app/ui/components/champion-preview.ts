@@ -14,7 +14,7 @@ import {
   Vector3
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
-import type { ChampionPreviewAnimation } from "../../models/champion.model";
+import type { ChampionPreviewAnimation } from "@/shared/champions/champion.model";
 import {
   createAnimationBindingTargetResolver,
   loadBoundAnimationCommandFromAsset

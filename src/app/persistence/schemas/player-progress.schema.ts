@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CHAMPION_IDS } from "../../data/champions.catalog";
+import { CHAMPION_IDS } from "@/shared/champions/champions.catalog";
 import { NOTIFICATION_TYPES } from "../../models/notification.model";
 import {
   PLAYER_PROGRESS_SAVE_VERSION,

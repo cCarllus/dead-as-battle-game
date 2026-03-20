@@ -3,8 +3,8 @@ import {
   DEFAULT_CHAMPION_ID,
   isChampionId,
   isDefaultChampionId
-} from "../data/champions.catalog";
-import type { ChampionId } from "../models/champion.model";
+} from "@/shared/champions/champions.catalog";
+import type { ChampionId } from "@/shared/champions/champion.model";
 import type { UserProfile } from "../models/user.model";
 import type { UserService } from "./user.service";
 

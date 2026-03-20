@@ -1,6 +1,6 @@
 // Responsável por renderizar a tela de campeões com desbloqueio por moedas e seleção segura.
 import { t, type Locale } from "../../i18n";
-import type { ChampionId } from "../../models/champion.model";
+import type { ChampionId } from "@/shared/champions/champion.model";
 import type { NotificationService } from "../../services/notification.service";
 import type { UserService } from "../../services/user.service";
 import type { HeroUnlockResult } from "../../services/hero-purchase.service";

@@ -1,6 +1,6 @@
 // Responsible for the minimap radar system: compass directions, player markers, and radar projection.
 import { MATCH_UI_CONFIG } from "@/config/ui.config";
-import type { MatchPlayerState } from "../../models/match-player.model";
+import type { MatchPlayerState } from "@/shared/match/match-player.model";
 
 const MATCH_RADAR_RANGE_METERS = MATCH_UI_CONFIG.radar.rangeMeters;
 const MATCH_RADAR_MAX_MARKERS = MATCH_UI_CONFIG.radar.maxMarkers;

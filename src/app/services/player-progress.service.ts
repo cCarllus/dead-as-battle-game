@@ -1,7 +1,7 @@
 // Responsável por exportar/importar progresso do jogador sem expor JSON bruto à UI.
 import { APP_VERSION_LABEL } from "../config/version";
 import type { GameSettings } from "../config/game-settings";
-import type { ChampionId } from "../models/champion.model";
+import type { ChampionId } from "@/shared/champions/champion.model";
 import type { UserProfile } from "../models/user.model";
 import type { PlayerProgressRepository } from "../persistence/repositories/player-progress.repository";
 import { createPlayerProgressRepository } from "../persistence/repositories/player-progress.repository";

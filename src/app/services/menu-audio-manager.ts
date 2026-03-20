@@ -1,4 +1,4 @@
-import type { ChampionId } from "../models/champion.model";
+import type { ChampionId } from "@/shared/champions/champion.model";
 import type { GameSettings } from "./settings.service";
 
 export type MenuAudioPageId =

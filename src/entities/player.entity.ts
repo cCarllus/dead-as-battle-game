@@ -43,7 +43,7 @@ import {
   type HeroVisualConfig
 } from "../animation/hero-visual-config";
 import { createColliderDebug } from "../debug/collider-debug";
-import type { MatchPlayerState } from "@/app/models/match-player.model";
+import type { MatchPlayerState } from "@/shared/match/match-player.model";
 
 type PlayerLabelHandle = {
   mesh: AbstractMesh;

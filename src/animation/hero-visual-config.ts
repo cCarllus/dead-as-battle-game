@@ -3,8 +3,8 @@ import {
   DEFAULT_CHAMPION_ID,
   getBaseChampionById,
   isChampionId
-} from "@/app/data/champions.catalog";
-import type { ChampionId } from "@/app/models/champion.model";
+} from "@/shared/champions/champions.catalog";
+import type { ChampionId } from "@/shared/champions/champion.model";
 
 export type HeroVisualConfig = {
   id: string;

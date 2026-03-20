@@ -3,9 +3,9 @@ import {
   DEFAULT_CHAMPION_ID,
   getBaseChampionById,
   isChampionId
-} from "../data/champions.catalog";
+} from "@/shared/champions/champions.catalog";
 import { resolveHeroCombatClientConfig, type HeroSkillSlotConfig } from "@/config/hero-combat.config";
-import type { MatchPlayerState } from "../models/match-player.model";
+import type { MatchPlayerState } from "@/shared/match/match-player.model";
 import { clamp } from "@/utils/math";
 
 const DEFAULT_HERO_LABEL = "HERO";

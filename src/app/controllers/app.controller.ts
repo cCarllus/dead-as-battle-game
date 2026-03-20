@@ -4,7 +4,7 @@ import { createRouter } from "../core/router";
 import type { AppStateStore } from "../core/state";
 import type { SessionService } from "../core/storage";
 import { t } from "../i18n";
-import type { ChampionId } from "../models/champion.model";
+import type { ChampionId } from "@/shared/champions/champion.model";
 import { getChampionCardsForUser, getSelectedChampionForUser } from "../services/champion.service";
 import type { MenuAudioManager } from "../services/menu-audio-manager";
 import { renderLoadingScreen } from "../ui/screens/loading.screen";

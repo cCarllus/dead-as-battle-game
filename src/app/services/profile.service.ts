@@ -1,6 +1,6 @@
 // Responsável por regras de negócio do perfil persistido do jogador.
-import { DEFAULT_CHAMPION_ID, isChampionId, isDefaultChampionId } from "../data/champions.catalog";
-import type { ChampionId } from "../models/champion.model";
+import { DEFAULT_CHAMPION_ID, isChampionId, isDefaultChampionId } from "@/shared/champions/champions.catalog";
+import type { ChampionId } from "@/shared/champions/champion.model";
 import { normalizeNickname, sanitizeChampionProgress, type UserProfile } from "../models/user.model";
 import type { PlayerProgressRepository } from "../persistence/repositories/player-progress.repository";
 import {

@@ -3,7 +3,7 @@ import { Client, Room } from "@colyseus/sdk";
 import { resolveServerEndpoint } from "../config/server-endpoint";
 import { CLIENT_MATCH_EVENTS } from "./match-events";
 import { clamp } from "@/utils/math";
-import { cloneMatchPlayerState } from "../models/match-player.utils";
+import { cloneMatchPlayerState } from "@/shared/match/match-player.utils";
 import {
   normalizeAttackStartedPayload,
   normalizeBlockEndedPayload,
@@ -40,7 +40,7 @@ import type {
   MatchPlayerWallRunSide,
   MatchSkillCastFinishedEventPayload,
   MatchSkillCastStartedEventPayload
-} from "../models/match-player.model";
+} from "@/shared/match/match-player.model";
 
 export const GLOBAL_MATCH_ROOM_NAME = "global_match";
 

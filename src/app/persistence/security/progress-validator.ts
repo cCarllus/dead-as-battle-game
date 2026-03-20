@@ -1,4 +1,4 @@
-import { CHAMPION_IDS, DEFAULT_CHAMPION_ID, isChampionId, isDefaultChampionId } from "../../data/champions.catalog";
+import { CHAMPION_IDS, DEFAULT_CHAMPION_ID, isChampionId, isDefaultChampionId } from "@/shared/champions/champions.catalog";
 import { APP_VERSION_LABEL } from "../../config/version";
 import { normalizeGameSettings } from "../../config/game-settings";
 import {
